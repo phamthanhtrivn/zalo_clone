@@ -38,6 +38,15 @@ export class Friend {
   status: FriendStatus;
 }
 
+@Schema({ _id: false, timestamps: true })
+export class Session {
+  @Prop({ required: true })
+  refreshToken: string; // hash
+
+  @Prop()
+  device?: string; // optional (mobile, web, etc)
+}
+
 @Schema({ timestamps: true })
 export class User {
   @Prop({ required: true, unique: true })
@@ -55,8 +64,8 @@ export class User {
   @Prop({ type: Setting })
   settings?: Setting;
 
-  @Prop()
-  refreshToken?: string;
+  @Prop({ type: [Session], default: [] })
+  sessions: Session[];
 
   @Prop()
   lastSeenAt?: Date;
