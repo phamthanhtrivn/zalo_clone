@@ -3,14 +3,18 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/cloudfront-signer';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FileType } from '@zalo-clone/shared-types';
 import { randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 @Injectable()
 export class StorageService {
   private readonly s3Client: S3Client;
+  private readonly privateKey: string;
 
   constructor(private readonly configService: ConfigService) {
     this.s3Client = new S3Client({
@@ -22,6 +26,10 @@ export class StorageService {
         ),
       },
     });
+    this.privateKey = fs.readFileSync(
+      path.join(process.cwd(), 'secrets/private_key.pem'),
+      'utf8',
+    );
   }
 
   private resolveFileType(mimeType: string): FileType {
@@ -62,5 +70,21 @@ export class StorageService {
         Key: fileKey,
       }),
     );
+  }
+
+  signFileUrl(fileKey: string) {
+    if (!fileKey) {
+      return null;
+    }
+
+    return getSignedUrl({
+      url:
+        this.configService.getOrThrow<string>('aws.cloudFrontDomain') + fileKey,
+      dateLessThan: new Date(Date.now() + 1000 * 60 * 60 * 24),
+      privateKey: this.privateKey,
+      keyPairId: this.configService.getOrThrow<string>(
+        'aws.cloudFrontKeyPairId',
+      ),
+    });
   }
 }

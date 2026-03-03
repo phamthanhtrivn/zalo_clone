@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   BadRequestException,
   Injectable,
@@ -12,6 +13,7 @@ import { Conversation } from '../conversations/schemas/conversation.schema';
 import {
   CallStatus,
   ConversationType,
+  FileType,
   MemberRole,
 } from '@zalo-clone/shared-types';
 import { PinnedMessageDto } from './dto/pinned-message.dto';
@@ -22,6 +24,9 @@ import { ReadReceiptDto } from './dto/read-reciept.dto';
 import { StorageService } from 'src/common/storage/storage.service';
 import { CallMessageDto } from './dto/call-message.dto';
 import { UpdateCallMessageDto } from './dto/update-call-message.dto';
+import { GetMessagesDto } from './dto/get-messages.dto';
+import { GetMediasPreviewDto } from './dto/get-medias-preview.dto';
+import { GetMediasFileTypeDto } from './dto/get-medias-file-type.dto';
 
 @Injectable()
 export class MessagesService {
@@ -34,6 +39,204 @@ export class MessagesService {
     private readonly conversationModel: Model<Conversation>,
     private readonly storageService: StorageService,
   ) {}
+
+  async getMessagesFromConversation(
+    conversationId: string,
+    getMesssagesDto: GetMessagesDto,
+  ) {
+    const { userId, cursor, limit = '15' } = getMesssagesDto;
+
+    const member = await this.memberModel.findOne({
+      userId: new Types.ObjectId(userId),
+      conversationId: new Types.ObjectId(conversationId),
+      leftAt: null,
+    });
+
+    if (!member) {
+      throw new NotFoundException(
+        'User is not a participant in this conversation',
+      );
+    }
+
+    const query: any = {
+      conversationId: new Types.ObjectId(conversationId),
+    };
+
+    if (cursor) {
+      query._id = { $lt: new Types.ObjectId(cursor) };
+    }
+
+    const messages = await this.messageModel
+      .find(query)
+      .sort({ _id: -1 })
+      .limit(Number(limit))
+      .populate('senderId', 'profile.name profile.avatarUrl')
+      .lean();
+
+    for (const message of messages) {
+      if (message.content?.file) {
+        (message.content as any).file.fileKey = this.storageService.signFileUrl(
+          (message.content as any).file.fileKey,
+        );
+      }
+    }
+
+    return {
+      messages,
+      nextCursor:
+        messages.length > 0 ? messages[messages.length - 1]._id : null,
+    };
+  }
+
+  async getMediasPreview(
+    conversationId: string,
+    getMediasPreviewDto: GetMediasPreviewDto,
+  ) {
+    const { userId } = getMediasPreviewDto;
+
+    const member = await this.memberModel.findOne({
+      userId: new Types.ObjectId(userId),
+      conversationId: new Types.ObjectId(conversationId),
+      leftAt: null,
+    });
+
+    if (!member) {
+      throw new NotFoundException(
+        'User is not a participant in this conversation',
+      );
+    }
+
+    const [images_videos, files, links] = await Promise.all([
+      this.messageModel
+        .find({
+          conversationId: new Types.ObjectId(conversationId),
+          'content.file.type': { $in: ['IMAGE', 'VIDEO'] },
+        })
+        .select('_id content.file createdAt')
+        .sort({ _id: -1 })
+        .limit(6)
+        .lean(),
+
+      this.messageModel
+        .find({
+          conversationId: new Types.ObjectId(conversationId),
+          'content.file.type': 'FILE',
+        })
+        .select('_id content.file createdAt')
+        .sort({ _id: -1 })
+        .limit(3)
+        .lean(),
+
+      this.messageModel
+        .find({
+          conversationId: new Types.ObjectId(conversationId),
+          'content.text': { $regex: /(http|https):\/\// },
+        })
+        .select('_id content.text createdAt')
+        .sort({ _id: -1 })
+        .limit(3)
+        .lean(),
+    ]);
+
+    for (const message of images_videos) {
+      if (message.content?.file) {
+        (message.content as any).file.fileKey = this.storageService.signFileUrl(
+          (message.content as any).file.fileKey,
+        );
+      }
+    }
+
+    for (const message of files) {
+      if (message.content?.file) {
+        (message.content as any).file.fileKey = this.storageService.signFileUrl(
+          (message.content as any).file.fileKey,
+        );
+      }
+    }
+
+    return {
+      images_videos,
+      files,
+      links,
+    };
+  }
+
+  async getMediasFileType(
+    conversationId: string,
+    getMediasFileTypeDto: GetMediasFileTypeDto,
+  ) {
+    const {
+      userId,
+      type,
+      cursor,
+      limit = '15',
+      senderId,
+      fromDate,
+      toDate,
+    } = getMediasFileTypeDto;
+
+    const member = await this.memberModel.findOne({
+      userId: new Types.ObjectId(userId),
+      conversationId: new Types.ObjectId(conversationId),
+      leftAt: null,
+    });
+
+    if (!member) {
+      throw new NotFoundException(
+        'User is not a participant in this conversation',
+      );
+    }
+
+    const query: any = {
+      conversationId: new Types.ObjectId(conversationId),
+    };
+
+    if (type === FileType.IMAGE || type === FileType.VIDEO) {
+      query['content.file.type'] = { $in: ['IMAGE', 'VIDEO'] };
+    }
+
+    if (type === FileType.FILE) {
+      query['content.file.type'] = 'FILE';
+    }
+
+    if (type === 'LINK') {
+      query['content.text'] = { $regex: /(http|https):\/\// };
+    }
+
+    if (senderId) {
+      query.senderId = new Types.ObjectId(senderId);
+    }
+
+    if (fromDate || toDate) {
+      query.createdAt = {};
+      if (fromDate) query.createdAt.$gte = new Date(fromDate);
+      if (toDate) query.createdAt.$lte = new Date(toDate);
+    }
+
+    if (cursor) {
+      query._id = { $lt: new Types.ObjectId(cursor) };
+    }
+
+    const messages = await this.messageModel
+      .find(query)
+      .sort({ _id: -1 })
+      .limit(Number(limit))
+      .lean();
+
+    for (const message of messages) {
+      if (message.content?.file) {
+        (message.content as any).file.fileKey = this.storageService.signFileUrl(
+          (message.content as any).file.fileKey,
+        );
+      }
+    }
+
+    return {
+      messages,
+      nextCursor:
+        messages.length > 0 ? messages[messages.length - 1]._id : null,
+    };
+  }
 
   async sendMessage(
     sendMessageDto: SendMessageDto,
@@ -59,10 +262,6 @@ export class MessagesService {
       );
     }
 
-    if (!content) {
-      throw new BadRequestException('Content must be provided');
-    }
-
     if (conversation.type === ConversationType.GROUP) {
       if (
         member.role === MemberRole.MEMBER &&
@@ -74,28 +273,24 @@ export class MessagesService {
       }
     }
 
-    let formattedContent = {};
+    const formattedContent: any = {
+      text: content?.text ?? null,
+      icon: content?.icon ?? null,
+      file: null,
+    };
 
-    if (content) {
-      const { text, icon } = content;
+    if (file) {
+      formattedContent.file = await this.storageService.uploadFile(file);
+    }
 
-      if (!text && !icon) {
-        throw new BadRequestException(
-          'At least one of text, icon must be provided in content',
-        );
-      }
-
-      let uploadedFile = {};
-
-      if (file) {
-        uploadedFile = await this.storageService.uploadFile(file);
-      }
-
-      formattedContent = {
-        text: text ?? null,
-        icon: icon ?? null,
-        file: uploadedFile ?? null,
-      };
+    if (
+      !formattedContent.text &&
+      !formattedContent.icon &&
+      !formattedContent.file
+    ) {
+      throw new BadRequestException(
+        'Message must contain at least text, icon, or file',
+      );
     }
 
     const message = await this.messageModel.create({

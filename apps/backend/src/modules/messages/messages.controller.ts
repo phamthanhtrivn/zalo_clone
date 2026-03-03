@@ -1,8 +1,11 @@
 import {
   Body,
   Controller,
+  Get,
+  Param,
   Patch,
   Post,
+  Query,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -16,10 +19,46 @@ import { ReadReceiptDto } from './dto/read-reciept.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CallMessageDto } from './dto/call-message.dto';
 import { UpdateCallMessageDto } from './dto/update-call-message.dto';
+import { GetMessagesDto } from './dto/get-messages.dto';
+import { GetMediasPreviewDto } from './dto/get-medias-preview.dto';
+import { GetMediasFileTypeDto } from './dto/get-medias-file-type.dto';
 
 @Controller('messages')
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
+
+  @Get('conversation/:conversationId')
+  async getMessagesFromConversation(
+    @Param('conversationId') conversationId: string,
+    @Query() getMessagesDto: GetMessagesDto,
+  ) {
+    return this.messagesService.getMessagesFromConversation(
+      conversationId,
+      getMessagesDto,
+    );
+  }
+
+  @Get('conversation/:conversationId/medias/preview')
+  async getMediasPreview(
+    @Param('conversationId') conversationId: string,
+    @Query() getMediasPreviewDto: GetMediasPreviewDto,
+  ) {
+    return this.messagesService.getMediasPreview(
+      conversationId,
+      getMediasPreviewDto,
+    );
+  }
+
+  @Get('conversation/:conversationId/medias')
+  async getMedias(
+    @Param('conversationId') conversationId: string,
+    @Query() getMediasFileTypeDto: GetMediasFileTypeDto,
+  ) {
+    return this.messagesService.getMediasFileType(
+      conversationId,
+      getMediasFileTypeDto,
+    );
+  }
 
   @Post()
   @UseInterceptors(FileInterceptor('file'))
