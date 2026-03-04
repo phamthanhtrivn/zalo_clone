@@ -1,7 +1,8 @@
-import { AuthService } from './auth.service';
+import { AuthService } from './services/auth.service';
 import {
   Body,
   Controller,
+  Get,
   InternalServerErrorException,
   Post,
   Request,
@@ -10,10 +11,11 @@ import {
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { SignUpDto } from './dto/signUp.dto';
 import { TempVerifyGuard } from './passport/temp-auth.guard';
-import { LocalAuthGuard } from './guards/local-auth.guard';
 import { Public } from 'src/common/decorator/is-public.decorator';
 import { RequestOtpDTO } from './dto/request-otp.dto';
-import { AuthUser } from './auth.type';
+import { AuthUser } from './types/auth.type';
+import { JwtAuthGuard } from './passport/jwt-auth.guard';
+import { LocalAuthGuard } from './passport/local-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -53,7 +55,30 @@ export class AuthController {
   @Post('sign-in')
   @Public()
   @UseGuards(LocalAuthGuard)
-  logIn(@Request() req: { user: AuthUser }) {
-    return this.authService.signIn(req.user);
+  logIn(@Request() req) {
+    const device = req.headers['user-agent'] as string;
+    return this.authService.signIn(req.user, device);
+  }
+
+  @Post('log-out')
+  @UseGuards(JwtAuthGuard)
+  logOut(
+    @Request() req: { user: AuthUser },
+    @Body('refreshToken') token: string,
+  ) {
+    return this.authService.signOut(req.user.userId, token);
+  }
+
+  @Post('token/refresh')
+  @Public()
+  refreshToken(@Body('refreshToken') token: string) {
+    return this.authService.refresh(token);
+  }
+
+  // api này chỉ để test
+  @Get('profile')
+  @UseGuards(JwtAuthGuard)
+  profile(@Request() req) {
+    return req.user as AuthUser;
   }
 }

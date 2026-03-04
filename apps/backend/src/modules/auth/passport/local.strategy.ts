@@ -1,8 +1,8 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { AuthService } from '../auth.service';
+import { AuthService } from '../services/auth.service';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-local';
-import { AuthUser } from '../auth.type';
+import { AuthUser } from '../types/auth.type';
 
 @Injectable()
 export class LocalStrategy extends PassportStrategy(Strategy) {
@@ -11,7 +11,6 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(phone: string, password: string): Promise<AuthUser> {
-    console.log('Validate run');
     const user = (await this.authService.validateUser(
       phone,
       password,
@@ -19,6 +18,7 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new UnauthorizedException();
     }
+    console.log(`User ${user.phone} vừa đăng nhập`);
     return user;
   }
 }

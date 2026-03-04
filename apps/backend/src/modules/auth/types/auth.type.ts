@@ -1,4 +1,4 @@
 export interface AuthUser {
-  id: string;
+  userId: string;
   phone: string;
 }

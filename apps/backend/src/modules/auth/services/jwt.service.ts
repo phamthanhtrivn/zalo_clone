@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { StringValue } from 'ms';
 
 @Injectable()
 export class TokenService {
@@ -12,21 +13,31 @@ export class TokenService {
   async signAccess(payload: any) {
     return await this.jwt.signAsync(payload, {
       secret: this.configService.get<string>('access_secret'),
-      expiresIn: '15m',
+      expiresIn: this.configService.get<StringValue>('access_expires'),
     });
   }
 
   async signRefresh(payload: any) {
     return await this.jwt.signAsync(payload, {
-      secret: process.env.JWT_REFRESH_SECRET,
-      expiresIn: '30d',
+      secret: this.configService.get<string>('refresh_secret'),
+      expiresIn: this.configService.get<StringValue>('refresh_expires'),
+    });
+  }
+
+  decode(payload: any): any {
+    return this.jwt.decode(payload);
+  }
+
+  verifyRefresh(token: string) {
+    return this.jwt.verifyAsync(token, {
+      secret: this.configService.get<string>('refresh_secret'),
     });
   }
 
   async signTempVerify(payload: any) {
     return await this.jwt.signAsync(payload, {
       secret: this.configService.get<string>('tmp_secret'),
-      expiresIn: '30m',
+      expiresIn: this.configService.get<StringValue>('tmp_expires'),
     });
   }
 }

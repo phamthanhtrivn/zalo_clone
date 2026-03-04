@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schemas/user.schema';
 import { Model } from 'mongoose';
@@ -11,6 +11,10 @@ export class UsersService {
 
   async findByPhone(phone: string) {
     return this.userModel.findOne({ phone: phone }).exec();
+  }
+
+  async findById(userId: string) {
+    return this.userModel.findById(userId);
   }
 
   async createRegister(
@@ -26,22 +30,12 @@ export class UsersService {
       gender,
       birthday,
     };
-    try {
-      // Tạo user với phone và profile
-      if (
-        await this.userModel.create({
-          phone,
-          profile,
-          password,
-        })
-      )
-        return true;
-    } catch (err) {
-      console.log(`Lỗi tạo người dùng mới ${err as string}`);
-      throw new InternalServerErrorException(
-        'Lỗi hệ thống khi tạo người dùng mới !',
-      );
-    }
+
+    return this.userModel.create({
+      phone,
+      profile,
+      password,
+    });
   }
 
   createTestUser(body: any) {
