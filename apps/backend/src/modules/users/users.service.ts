@@ -1,13 +1,273 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Body, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schemas/user.schema';
 import { Model } from 'mongoose';
-
+import { RequestFriendDto } from './dto/request-friend.dto';
+import { FriendStatus } from '@zalo-clone/shared-types';
+import { updateFriendStatus } from './helper/updateFriendStatus.helper';
+import { checkFriendStatus } from './helper/checkFriendStaus.helper';
+import { SearchFriendDto } from './dto/search-friend.dto';
+import { generateSuggestFriends } from './helper/generateSuggestFriends.helper';
+import { InforUser } from './dto/infor-user.dto';
+import { flattenObject } from './helper/flattenObject.helper';
+import { StorageService } from 'src/common/storage/storage.service';
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<User>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<User>,
+    private readonly storageService: StorageService,
+  ) {}
 
   createTestUser(body: any) {
     return this.userModel.create(body);
+  }
+  // [POST] /api/users/add-friend
+  async addFriend(body: RequestFriendDto) {
+    const { userId, friendId } = body;
+
+    const check = await checkFriendStatus(
+      this.userModel,
+      userId,
+      friendId,
+      FriendStatus.PENDING,
+    );
+    // Gui yeu cau lai lan nua
+    if (check) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      await updateFriendStatus(
+        this.userModel,
+        friendId,
+        userId,
+        FriendStatus.REQUESTED,
+      );
+      return { userId, friendId };
+    }
+
+    await this.userModel.findByIdAndUpdate(
+      userId,
+      {
+        $push: {
+          friends: {
+            friendId: friendId,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            status: FriendStatus.PENDING,
+          },
+        },
+      },
+      { new: true },
+    );
+    await this.userModel.findByIdAndUpdate(friendId, {
+      $push: {
+        friends: {
+          friendId: userId,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          status: FriendStatus.REQUESTED,
+        },
+      },
+    });
+    return { userId, friendId };
+  }
+  // [POST] /api/users/accept-friend
+  async acceptFriend(body: RequestFriendDto) {
+    const { userId, friendId } = body;
+
+    const check = await checkFriendStatus(
+      this.userModel,
+      userId,
+      friendId,
+      FriendStatus.REQUESTED,
+    );
+    if (check) {
+      // update status user
+      await updateFriendStatus(
+        this.userModel,
+        userId,
+        friendId,
+        FriendStatus.ACCEPTED,
+      );
+      // update status friend
+      await updateFriendStatus(
+        this.userModel,
+        friendId,
+        userId,
+        FriendStatus.ACCEPTED,
+      );
+      return { userId, friendId };
+    }
+  }
+  // [POST] /api/users/reject-friend
+  async rejectFriend(body: RequestFriendDto) {
+    const { userId, friendId } = body;
+
+    const check = await checkFriendStatus(
+      this.userModel,
+      userId,
+      friendId,
+      FriendStatus.REQUESTED,
+    );
+    if (check) {
+      await updateFriendStatus(
+        this.userModel,
+        userId,
+        friendId,
+        FriendStatus.REJECTED,
+      );
+      return { userId, friendId };
+    }
+  }
+  //  [POST] /api/users/block-friend
+  async blockFriend(body: RequestFriendDto) {
+    const { userId, friendId } = body;
+    await updateFriendStatus(
+      this.userModel,
+      userId,
+      friendId,
+      FriendStatus.BLOCKED,
+    );
+    return { userId, friendId };
+  }
+  //  [POST] /api/users/cancel-friend
+  async cancelFriend(body: RequestFriendDto) {
+    const { userId, friendId } = body;
+    await this.userModel.findOneAndUpdate(
+      {
+        _id: userId,
+      },
+      {
+        $pull: {
+          friends: {
+            friendId: friendId,
+          },
+        },
+      },
+    );
+    await this.userModel.findOneAndUpdate(
+      {
+        _id: friendId,
+      },
+      {
+        $pull: {
+          friends: {
+            friendId: userId,
+          },
+        },
+      },
+    );
+    return { userId, friendId };
+  }
+  // [POST] /api/users/search-friend
+  async searchFriend(body: SearchFriendDto) {
+    const { userId, key } = body;
+    const users = await this.userModel.find({
+      $or: [
+        {
+          phone: key,
+        },
+        {
+          $and: [
+            { 'friends.friendId': userId },
+            { 'friends.status': FriendStatus.ACCEPTED },
+            { 'profile.name': { $regex: `${key}`, $options: 'i' } },
+          ],
+        },
+      ],
+    });
+    return { users: users };
+  }
+  // [POST] /api/users/suggest-friend
+  async suggestFriend(userId: string) {
+    // id ung cu vien co the kb
+    const candidatesIds = await generateSuggestFriends(this.userModel, userId);
+    console.log('candidatesIds : ', candidatesIds);
+    const friendsUser = await this.userModel
+      .findOne({ _id: userId })
+      .select({ friends: 1 })
+      .lean();
+    // chuyen ve set giam do phuc tap
+    const userFriendSet = new Set(
+      friendsUser?.friends?.map((f) => f.friendId.toString()) ?? [],
+    );
+    // ung cu vien co the kb
+    const candidates = await this.userModel
+      .find({ _id: { $in: candidatesIds } })
+      .lean();
+    const result: {
+      id: string;
+      name: string;
+      avatar: string;
+      score: number;
+    }[] = [];
+
+    // lay toan bo id cua ban chung
+    const allMutualIds = new Set<string>();
+
+    for (const item of candidates) {
+      for (const f of item.friends ?? []) {
+        if (userFriendSet.has(f.friendId.toString())) {
+          allMutualIds.add(f.friendId.toString());
+        }
+      }
+    }
+    const mutualUsers = await this.userModel
+      .find({ _id: { $in: Array.from(allMutualIds) } })
+      .select({ friends: 1 })
+      .lean();
+
+    const degreeMap = new Map<string, number>();
+
+    for (const u of mutualUsers) {
+      degreeMap.set(u._id.toString(), u.friends?.length ?? 1);
+    }
+
+    for (const item of candidates) {
+      let score = 0;
+      for (const f of item.friends || []) {
+        const fid = f.friendId.toString();
+        // kiem tra co ban chung k
+        if (userFriendSet.has(fid)) {
+          const degree = degreeMap.get(fid) ?? 1;
+          if (degree > 1) {
+            score += 1 / Math.log(degree);
+          }
+        }
+      }
+      result.push({
+        id: item._id.toString(),
+        name: item.profile?.name || '',
+        avatar: item.profile?.avatarUrl || '',
+        score: score,
+      });
+    }
+    result.sort((a, b) => b.score - a.score);
+    return result;
+  }
+  async updateInformationUser(
+    body: InforUser,
+    file?: Express.Multer.File,
+    id?: string,
+  ) {
+    const data = body;
+    const user = await this.userModel.findById(id);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (file) {
+      if (user.profile?.avatarUrl) {
+        await this.storageService.deleteFile(user.profile.avatarUrl);
+      }
+      const uploadResult = await this.storageService.uploadFile(file);
+      console.log('uploadResult : ', uploadResult);
+      data.profile = {
+        ...data.profile,
+        avatarUrl: uploadResult.fileKey,
+      };
+    }
+    const newData = flattenObject(data);
+    return await this.userModel.findByIdAndUpdate(
+      id,
+      { $set: newData },
+      { new: true },
+    );
   }
 }

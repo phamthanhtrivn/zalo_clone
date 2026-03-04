@@ -1,5 +1,7 @@
 export enum FriendStatus {
   PENDING = "PENDING",
   ACCEPTED = "ACCEPTED",
-  BLOCKED = "BLOCKED"
+  BLOCKED = "BLOCKED",
+  REQUESTED = "REQUESTED",
+  REJECTED = "REJECTED",
 }
