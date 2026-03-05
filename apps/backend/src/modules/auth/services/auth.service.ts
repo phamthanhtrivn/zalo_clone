@@ -1,9 +1,8 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import { TempVerifyPayload } from './../types/tmp-verify-payload.type';
 import { UsersService } from '../../users/users.service';
 import { RedisService } from '../../../common/redis/redis.service';
 import {
   BadRequestException,
-  Body,
   ConflictException,
   Injectable,
   UnauthorizedException,
@@ -13,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 import { AuthUser } from '../types/auth.type';
 import { TokenService } from './jwt.service';
 import { SessionService } from './session.service';
+import { Purpose } from '../dto/verify-otp.dto';
 
 @Injectable()
 export class AuthService {
@@ -52,7 +52,7 @@ export class AuthService {
       this.otpKey(phone),
       otp,
       'EX',
-      Number(process.env.OTP_EXPIRE_SECONDS),
+      Number(process.env.OTP_EXPIRE_SECONDS) || 300,
     );
 
     //lưu vết để tính thời gian cho phép gửi lại otp
@@ -66,7 +66,8 @@ export class AuthService {
     return true;
   }
 
-  async verifyOtp(phone: string, otp: string) {
+  async verifyOtp(phone: string, otp: string, purpose: Purpose) {
+    const user = await this.userService.findByPhone(phone);
     const savedOtp = await this.redisService.get(this.otpKey(phone));
 
     if (!savedOtp) {
@@ -81,9 +82,28 @@ export class AuthService {
 
     const tmp_token = await this.tokenService.signTempVerify({
       phone,
+      purpose,
       type: 'temp_verify',
-    });
+      userId: user?._id,
+    } as TempVerifyPayload);
     return { message: 'Xác thực thành công', tmp_token };
+  }
+
+  async forgotPassword(phone: string) {
+    const user = await this.userService.findByPhone(phone);
+    if (!user) {
+      return { message: 'Số điện thoại chưa được đăng ký !' };
+    }
+    if (await this.sendOtp(phone)) {
+      return { message: 'Mã otp đã được gọi. Vui lòng kiểm tra hộp thư !' };
+    }
+  }
+
+  async resetPassword(user: AuthUser, password: string, device: string) {
+    console.log(user);
+    await this.userService.updatePassword(user.phone, password);
+
+    return this.signIn({ phone: user.phone, userId: user.userId }, device);
   }
 
   async signUp(phone: string) {
@@ -115,54 +135,51 @@ export class AuthService {
     return { message: 'Đăng ký tài khoản thành công !' };
   }
 
-  async validateUser(phone: string, pass: string): Promise<AuthUser | null> {
+  async validateUser(phone: string, pass: string): Promise<any> {
     const user = await this.userService.findByPhone(phone);
     if (user && (await bcrypt.compare(pass, user.password))) {
-      return { userId: user.id, phone: user.phone };
+      return { userId: user._id, phone: user.phone };
     }
     return null;
   }
 
   async refresh(refreshToken: string) {
-    const payload = await this.tokenService.verifyRefresh(refreshToken);
+    const payload = (await this.tokenService.verifyRefresh(
+      refreshToken,
+    )) as AuthUser;
 
     const session = await this.sessionService.findValidSession(
       payload.userId,
       refreshToken,
     );
 
-    console.log(session);
     if (!session) {
       throw new UnauthorizedException();
     }
 
-    const user = await this.userService.findById(payload.id);
-
+    const user = await this.userService.findById(payload.userId);
     const accessToken = await this.tokenService.signAccess({
-      userId: user?.id,
+      userId: user?.id as string,
       phone: user?.phone,
     });
 
     return { accessToken };
   }
 
-  async signIn(user: AuthUser, device?: string) {
+  async signIn(user: AuthUser, device: string) {
+    await this.sessionService.removeByDevice(user.userId, device);
+
     const accessToken = await this.tokenService.signAccess(user);
     const refreshToken = await this.tokenService.signRefresh(user);
 
     const hashToken = await bcrypt.hash(refreshToken, 10);
 
-    try {
-      await this.sessionService.create(
-        user.userId,
-        hashToken,
-        new Date(this.tokenService.decode(refreshToken).exp * 1000),
-        device,
-      );
-    } catch (err) {
-      console.log(err);
-      throw err;
-    }
+    await this.sessionService.create(
+      user.userId,
+      hashToken,
+      new Date(this.tokenService.decode(refreshToken).exp * 1000),
+      device,
+    );
 
     return { accessToken, refreshToken };
   }

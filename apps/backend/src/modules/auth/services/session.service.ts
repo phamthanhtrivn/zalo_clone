@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Session } from '../schemas/session.schem';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -25,13 +25,17 @@ export class SessionService {
   }
 
   async findValidSession(userId: string, refreshToken: string) {
-    const sessions = await this.sessionModel.find({ userId });
+    const sessions = await this.sessionModel.find({
+      userId: new Types.ObjectId(userId),
+    });
 
     for (const session of sessions) {
+      console.log(session.refreshToken);
       const match = await bcrypt.compare(refreshToken, session.refreshToken);
-      if (match) return session;
+      if (match) {
+        return session;
+      }
     }
-
     return null;
   }
 
@@ -44,5 +48,8 @@ export class SessionService {
         return;
       }
     }
+  }
+  async removeByDevice(userId: string, device: string) {
+    await this.sessionModel.deleteMany({ userId, device });
   }
 }

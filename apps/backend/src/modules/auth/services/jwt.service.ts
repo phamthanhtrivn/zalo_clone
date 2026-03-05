@@ -28,7 +28,7 @@ export class TokenService {
     return this.jwt.decode(payload);
   }
 
-  verifyRefresh(token: string) {
+  verifyRefresh(token: string): any {
     return this.jwt.verifyAsync(token, {
       secret: this.configService.get<string>('refresh_secret'),
     });

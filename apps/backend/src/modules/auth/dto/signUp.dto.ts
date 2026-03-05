@@ -12,7 +12,7 @@ export class SignUpDto {
   @IsPhoneNumber('VN')
   phone: string;
 
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Vui lòng nhập tên của bạn !' })
   @Matches(/^[A-ZÀ-Ỹ][a-zà-ỹ]*(\s[A-ZÀ-Ỹ][a-zà-ỹ]*)*$/, {
     message: 'Mỗi chữ cái đầu phải viết hoa',
   })

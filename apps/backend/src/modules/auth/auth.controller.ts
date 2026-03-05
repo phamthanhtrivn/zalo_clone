@@ -8,7 +8,7 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { Purpose, VerifyOtpDto } from './dto/verify-otp.dto';
 import { SignUpDto } from './dto/signUp.dto';
 import { TempVerifyGuard } from './passport/temp-auth.guard';
 import { Public } from 'src/common/decorator/is-public.decorator';
@@ -16,6 +16,8 @@ import { RequestOtpDTO } from './dto/request-otp.dto';
 import { AuthUser } from './types/auth.type';
 import { JwtAuthGuard } from './passport/jwt-auth.guard';
 import { LocalAuthGuard } from './passport/local-auth.guard';
+import { RequireTempPurpose } from 'src/common/decorator/temp_purpose.decorator';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -30,14 +32,18 @@ export class AuthController {
   @Post('otp/verify')
   @Public()
   verifyOtp(@Body() verifyOtp: VerifyOtpDto) {
-    return this.authService.verifyOtp(verifyOtp.phone, verifyOtp.otp);
+    return this.authService.verifyOtp(
+      verifyOtp.phone,
+      verifyOtp.otp,
+      verifyOtp.purpose,
+    );
   }
 
   @Post('complete-sign-up')
   @Public()
+  @RequireTempPurpose(Purpose.SignUp)
   @UseGuards(TempVerifyGuard)
   async completeSignUp(@Body() signUpDto: SignUpDto) {
-    console.log('Request user:', signUpDto);
     try {
       return await this.authService.completeSignUp(
         signUpDto.phone,
@@ -50,6 +56,40 @@ export class AuthController {
       console.log(`Lỗi khi sign up: ${err}`);
       throw new InternalServerErrorException('Lỗi sign up');
     }
+  }
+
+  @Post('forgot-password')
+  @Public()
+  forgotPassword(@Body('phone') phone: string) {
+    console.log(phone);
+    return this.authService.forgotPassword(phone);
+  }
+
+  @Post('reset-password')
+  @Public()
+  @RequireTempPurpose(Purpose.ForgotPassword)
+  @UseGuards(TempVerifyGuard)
+  resetPassword(@Request() req, @Body() resetPasswordDto: ResetPasswordDto) {
+    if (resetPasswordDto.confirmPassword === resetPasswordDto.newPassword) {
+      console.log(req.user);
+      const device = req.headers['user-agent'] as string;
+      console.log(device);
+      return this.authService.resetPassword(
+        req.user,
+        resetPasswordDto.newPassword,
+        device,
+      );
+    }
+  }
+
+  @Post('login-with-temp')
+  @Public()
+  @RequireTempPurpose(Purpose.ForgotPassword)
+  @UseGuards(TempVerifyGuard)
+  loginWithTemp(@Request() req) {
+    const device = req.headers['user-agent'] as string;
+
+    return this.authService.signIn(req.user, device);
   }
 
   @Post('sign-in')

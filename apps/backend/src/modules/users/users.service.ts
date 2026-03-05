@@ -38,6 +38,20 @@ export class UsersService {
     });
   }
 
+  async updatePassword(phone: string, password: string) {
+    const hashedPass = await bcrypt.hash(password, 10);
+
+    try {
+      return await this.userModel.findOneAndUpdate(
+        { phone },
+        { $set: { password: hashedPass } },
+      );
+    } catch (err) {
+      console.log(err);
+      throw err;
+    }
+  }
+
   createTestUser(body: any) {
     return this.userModel.create(body);
   }
