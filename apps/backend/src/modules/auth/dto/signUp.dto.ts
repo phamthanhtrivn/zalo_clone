@@ -1,17 +1,8 @@
 import { Gender } from '@zalo-clone/shared-types';
-import {
-  IsDateString,
-  IsEnum,
-  IsNotEmpty,
-  IsPhoneNumber,
-  Matches,
-} from 'class-validator';
+import { IsDateString, IsEnum, IsNotEmpty, Matches } from 'class-validator';
 import { IsAtLeast14 } from 'src/common/decorator/check-valid-old.decorator';
 
 export class SignUpDto {
-  @IsPhoneNumber('VN')
-  phone: string;
-
   @IsNotEmpty({ message: 'Vui lòng nhập tên của bạn !' })
   @Matches(/^[A-ZÀ-Ỹ][a-zà-ỹ]*(\s[A-ZÀ-Ỹ][a-zà-ỹ]*)*$/, {
     message: 'Mỗi chữ cái đầu phải viết hoa',

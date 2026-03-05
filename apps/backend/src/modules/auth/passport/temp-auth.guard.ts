@@ -29,21 +29,18 @@ export class TempVerifyGuard implements CanActivate {
     if (!token) {
       throw new UnauthorizedException();
     }
-    try {
-      const payload = await this.jwtService.verifyAsync<
-        Record<string, unknown>
-      >(token, {
+    const payload = await this.jwtService.verifyAsync<Record<string, unknown>>(
+      token,
+      {
         secret: this.configService.get<string>('tmp_secret'),
-      });
+      },
+    );
 
-      if (requiredPurpose && payload.purpose !== requiredPurpose) {
-        throw new UnauthorizedException('Sai mục đích token');
-      }
-      request['user'] = payload;
-    } catch (err) {
-      console.log('Lỗi verify token:', err.message as string);
-      throw new UnauthorizedException();
+    if (requiredPurpose && payload.purpose !== requiredPurpose) {
+      throw new UnauthorizedException('Sai mục đích token');
     }
+    request['user'] = payload;
+
     return true;
   }
 

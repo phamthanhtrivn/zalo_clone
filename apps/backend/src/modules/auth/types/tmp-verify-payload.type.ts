@@ -4,5 +4,5 @@ export interface TempVerifyPayload {
   phone: string;
   purpose: Purpose;
   type: 'temp_verify';
-  userId?: string; // Optional
+  userId?: string;
 }

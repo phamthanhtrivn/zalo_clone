@@ -16,8 +16,9 @@ export class SessionService {
     expiresAt: Date,
     device?: string,
   ) {
+    const userObjectId = new Types.ObjectId(userId);
     return await this.sessionModel.create({
-      userId,
+      userId: userObjectId,
       refreshToken,
       expiresAt,
       device,
@@ -25,8 +26,9 @@ export class SessionService {
   }
 
   async findValidSession(userId: string, refreshToken: string) {
+    const userObjectId = new Types.ObjectId(userId);
     const sessions = await this.sessionModel.find({
-      userId: new Types.ObjectId(userId),
+      userId: userObjectId,
     });
 
     for (const session of sessions) {
@@ -40,16 +42,20 @@ export class SessionService {
   }
 
   async remove(userId: string, refreshToken: string) {
-    const sessions = await this.sessionModel.find({ userId });
+    const sessions = await this.sessionModel.find({
+      userId: new Types.ObjectId(userId),
+    });
 
     for (const session of sessions) {
       if (await bcrypt.compare(refreshToken, session.refreshToken)) {
-        await this.sessionModel.deleteOne({ _id: session.id });
-        return;
+        await this.sessionModel.deleteOne({ _id: session._id });
+        return true;
       }
     }
+    return false;
   }
   async removeByDevice(userId: string, device: string) {
-    await this.sessionModel.deleteMany({ userId, device });
+    const userObjectId = new Types.ObjectId(userId);
+    await this.sessionModel.deleteMany({ userId: userObjectId, device });
   }
 }

@@ -4,6 +4,7 @@ import { RedisService } from '../../../common/redis/redis.service';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -100,10 +101,9 @@ export class AuthService {
   }
 
   async resetPassword(user: AuthUser, password: string, device: string) {
-    console.log(user);
     await this.userService.updatePassword(user.phone, password);
 
-    return this.signIn({ phone: user.phone, userId: user.userId }, device);
+    return this.signIn({ userId: user.userId, phone: user.phone }, device);
   }
 
   async signUp(phone: string) {
@@ -148,6 +148,8 @@ export class AuthService {
       refreshToken,
     )) as AuthUser;
 
+    console.log(payload);
+
     const session = await this.sessionService.findValidSession(
       payload.userId,
       refreshToken,
@@ -185,8 +187,12 @@ export class AuthService {
   }
 
   async signOut(userId: string, refreshToken: string) {
-    await this.sessionService.remove(userId, refreshToken);
+    const deleted = await this.sessionService.remove(userId, refreshToken);
 
-    return { message: 'Đăng xuất thành công !' };
+    if (deleted) {
+      return { message: 'Đăng xuất thành công !' };
+    } else {
+      throw new ForbiddenException('Không có phiên đăng nhập !');
+    }
   }
 }

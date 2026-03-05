@@ -1,5 +1,6 @@
 import { AuthService } from './services/auth.service';
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -43,10 +44,10 @@ export class AuthController {
   @Public()
   @RequireTempPurpose(Purpose.SignUp)
   @UseGuards(TempVerifyGuard)
-  async completeSignUp(@Body() signUpDto: SignUpDto) {
+  async completeSignUp(@Request() req, @Body() signUpDto: SignUpDto) {
     try {
       return await this.authService.completeSignUp(
-        signUpDto.phone,
+        req.user.phone,
         signUpDto.name,
         signUpDto.gender,
         signUpDto.birthDay,
@@ -70,26 +71,28 @@ export class AuthController {
   @RequireTempPurpose(Purpose.ForgotPassword)
   @UseGuards(TempVerifyGuard)
   resetPassword(@Request() req, @Body() resetPasswordDto: ResetPasswordDto) {
-    if (resetPasswordDto.confirmPassword === resetPasswordDto.newPassword) {
-      console.log(req.user);
-      const device = req.headers['user-agent'] as string;
-      console.log(device);
-      return this.authService.resetPassword(
-        req.user,
-        resetPasswordDto.newPassword,
-        device,
-      );
+    if (resetPasswordDto.confirmPassword !== resetPasswordDto.newPassword) {
+      throw new BadRequestException('Mật khẩu xác nhận không khớp !');
     }
+    const device = req.headers['user-agent'] as string;
+    return this.authService.resetPassword(
+      req.user,
+      resetPasswordDto.newPassword,
+      device,
+    );
   }
 
-  @Post('login-with-temp')
+  @Post('signin-with-temp')
   @Public()
   @RequireTempPurpose(Purpose.ForgotPassword)
   @UseGuards(TempVerifyGuard)
   loginWithTemp(@Request() req) {
     const device = req.headers['user-agent'] as string;
 
-    return this.authService.signIn(req.user, device);
+    return this.authService.signIn(
+      { userId: req.user.userId as string, phone: req.user.phone as string },
+      device,
+    );
   }
 
   @Post('sign-in')
@@ -100,7 +103,7 @@ export class AuthController {
     return this.authService.signIn(req.user, device);
   }
 
-  @Post('log-out')
+  @Post('sign-out')
   @UseGuards(JwtAuthGuard)
   logOut(
     @Request() req: { user: AuthUser },
@@ -112,6 +115,9 @@ export class AuthController {
   @Post('token/refresh')
   @Public()
   refreshToken(@Body('refreshToken') token: string) {
+    if (!token) {
+      throw new BadRequestException('Refresh tokenn không tồn tại !');
+    }
     return this.authService.refresh(token);
   }
 
