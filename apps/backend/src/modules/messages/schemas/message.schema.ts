@@ -1,14 +1,12 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { CallStatus, CallType, FileType } from '@zalo-clone/shared-types';
+import { EmojiType } from '@zalo-clone/shared-types/dist/enums/emoji-type';
 import { Types } from 'mongoose';
 
 @Schema({ _id: false })
 export class File {
   @Prop()
-  fileName: string;
-
-  @Prop()
-  fileUrl: string;
+  fileKey: string;
 
   @Prop()
   fileSize: number;
@@ -31,8 +29,8 @@ export class Content {
 
 @Schema({ _id: false })
 export class Emoji {
-  @Prop({ required: true })
-  name: string;
+  @Prop({ type: String, enum: EmojiType, required: true })
+  name: EmojiType;
 
   @Prop({ required: true, default: 1 })
   quantity: number;
@@ -60,6 +58,9 @@ export class Call {
 
   @Prop({ type: String, enum: CallStatus, required: true })
   status: CallStatus;
+
+  @Prop()
+  startedAt: Date;
 
   @Prop()
   endedAt: Date;
@@ -101,4 +102,9 @@ export class Message {
 export const MessageSchema = SchemaFactory.createForClass(Message);
 
 MessageSchema.index({ conversationId: 1, createdAt: -1 });
+MessageSchema.index({
+  conversationId: 1,
+  'content.file.type': 1,
+  createdAt: -1,
+});
 MessageSchema.index({ senderId: 1 });

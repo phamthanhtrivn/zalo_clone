@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Patch,
   Post,
@@ -60,5 +61,21 @@ export class UsersController {
   @Post('suggest-friend/:userId')
   suggestFriend(@Param('userId') userId: string) {
     return this.usersService.suggestFriend(userId);
+  }
+  @Get('list-friends/:userId')
+  getListFriends(@Param('userId') userId: string) {
+    return this.usersService.getListFriends(userId);
+  }
+  @Get('received-friends-requests/:userId')
+  getReceivedFriendRequests(@Param('userId') userId: string) {
+    return this.usersService.getReceivedFriendRequests(userId);
+  }
+  @Get('sent-friends-requests/:userId')
+  getSentFriendRequests(@Param('userId') userId: string) {
+    return this.usersService.getSentFriendRequests(userId);
+  }
+  @Get('user-information/:userId')
+  getUserInformation(@Param('userId') userId: string) {
+    return this.usersService.getUserInformation(userId);
   }
 }

@@ -10,7 +10,8 @@ import { SearchFriendDto } from './dto/search-friend.dto';
 import { generateSuggestFriends } from './helper/generateSuggestFriends.helper';
 import { InforUser } from './dto/infor-user.dto';
 import { flattenObject } from './helper/flattenObject.helper';
-import { StorageService } from 'src/common/storage/storage.service';
+import { StorageService } from '../../common/storage/storage.service';
+import { getListUserForStatus } from './helper/getListUserForStatus.helper';
 @Injectable()
 export class UsersService {
   constructor(
@@ -269,5 +270,54 @@ export class UsersService {
       { $set: newData },
       { new: true },
     );
+  }
+  async getListFriends(userId: string) {
+    const users = await getListUserForStatus(
+      this.userModel,
+      FriendStatus.ACCEPTED,
+      this.storageService,
+      userId,
+    );
+    return { users };
+  }
+  async getReceivedFriendRequests(userId: string) {
+    const users = await getListUserForStatus(
+      this.userModel,
+      FriendStatus.REQUESTED,
+      this.storageService,
+      userId,
+    );
+    return { users };
+  }
+  async getSentFriendRequests(userId: string) {
+    const users = await getListUserForStatus(
+      this.userModel,
+      FriendStatus.PENDING,
+      this.storageService,
+      userId,
+    );
+    return { users };
+  }
+  async getUserInformation(userId: string) {
+    const user = await this.userModel
+      .findById(userId)
+      .select({ profile: 1 })
+      .lean();
+
+    if (!user) {
+      return null;
+    }
+
+    const avatarKey = user.profile?.avatarUrl;
+
+    const newUser = {
+      ...user,
+      profile: {
+        ...user.profile,
+        avatarUrl: avatarKey ? this.storageService.signFileUrl(avatarKey) : '',
+      },
+    };
+
+    return { newUser };
   }
 }
