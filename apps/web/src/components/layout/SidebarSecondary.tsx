@@ -1,7 +1,7 @@
 import { useLocation } from 'react-router-dom'
 import { SidebarSearch } from './SidebarSearch'
 import { ContactMenu } from './ContactMenu'
-import { ChatList } from './ChatList'
+import ConversationList from './ConversationList'
 
 export const SidebarSecondary = () => {
   const location = useLocation()
@@ -19,7 +19,7 @@ export const SidebarSecondary = () => {
         /* Chat List Sidebar (Default) */
         <div className="flex flex-col h-full">
           <SidebarSearch />
-          <ChatList />
+          <ConversationList />
         </div>
       )}
     </aside>

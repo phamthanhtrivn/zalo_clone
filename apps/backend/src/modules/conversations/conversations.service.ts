@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Conversation } from './schemas/conversation.schema';
-import { Connection, Model } from 'mongoose';
+import { Connection, Model, Types } from 'mongoose';
 import { Member } from '../members/schemas/member.schema';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { ConversationType, MemberRole } from '@zalo-clone/shared-types';
@@ -16,7 +16,7 @@ import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { TransferOwnerDto } from './dto/transfer-owenr.dto';
 import { RemoveMemberDto } from './dto/remove-member.dto';
 import { AddMemberDto } from './dto/add-member.dto';
-import e from 'express';
+import { ConversationItemDto } from './dto/conversation-item.dto';
 
 @Injectable()
 export class ConversationsService {
@@ -400,5 +400,168 @@ export class ConversationsService {
         ignoredUserIds: existingUserIds,
       },
     };
+  }
+
+  async getConversationsFromUser(userId: string) {
+    const userObjectId = new Types.ObjectId(userId);
+
+    const conversations: ConversationItemDto[] =
+      await this.memberModel.aggregate([
+        {
+          $match: {
+            userId: userObjectId,
+            leftAt: null,
+          },
+        },
+
+        {
+          $lookup: {
+            from: 'conversations',
+            localField: 'conversationId',
+            foreignField: '_id',
+            as: 'conversation',
+          },
+        },
+
+        { $unwind: '$conversation' },
+
+        {
+          $lookup: {
+            from: 'messages',
+            localField: 'conversation.lastMessageId',
+            foreignField: '_id',
+            as: 'lastMessage',
+          },
+        },
+
+        {
+          $unwind: {
+            path: '$lastMessage',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'lastMessage.senderId',
+            foreignField: '_id',
+            as: 'sender',
+          },
+        },
+
+        {
+          $unwind: {
+            path: '$sender',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        // lấy toàn bộ member của conversation
+        {
+          $lookup: {
+            from: 'members',
+            localField: 'conversationId',
+            foreignField: 'conversationId',
+            as: 'members',
+          },
+        },
+
+        // tìm user còn lại trong PRIVATE chat
+        {
+          $lookup: {
+            from: 'users',
+            let: {
+              members: '$members',
+              currentUser: '$userId',
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $in: [
+                      '$_id',
+                      {
+                        $map: {
+                          input: {
+                            $filter: {
+                              input: '$$members',
+                              as: 'm',
+                              cond: {
+                                $and: [
+                                  { $ne: ['$$m.userId', '$$currentUser'] },
+                                  { $eq: ['$$m.leftAt', null] },
+                                ],
+                              },
+                            },
+                          },
+                          as: 'm',
+                          in: '$$m.userId',
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: 'otherUser',
+          },
+        },
+
+        {
+          $unwind: {
+            path: '$otherUser',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        {
+          $project: {
+            _id: 0,
+
+            conversationId: '$conversation._id',
+
+            type: '$conversation.type',
+
+            name: {
+              $cond: [
+                { $eq: ['$conversation.type', 'GROUP'] },
+                '$conversation.group.name',
+                '$otherUser.profile.name',
+              ],
+            },
+
+            avatar: {
+              $cond: [
+                { $eq: ['$conversation.type', 'GROUP'] },
+                '$conversation.group.avatarUrl',
+                '$otherUser.profile.avatarUrl',
+              ],
+            },
+
+            lastMessage: {
+              senderName: {
+                $cond: [
+                  { $eq: ['$lastMessage.senderId', '$userId'] },
+                  'Bạn',
+                  '$sender.profile.name',
+                ],
+              },
+
+              content: '$lastMessage.content',
+            },
+
+            lastMessageAt: '$conversation.lastMessageAt',
+          },
+        },
+
+        {
+          $sort: {
+            lastMessageAt: -1,
+          },
+        },
+      ]);
+
+    return conversations;
   }
 }

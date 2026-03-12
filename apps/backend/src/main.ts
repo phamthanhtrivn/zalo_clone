@@ -4,7 +4,9 @@ import { ConfigService } from '@nestjs/config';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import * as dns from 'node:dns';
 
+dns.setServers(['1.1.1.1']);
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
@@ -14,6 +16,9 @@ async function bootstrap() {
   app.setGlobalPrefix('/api');
   app.enableVersioning({
     type: VersioningType.URI,
+  });
+  app.enableCors({
+    origin: true,
   });
 
   app.useGlobalPipes(

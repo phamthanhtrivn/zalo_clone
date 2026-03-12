@@ -4,7 +4,7 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar'
 
-const ChatPage = () => {
+const ConversationPage = () => {
   const { id } = useParams()
 
   // Simplified data for demo
@@ -101,4 +101,4 @@ const ChatPage = () => {
   )
 }
 
-export default ChatPage
+export default ConversationPage
