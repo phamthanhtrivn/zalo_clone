@@ -10,7 +10,6 @@ import {
   ConversationSchema,
 } from '../conversations/schemas/conversation.schema';
 import { StorageModule } from 'src/common/storage/storage.module';
-import { MessagesGateway } from './messages.gateway';
 
 @Module({
   imports: [
@@ -22,7 +21,7 @@ import { MessagesGateway } from './messages.gateway';
     MembersModule,
     StorageModule,
   ],
-  providers: [MessagesService, MessagesGateway],
+  providers: [MessagesService],
   controllers: [MessagesController],
 })
 export class MessagesModule {}
