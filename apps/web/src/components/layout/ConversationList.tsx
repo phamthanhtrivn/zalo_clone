@@ -5,11 +5,14 @@ import { useCallback, useEffect, useState } from "react";
 import { conversationService } from "@/services/conversation.service";
 import ConversationListItem from "./ConversationListItem";
 import type { ConversationItemType } from "@/types/conversation-item.type";
+import { useDispatch, useSelector } from "react-redux";
+import { setConversations } from "@/store/slices/conversationSlice";
 
 const ConversationList = () => {
   const { id } = useParams();
-  const [conversations, setConversations] = useState<ConversationItemType[]>(
-    [],
+  const dispatch = useDispatch();
+  const conversations = useSelector(
+    (state) => state.conversation.conversations,
   );
 
   const handleFetchConversations = useCallback(async () => {
@@ -19,7 +22,7 @@ const ConversationList = () => {
       );
 
       if (res.success) {
-        setConversations(res.data);
+        dispatch(setConversations(res.data));
       } else {
         console.log(res);
       }
@@ -70,11 +73,11 @@ const ConversationList = () => {
           </div>
         )}
 
-        {conversations.map((conversation) => (
+        {conversations.map((c) => (
           <ConversationListItem
-            key={conversation.conversationId}
-            conversation={conversation}
-            isActive={id === conversation.conversationId}
+            key={c.conversationId}
+            conversation={c}
+            isActive={id === c.conversationId}
           />
         ))}
       </div>

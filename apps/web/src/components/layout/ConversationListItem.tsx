@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { cn } from "@/lib/utils";
 import { formatMessageTime } from "@/utils/format-message-time..util";
-import { MoreHorizontal, Users } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
+import { MdGroups } from "react-icons/md";
 
 type Props = {
   conversation: ConversationItemType;
@@ -46,7 +47,7 @@ const ConversationListItem = ({ conversation, isActive }: Props) => {
               isActive ? "text-black" : "text-gray-900",
             )}
           >
-            {conversation.type === 'GROUP' && <Users size={16} />} {" "} {conversation.name}
+            {conversation.type === "GROUP" && <MdGroups size={20} color="gray" />} {conversation.name}
           </h4>
 
           <div className="relative flex items-center">
