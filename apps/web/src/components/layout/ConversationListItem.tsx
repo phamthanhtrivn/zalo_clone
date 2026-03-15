@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { formatMessageTime } from "@/utils/format-message-time..util";
 import { MoreHorizontal } from "lucide-react";
 import { MdGroups } from "react-icons/md";
+import React, { useMemo } from "react";
 
 type Props = {
   conversation: ConversationItemType;
@@ -12,23 +13,23 @@ type Props = {
 };
 
 const ConversationListItem = ({ conversation, isActive }: Props) => {
-  const getPreviewContent = () => {
+  const getPreviewContent = useMemo(() => {
     const content = conversation.lastMessage?.content;
 
     if (!content) return "";
-
     if (content.text) return content.text;
-
     if (content.icon) return "[Sticker]";
-
     if (content.file) return content.file.substring(8);
 
     return "";
-  };
+  }, [conversation.lastMessage]);
 
   return (
     <Link
       to={`/conversation/${conversation.conversationId}`}
+      state={{
+        conversation,
+      }}
       className={cn(
         "flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors group mt-2 mx-2 rounded-lg",
         isActive ? "bg-[#e5efff]" : "hover:bg-[#f3f5f6]",
@@ -47,7 +48,10 @@ const ConversationListItem = ({ conversation, isActive }: Props) => {
               isActive ? "text-black" : "text-gray-900",
             )}
           >
-            {conversation.type === "GROUP" && <MdGroups size={20} color="gray" />} {conversation.name}
+            {conversation.type === "GROUP" && (
+              <MdGroups size={20} color="gray" />
+            )}{" "}
+            {conversation.name}
           </h4>
 
           <div className="relative flex items-center">
@@ -68,11 +72,11 @@ const ConversationListItem = ({ conversation, isActive }: Props) => {
           conversation.lastMessage?.senderName !== "Bạn"
             ? ""
             : conversation.lastMessage?.senderName + ": "}
-          {getPreviewContent()}
+          {getPreviewContent}
         </p>
       </div>
     </Link>
   );
 };
 
-export default ConversationListItem;
+export default React.memo(ConversationListItem);

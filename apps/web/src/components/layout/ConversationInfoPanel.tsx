@@ -1,7 +1,7 @@
 import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import { Button } from "../ui/button";
 
-const ConversationInfoPanel = ({ chatInfo, isOpen }: any) => {
+const ConversationInfoPanel = ({ isOpen }: any) => {
   return (
     <div
       className={`
@@ -17,12 +17,12 @@ const ConversationInfoPanel = ({ chatInfo, isOpen }: any) => {
       <div className="p-4 space-y-4">
         <div className="flex flex-col items-center">
           <Avatar className="w-16 h-16">
-            <AvatarImage src={chatInfo.avatar} />
-            <AvatarFallback>{chatInfo.name.charAt(0)}</AvatarFallback>
+            {/* <AvatarImage src={chatInfo.avatar} />
+            <AvatarFallback>{chatInfo.name.charAt(0)}</AvatarFallback> */}
           </Avatar>
 
-          <h3 className="mt-2 font-semibold">{chatInfo.name}</h3>
-          <span className="text-sm text-gray-400">{chatInfo.status}</span>
+          {/* <h3 className="mt-2 font-semibold">{chatInfo.name}</h3>
+          <span className="text-sm text-gray-400">{chatInfo.status}</span> */}
         </div>
 
         <div className="border-t pt-4 space-y-2">

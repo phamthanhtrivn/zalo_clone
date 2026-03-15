@@ -66,11 +66,20 @@ export class MessagesService {
       query._id = { $lt: new Types.ObjectId(cursor) };
     }
 
-    const messages = await this.messageModel
+    let messages = await this.messageModel
       .find(query)
       .sort({ _id: -1 })
       .limit(Number(limit))
       .populate('senderId', 'profile.name profile.avatarUrl')
+      .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
+      .populate('reactions.userId', 'profile.name profile.avatarUrl')
+      .populate({
+        path: 'repliedId',
+        populate: {
+          path: 'senderId',
+          select: 'profile.name profile.avatarUrl',
+        },
+      })
       .lean();
 
     for (const message of messages) {
@@ -80,6 +89,8 @@ export class MessagesService {
         );
       }
     }
+
+    messages = messages.reverse();
 
     return {
       messages,

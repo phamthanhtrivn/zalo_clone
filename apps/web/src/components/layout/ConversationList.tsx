@@ -1,39 +1,14 @@
 import { useParams } from "react-router-dom";
 import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { Button } from "../ui/button";
-import { useCallback, useEffect, useState } from "react";
-import { conversationService } from "@/services/conversation.service";
 import ConversationListItem from "./ConversationListItem";
-import type { ConversationItemType } from "@/types/conversation-item.type";
-import { useDispatch, useSelector } from "react-redux";
-import { setConversations } from "@/store/slices/conversationSlice";
+import { useAppSelector } from "@/store";
 
 const ConversationList = () => {
   const { id } = useParams();
-  const dispatch = useDispatch();
-  const conversations = useSelector(
+  const conversations = useAppSelector(
     (state) => state.conversation.conversations,
   );
-
-  const handleFetchConversations = useCallback(async () => {
-    try {
-      const res = await conversationService.getConversationsFromUserId(
-        "699d2b94f9075fe800282901",
-      );
-
-      if (res.success) {
-        dispatch(setConversations(res.data));
-      } else {
-        console.log(res);
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  }, []);
-
-  useEffect(() => {
-    handleFetchConversations();
-  }, [handleFetchConversations]);
 
   return (
     <div className="flex flex-col h-full">

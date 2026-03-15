@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import ChatHeader from "@/components/layout/ChatHeader";
 import MessageList from "@/components/layout/MessageList";
@@ -7,28 +7,21 @@ import ConversationInfoPanel from "@/components/layout/ConversationInfoPanel";
 import { messageService } from "@/services/message.service";
 
 const ConversationPage = () => {
+  const userId = "699d2b94f9075fe800282901";
   const { id } = useParams();
+  const location = useLocation();
+  const { conversation } = location.state || {};
+
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
-
-  const chatInfo = {
-    name:
-      id === "1"
-        ? "Nguyễn Văn A"
-        : id === "2"
-          ? "Group Dự Án"
-          : "Người dùng Zalo",
-    status: "Vừa mới truy cập",
-    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${id}`,
-  };
 
   const handleLoadMessagesFromConversation = async () => {
     try {
       if (id) {
         const res = await messageService.getMessagesFromConversation(
           id,
-          "699d2b94f9075fe800282901",
+          userId,
           nextCursor,
           15,
         );
@@ -50,19 +43,21 @@ const ConversationPage = () => {
 
   return (
     <div className="flex flex-1 h-full">
-      <div className="flex-1 flex flex-col h-full bg-[#f4f7f9] min-w-0">
-        <ChatHeader
-          chatInfo={chatInfo}
-          isInfoOpen={isInfoOpen}
-          toggleInfo={() => setIsInfoOpen(!isInfoOpen)}
-        />
+      {conversation && (
+        <div className="flex-1 flex flex-col h-full bg-[#EBECF0] min-w-0">
+          <ChatHeader
+            conversation={conversation}
+            isInfoOpen={isInfoOpen}
+            toggleInfo={() => setIsInfoOpen(!isInfoOpen)}
+          />
 
-        <MessageList chatInfo={chatInfo} />
+          <MessageList messages={messages} currentUserId={userId} />
 
-        <ChatInput chatName={chatInfo.name} />
-      </div>
+          <ChatInput chatName={conversation.name} />
+        </div>
+      )}
 
-      <ConversationInfoPanel chatInfo={chatInfo} isOpen={isInfoOpen} />
+      <ConversationInfoPanel isOpen={isInfoOpen} />
     </div>
   );
 };

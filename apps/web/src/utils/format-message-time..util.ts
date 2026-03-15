@@ -44,3 +44,40 @@ export const formatMessageTime = (dateString: string) => {
     year: "numeric",
   });
 };
+
+export const formatTime = (date: string) => {
+  const d = new Date(date);
+  return d.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+export const formatOldDate = (date: string) => {
+  const d = new Date(date);
+
+  const weekday = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"][d.getDay()];
+
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+
+  return `${weekday} ${day}/${month}/${year}`;
+};
+
+export const getDateLabel = (date: string) => {
+  const msgDate = new Date(date);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  if (isSameDay(msgDate, today)) return "Hôm nay";
+  if (isSameDay(msgDate, yesterday)) return "Hôm qua";
+
+  return formatOldDate(date);
+};
