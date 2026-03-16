@@ -1,7 +1,60 @@
 import axios from "axios";
+import * as SecureStore from "expo-secure-store";
 import { config } from "@/constants/config";
 
+console.log(config.apiUrl);
+
 export const api = axios.create({
-  baseURL: config.apiUrl,
+  baseURL: `${config.apiUrl}/api`,
   timeout: 10000,
 });
+
+api.interceptors.request.use(async (config) => {
+  const token = await SecureStore.getItemAsync("access_token");
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => {
+    return response.data;
+  },
+  (error) => {
+    return Promise.reject(error);
+  },
+);
+
+api.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest.headers?.Authorization &&
+      !originalRequest._retry
+    ) {
+      originalRequest._retry = true;
+
+      const refreshToken = await SecureStore.getItemAsync("refresh_token");
+
+      const res = await api.post("/auth/token/refresh", {
+        refreshToken,
+      });
+
+      const newAccessToken = res.data.accessToken;
+
+      await SecureStore.setItemAsync("access_token", newAccessToken);
+
+      originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
+
+      return api(originalRequest);
+    }
+
+    return Promise.reject(error);
+  },
+);

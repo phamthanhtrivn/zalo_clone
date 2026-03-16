@@ -5,14 +5,26 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: "#0068FF",
-        accent: "#ebecf0",
-        chatMe: "#0068FF",
-        chatOther: "#F3F4F6",
+        primary: "#0055ff",
+        secondary: "#edeff2",
+        background: "#ffffff",
+        graident: "#02b4fa",
       },
-      textColor: {
-        
-      }
+      fontSize: {
+        xsm: 11,
+        xs: 12,
+        sm: 15,
+        base: 16,
+        lg: 22,
+      },
+      radius: {
+        cardRadius: 4,
+        inputRadius: 20,
+      },
+      textColor: {},
+      spacing: {
+        "screen-edge": "16px",
+      },
     },
   },
   plugins: [],
