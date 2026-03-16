@@ -1,36 +1,68 @@
 import { useLocation, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ChatHeader from "@/components/layout/ChatHeader";
 import MessageList from "@/components/layout/MessageList";
 import ChatInput from "@/components/layout/ChatInput";
 import ConversationInfoPanel from "@/components/layout/ConversationInfoPanel";
 import { messageService } from "@/services/message.service";
+import type { MessagesType } from "@/types/messages..type";
+
+const CURRENT_USER_ID = "699d2b94f9075fe800282901";
 
 const ConversationPage = () => {
-  const userId = "699d2b94f9075fe800282901";
   const { id } = useParams();
   const location = useLocation();
   const { conversation } = location.state || {};
 
   const [isInfoOpen, setIsInfoOpen] = useState(false);
-  const [messages, setMessages] = useState([]);
-  const [nextCursor, setNextCursor] = useState(null);
+  const [messages, setMessages] = useState<MessagesType[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isFirstLoad = useRef(true);
+
+  const handleScrollToTop = async () => {
+    const container = containerRef.current;
+    if (!container || !nextCursor || !id) return;
+
+    if (container.scrollTop === 0) {
+      const prevHeight = container.scrollHeight;
+
+      const res = await messageService.getMessagesFromConversation(
+        id,
+        CURRENT_USER_ID,
+        nextCursor,
+        10,
+      );
+
+      if (res.success) {
+        setMessages((prev) => [...res.data.messages, ...prev]);
+        setNextCursor(res.data.nextCursor);
+
+        requestAnimationFrame(() => {
+          const newHeight = container.scrollHeight;
+          container.scrollTop = newHeight - prevHeight;
+        });
+      }
+    }
+  };
 
   const handleLoadMessagesFromConversation = async () => {
+    if (!id) return;
+
     try {
-      if (id) {
-        const res = await messageService.getMessagesFromConversation(
-          id,
-          userId,
-          nextCursor,
-          15,
-        );
-        if (res.success) {
-          setMessages(res.data.messages);
-          setNextCursor(res.data.nextCursor);
-        } else {
-          console.error(res);
-        }
+      const res = await messageService.getMessagesFromConversation(
+        id,
+        CURRENT_USER_ID,
+        null,
+        10,
+      );
+
+      if (res.success) {
+        setMessages(res.data.messages);
+        setNextCursor(res.data.nextCursor);
+      } else {
+        console.error(res);
       }
     } catch (error) {
       console.error(error);
@@ -38,8 +70,19 @@ const ConversationPage = () => {
   };
 
   useEffect(() => {
+    setMessages([]);
+    setNextCursor(null);
+    isFirstLoad.current = true;
+
     handleLoadMessagesFromConversation();
   }, [id]);
+
+  useEffect(() => {
+    if (containerRef.current && isFirstLoad.current && messages.length) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      isFirstLoad.current = false;
+    }
+  }, [messages]);
 
   return (
     <div className="flex flex-1 h-full">
@@ -51,7 +94,12 @@ const ConversationPage = () => {
             toggleInfo={() => setIsInfoOpen(!isInfoOpen)}
           />
 
-          <MessageList messages={messages} currentUserId={userId} />
+          <MessageList
+            messages={messages}
+            currentUserId={CURRENT_USER_ID}
+            containerRef={containerRef}
+            handleScrollToTop={handleScrollToTop}
+          />
 
           <ChatInput chatName={conversation.name} />
         </div>

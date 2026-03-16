@@ -10,13 +10,11 @@ import { useAppDispatch } from "@/store";
 export const SidebarSecondary = () => {
   const location = useLocation();
   const isContactsRoute = location.pathname.startsWith("/contacts");
-
-  const userId = "699d2b94f9075fe800282901";
   const dispatch = useAppDispatch();
 
   useEffect(() => {
     const fetch = async () => {
-      const res = await conversationService.getConversationsFromUserId(userId);
+      const res = await conversationService.getConversationsFromUserId("699d2b94f9075fe800282901");
 
       if (res.success) {
         dispatch(setConversations(res.data));

@@ -94,8 +94,7 @@ export class MessagesService {
 
     return {
       messages,
-      nextCursor:
-        messages.length > 0 ? messages[messages.length - 1]._id : null,
+      nextCursor: messages.length > 0 ? messages[0]._id : null,
     };
   }
 

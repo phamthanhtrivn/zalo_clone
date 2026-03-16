@@ -81,3 +81,10 @@ export const getDateLabel = (date: string) => {
 
   return formatOldDate(date);
 };
+
+export const isSameHourAndMinute = (a: string, b: string) => {
+  const d1 = new Date(a);
+  const d2 = new Date(b);
+
+  return d1.getHours() === d2.getHours() && d1.getMinutes() === d2.getMinutes();
+};

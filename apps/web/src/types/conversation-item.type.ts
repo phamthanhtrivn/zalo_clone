@@ -8,8 +8,14 @@ export interface ConversationItemType {
     content: {
       text: string;
       icon: string;
-      file: string;
+      file: File;
     };
   };
   lastMessageAt: string;
+}
+
+export interface File {
+  fileKey: string;
+  fileSize: number;
+  type: "IMAGE" | "VIDEO" | "LINK";
 }

@@ -19,7 +19,7 @@ const ConversationListItem = ({ conversation, isActive }: Props) => {
     if (!content) return "";
     if (content.text) return content.text;
     if (content.icon) return "[Sticker]";
-    if (content.file) return content.file.substring(8);
+    if (content.file) return content.file.fileKey;
 
     return "";
   }, [conversation.lastMessage]);
