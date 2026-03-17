@@ -159,21 +159,52 @@ export class UsersService {
   // [POST] /api/users/search-friend
   async searchFriend(body: SearchFriendDto) {
     const { userId, key } = body;
-    const users = await this.userModel.find({
-      $or: [
-        {
-          phone: key,
-        },
-        {
-          $and: [
-            { 'friends.friendId': userId },
-            { 'friends.status': FriendStatus.ACCEPTED },
-            { 'profile.name': { $regex: `${key}`, $options: 'i' } },
-          ],
-        },
-      ],
+    const users = await this.userModel
+      .find({
+        $or: [
+          {
+            phone: key,
+          },
+          {
+            $and: [
+              { 'friends.friendId': userId },
+              { 'friends.status': FriendStatus.ACCEPTED },
+              { 'profile.name': { $regex: `${key}`, $options: 'i' } },
+            ],
+          },
+        ],
+      })
+      .select({ _id: true, profile: true });
+
+    const userMap = users?.map((item) => {
+      return {
+        _id: item._id,
+        name: item.profile?.name,
+        avatarUrl: this.storageService.signFileUrl(
+          item.profile?.avatarUrl ? item.profile?.avatarUrl : '',
+        ),
+      };
     });
-    return { users: users };
+
+    const newUsers = userMap?.reduce(
+      (acc, friend) => {
+        const letter = friend?.name ? friend?.name[0].toUpperCase() : '0';
+
+        let group = acc.find((item) => item.key === letter);
+
+        if (!group) {
+          group = { key: letter, friends: [] };
+          acc.push(group);
+        }
+
+        group.friends.push(friend);
+
+        return acc;
+      },
+      [] as { key: string; friends: typeof userMap }[],
+    );
+
+    return { users: newUsers };
   }
   // [POST] /api/users/suggest-friend
   async suggestFriend(userId: string) {
@@ -278,7 +309,22 @@ export class UsersService {
       this.storageService,
       userId,
     );
-    return { users };
+    const newUsers = users.friends?.reduce(
+      (acc, friend) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+        const letter = friend.name[0].toUpperCase();
+        let group = acc.find((item) => item.key === letter);
+        if (!group) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          group = { key: letter, friends: [] };
+          acc.push(group);
+        }
+        group.friends.push(friend);
+        return acc;
+      },
+      [] as { key: string; friends: typeof users.friends }[],
+    );
+    return { users: newUsers };
   }
   async getReceivedFriendRequests(userId: string) {
     const users = await getListUserForStatus(
@@ -309,6 +355,8 @@ export class UsersService {
     }
 
     const avatarKey = user.profile?.avatarUrl;
+
+    console.log(this.storageService.signFileUrl(avatarKey || ''));
 
     const newUser = {
       ...user,
