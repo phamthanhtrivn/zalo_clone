@@ -6,7 +6,7 @@ import ContactGroup from '../pages/ContactGroup'
 import ContactRequest from '../pages/ContactRequest'
 import ContactGroupRequest from '../pages/ContactGroupRequest'
 import HomePage from '../pages/HomePage'
-import ChatPage from '../pages/ChatPage'
+import ConversationPage from '../pages/ConversationPage'
 
 
 const router = createBrowserRouter([
@@ -19,8 +19,8 @@ const router = createBrowserRouter([
         element: <HomePage />,
       },
       {
-        path: '/chat/:id',
-        element: <ChatPage />,
+        path: '/conversation/:id',
+        element: <ConversationPage />,
       },
       {
         path: '/contacts',

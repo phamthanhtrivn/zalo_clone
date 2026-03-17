@@ -56,10 +56,13 @@ export class ConversationSettingsController {
     muteConversation(
         @Body('userId') userId: string,
         @Body('conversationId') conversationId: string,
+        @Body('duration') duration: number
     ) {
         return this.conversationSettingsService.muteConversation(
             new Types.ObjectId(userId),
-            new Types.ObjectId(conversationId));
+            new Types.ObjectId(conversationId),
+            duration
+        );
     }
     // Bật thông báo
     @Patch('unmute')

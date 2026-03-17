@@ -1,5 +1,5 @@
 /* eslint-disable prettier/prettier */
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import {
     ConversationSetting,
@@ -81,10 +81,38 @@ export class ConversationSettingsService {
     // Tắt thông báo
     async muteConversation(
         userId: Types.ObjectId,
-        conversationId: Types.ObjectId) {
+        conversationId: Types.ObjectId,
+        duration: number
+    ) {
+        if (duration === undefined || duration === null) {
+            throw new BadRequestException("Duration is required");
+        }
+
+        const now = new Date();
+        let mutedUntil: Date;
+
+        if (duration === -1) {
+
+            mutedUntil = new Date("2999-12-31");
+        } else if (duration === -2) {
+
+            const target = new Date();
+
+            target.setHours(8, 0, 0, 0);
+
+            if (now >= target) {
+                target.setDate(target.getDate() + 1);
+            }
+
+            mutedUntil = target;
+        } else {
+            mutedUntil = new Date(Date.now() + duration * 60 * 1000);
+        }
         const setting = await this.conversationSettingModel.findOneAndUpdate(
             { userId, conversationId },
-            { $set: { muted: true } },
+            {
+                $set: { mutedUntil }
+            },
             {
                 new: true,
                 upsert: true,
@@ -93,7 +121,6 @@ export class ConversationSettingsService {
         );
 
         return setting;
-
     }
     // Bật thông báo
     async unmuteConversation(
@@ -101,7 +128,7 @@ export class ConversationSettingsService {
         conversationId: Types.ObjectId) {
         const setting = await this.conversationSettingModel.findOneAndUpdate(
             { userId, conversationId },
-            { $set: { muted: false } },
+            { $set: { mutedUntil: null } },
             { new: true }
         );
         if (!setting) {

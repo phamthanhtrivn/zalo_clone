@@ -9,8 +9,8 @@ export class ConversationSetting {
   @Prop({ type: Types.ObjectId, ref: 'Conversation', required: true })
   conversationId: Types.ObjectId;
 
-  @Prop({ default: false })
-  muted: boolean;
+  @Prop({ type: Date, default: null })
+  mutedUntil: Date | null;
 
   @Prop({ default: false })
   pinned: boolean;

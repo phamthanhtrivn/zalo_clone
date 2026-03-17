@@ -1,10 +1,14 @@
 import { apiClient } from "./apiClient";
 
 export const messageService = {
-  // getMessages: async (conversationId: string, params?: any) => {
-  //   const response = await apiClient.get(`/messages/${conversationId}`, {
-  //     params,
-  //   });
-  //   return response.data;
-  // },
+  getMessagesFromConversation: async (conversationId: string, userId: string, cursor?: string | null, limit: number = 15) => {
+    const response = await apiClient.get(`/api/messages/conversation/${conversationId}`, {
+      params: {
+        userId,
+        cursor,
+        limit
+      }
+    })
+    return response.data;
+  }
 };
