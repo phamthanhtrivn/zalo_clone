@@ -1,9 +1,9 @@
 import { Video, Search } from "lucide-react";
-import { Button } from "../ui/button";
-import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import { MdGroupAdd } from "react-icons/md";
 import { LuPanelRight, LuPanelRightClose } from "react-icons/lu";
 import type { ConversationItemType } from "@/types/conversation-item.type";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 
 type ChatHeaderProps = {
   conversation: ConversationItemType;

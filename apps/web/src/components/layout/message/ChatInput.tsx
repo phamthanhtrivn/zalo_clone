@@ -1,6 +1,6 @@
 import { Smile, Paperclip, Image } from "lucide-react";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const ChatInput = ({ chatName }: any) => {
   return (
@@ -24,7 +24,7 @@ const ChatInput = ({ chatName }: any) => {
         />
         <Button
           variant="ghost"
-          size="icon"   
+          size="icon"
           className="w-10 h-10 text-[#0068ff] hover:bg-transparent"
         >
           <span className="font-bold text-sm">GỬI</span>

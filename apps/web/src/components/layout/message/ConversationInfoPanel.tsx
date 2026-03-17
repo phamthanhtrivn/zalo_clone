@@ -1,5 +1,5 @@
-import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
-import { Button } from "../ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 
 const ConversationInfoPanel = ({ isOpen }: any) => {
   return (

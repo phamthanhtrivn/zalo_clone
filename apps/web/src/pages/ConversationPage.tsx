@@ -1,11 +1,12 @@
 import { useLocation, useParams } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
-import ChatHeader from "@/components/layout/ChatHeader";
-import MessageList from "@/components/layout/MessageList";
-import ChatInput from "@/components/layout/ChatInput";
-import ConversationInfoPanel from "@/components/layout/ConversationInfoPanel";
+import ChatHeader from "@/components/layout/message/ChatHeader";
+import MessageList from "@/components/layout/message/MessageList";
+import ChatInput from "@/components/layout/message/ChatInput";
+import ConversationInfoPanel from "@/components/layout/message/ConversationInfoPanel";
 import { messageService } from "@/services/message.service";
-import type { MessagesType } from "@/types/messages..type";
+import type { MessagesType } from "@/types/messages.type";
+import type { EmojiType } from "@/constants/emoji.constant";
 
 const CURRENT_USER_ID = "699d2b94f9075fe800282901";
 
@@ -69,6 +70,41 @@ const ConversationPage = () => {
     }
   };
 
+  const reactionMessage = async (emojiType: EmojiType, messageId: string) => {
+    if (!id) return;
+
+    try {
+      const res = await messageService.reactionMessage(
+        id,
+        CURRENT_USER_ID,
+        emojiType,
+        messageId,
+      );
+      if (!res.success) {
+        console.error(res);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const removeReaction = async (messageId: string) => {
+    if (!id) return;
+
+    try {
+      const res = await messageService.removeReaction(
+        CURRENT_USER_ID,
+        messageId,
+        id,
+      );
+      if (!res.success) {
+        console.error(res);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     setMessages([]);
     setNextCursor(null);
@@ -99,6 +135,8 @@ const ConversationPage = () => {
             currentUserId={CURRENT_USER_ID}
             containerRef={containerRef}
             handleScrollToTop={handleScrollToTop}
+            reactionMessage={reactionMessage}
+            removeReaction={removeReaction}
           />
 
           <ChatInput chatName={conversation.name} />

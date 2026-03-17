@@ -692,8 +692,14 @@ export class MessagesService {
         conversationId: objectConversationId,
         recalled: false,
         call: null,
-        'reactions.userId': objectUserId,
-        'reactions.emoji.name': emojiType,
+        reactions: {
+          $elemMatch: {
+            userId: objectUserId,
+            emoji: {
+              $elemMatch: { name: emojiType },
+            },
+          },
+        },
       },
       {
         $inc: {
@@ -715,7 +721,16 @@ export class MessagesService {
         conversationId: objectConversationId,
         recalled: false,
         call: null,
-        'reactions.userId': objectUserId,
+        reactions: {
+          $elemMatch: {
+            userId: objectUserId,
+            emoji: {
+              $not: {
+                $elemMatch: { name: emojiType },
+              },
+            },
+          },
+        },
       },
       {
         $push: {
@@ -737,6 +752,7 @@ export class MessagesService {
         conversationId: objectConversationId,
         recalled: false,
         call: null,
+        'reactions.userId': { $ne: objectUserId },
       },
       {
         $push: {

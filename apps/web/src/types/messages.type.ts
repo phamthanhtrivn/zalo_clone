@@ -23,7 +23,21 @@ export interface MessagesType {
   updatedAt: string;
 }
 
-export interface ReactionType {}
+export interface ReactionType {
+  userId: {
+    _id: string;
+    profile: {
+      name: string;
+      avatarUrl: string;
+    };
+  };
+  emoji: {
+    name: string;
+    quantity: number;
+  }[];
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface ReadReceiptType {
   userId: {
