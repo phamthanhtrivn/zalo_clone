@@ -10,8 +10,9 @@ const ContactPage = () => {
   useEffect(() => {
     const getFriends = async () => {
       const data = await userService.getListFriends();
-
-      setFriends(data.data.users);
+      if (data?.data?.users) {
+        setFriends(data.data.users);
+      }
     };
     getFriends();
   }, []);
@@ -21,7 +22,9 @@ const ContactPage = () => {
     const timer = setTimeout(async () => {
       try {
         const data = await userService.searchFriend(keyword);
-        setFriends(data.data.users);
+        if (data?.data?.users) {
+          setFriends(data.data.users);
+        }
       } catch (err) {
         console.log(err);
       }
@@ -30,7 +33,7 @@ const ContactPage = () => {
   }, [keyword]);
 
   const countFriends = () => {
-    const count = friends.reduce((sum: number, item: any) => {
+    const count = friends?.reduce((sum: number, item: any) => {
       return sum + item.friends.length;
     }, 0);
     return count;
@@ -103,14 +106,14 @@ const ContactPage = () => {
             </div>
           </div>
 
-          {friends.length < 0 ? (
+          {friends?.length == 0 && friends ? (
             <div className="flex-1 flex-col items-center justify-center p-4 text-center">
               <Users className="w-20 h-20 mx-auto opacity-20" />
               <p className="text-2xl">Hiện tại bạn chưa có bạn bè</p>
             </div>
           ) : (
             friends.map((item: any) => (
-              <FriendItem key={item.key} item={item} />
+              <FriendItem key={item.key} item={item} setFriends={setFriends} />
             ))
           )}
         </div>

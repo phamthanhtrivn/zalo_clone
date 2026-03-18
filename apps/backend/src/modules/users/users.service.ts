@@ -12,6 +12,7 @@ import { InforUser } from './dto/infor-user.dto';
 import { flattenObject } from './helper/flattenObject.helper';
 import { StorageService } from '../../common/storage/storage.service';
 import { getListUserForStatus } from './helper/getListUserForStatus.helper';
+import { format } from './helper/format.helper';
 @Injectable()
 export class UsersService {
   constructor(
@@ -125,6 +126,12 @@ export class UsersService {
       friendId,
       FriendStatus.BLOCKED,
     );
+    await updateFriendStatus(
+      this.userModel,
+      friendId,
+      userId,
+      FriendStatus.BLOCKED_BY_OTHER,
+    );
     return { userId, friendId };
   }
   //  [POST] /api/users/cancel-friend
@@ -186,25 +193,9 @@ export class UsersService {
       };
     });
 
-    const newUsers = userMap?.reduce(
-      (acc, friend) => {
-        const letter = friend?.name ? friend?.name[0].toUpperCase() : '0';
+    const usersFormat = format(userMap);
 
-        let group = acc.find((item) => item.key === letter);
-
-        if (!group) {
-          group = { key: letter, friends: [] };
-          acc.push(group);
-        }
-
-        group.friends.push(friend);
-
-        return acc;
-      },
-      [] as { key: string; friends: typeof userMap }[],
-    );
-
-    return { users: newUsers };
+    return { users: usersFormat };
   }
   // [POST] /api/users/suggest-friend
   async suggestFriend(userId: string) {
@@ -309,22 +300,8 @@ export class UsersService {
       this.storageService,
       userId,
     );
-    const newUsers = users.friends?.reduce(
-      (acc, friend) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
-        const letter = friend.name[0].toUpperCase();
-        let group = acc.find((item) => item.key === letter);
-        if (!group) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          group = { key: letter, friends: [] };
-          acc.push(group);
-        }
-        group.friends.push(friend);
-        return acc;
-      },
-      [] as { key: string; friends: typeof users.friends }[],
-    );
-    return { users: newUsers };
+    const userFormat = format(users);
+    return { users: userFormat };
   }
   async getReceivedFriendRequests(userId: string) {
     const users = await getListUserForStatus(

@@ -9,8 +9,17 @@ export const userService = {
   },
 
   searchFriend : async ( key : string ) => {
-    const reponse = await apiClient.post("users/search-friend", {userId : "69a7cf6cdf7c64ce18685dc6",key});
-    return reponse.data;
+    const response = await apiClient.post("users/search-friend", {userId : userId,key});
+    return response.data;
+  },
+  cancelFriend : async (friendId : string) => {
+    const response = await apiClient.post("users/cancel-friend",{userId : userId,friendId : friendId});
+    return response.data;
+  },
+  blockFriend : async (friendId : string) => {
+    console.log(friendId);
+    const response = await apiClient.post("users/block-friend",{userId : userId,friendId : friendId});
+    return response.data;
   },
 
   getProfile: async () => {
