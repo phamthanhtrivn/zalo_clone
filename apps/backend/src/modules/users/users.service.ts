@@ -215,9 +215,9 @@ export class UsersService {
       .find({ _id: { $in: candidatesIds } })
       .lean();
     const result: {
-      id: string;
+      friendId: string;
       name: string;
-      avatar: string;
+      avatarUrl: string;
       score: number;
     }[] = [];
 
@@ -255,9 +255,10 @@ export class UsersService {
         }
       }
       result.push({
-        id: item._id.toString(),
+        friendId: item._id.toString(),
         name: item.profile?.name || '',
-        avatar: item.profile?.avatarUrl || '',
+        avatarUrl:
+          this.storageService.signFileUrl(item.profile?.avatarUrl ?? '') || '',
         score: score,
       });
     }

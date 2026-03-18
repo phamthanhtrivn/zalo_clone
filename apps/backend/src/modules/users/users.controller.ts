@@ -55,7 +55,6 @@ export class UsersController {
     @Body() body: InforUser,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    console.log(body);
     return this.usersService.updateInformationUser(body, file, id);
   }
   @Post('suggest-friend/:userId')

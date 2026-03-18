@@ -17,8 +17,21 @@ export const userService = {
     return response.data;
   },
   blockFriend : async (friendId : string) => {
-    console.log(friendId);
     const response = await apiClient.post("users/block-friend",{userId : userId,friendId : friendId});
+    return response.data;
+  },
+  receivedFriendRequests : async () => {
+    const response = await apiClient.get(`users/received-friends-requests/${userId}`);
+    return response.data;
+  },
+
+  sentFriendRequests : async () => {
+    const response = await apiClient.get(`users/sent-friends-requests/${userId}`);
+    return response.data;
+  },
+
+  suggestFriend : async () => {
+    const response = await apiClient.post(`users/suggest-friend/${userId}`);
     return response.data;
   },
 
