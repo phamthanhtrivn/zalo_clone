@@ -9,30 +9,21 @@ const ContactRequest = () => {
   const [receivedUsers, setReceivedUsers] = useState<any>([]);
   const [sendUsers, setSendUsers] = useState<any>([]);
   const [suggestUsers, setSuggestUsers] = useState<any>([]);
+
   useEffect(() => {
     const getUsers = async () => {
       try {
         let data = await userService.receivedFriendRequests();
         if (data?.data?.users) {
-          setReceivedUsers([
-            ...data.data.users,
-            { id: "1111111", name: "Tran Minh Tri" },
-          ]);
+          setReceivedUsers(data.data.users);
         }
         data = await userService.sentFriendRequests();
         if (data?.data?.users) {
-          setSendUsers([
-            ...data.data.users,
-            { id: "1111111", name: "Tran Minh Tri" },
-          ]);
+          setSendUsers(data.data.users);
         }
         data = await userService.suggestFriend();
-        console.log(data);
         if (data?.data) {
-          setSuggestUsers([
-            ...data.data,
-            { id: "1111111", name: "Tran Minh Tri" },
-          ]);
+          setSuggestUsers(data.data);
         }
       } catch (err) {
         console.log(err);
@@ -41,8 +32,81 @@ const ContactRequest = () => {
     getUsers();
   }, []);
 
+  const handelAccept = (id: string) => {
+    const acceptFriend = async () => {
+      try {
+        const data = await userService.acceptFriend(id);
+        console.log(data);
+        if (data.data) {
+          setReceivedUsers((prev: any) =>
+            prev.filter((item: any) => item.friendId != id),
+          );
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    };
+    acceptFriend();
+  };
+
+  const handelReject = (id: string) => {
+    const rejectFriend = async () => {
+      try {
+        const data = await userService.rejectFriend(id);
+        if (data.data) {
+          setReceivedUsers((prev: any) =>
+            prev.filter((item: any) => item.friendId != id),
+          );
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    };
+    rejectFriend();
+  };
+
+  const handelRecall = (id: string) => {
+    const recallFriend = async () => {
+      try {
+        const data = await userService.cancelFriend(id);
+        if (data.data) {
+          setSendUsers((prev: any) =>
+            prev.filter((item: any) => item.friendId != id),
+          );
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    };
+    recallFriend();
+  };
+
+  const handelAddFriend = (id: string) => {
+    const addFriend = async () => {
+      try {
+        const data = await userService.addFriend(id);
+        if (data.data) {
+          const item = suggestUsers.find((user: any) => user.friendId == id);
+          setSuggestUsers((prev: any) =>
+            prev.filter((item: any) => item.friendId != id),
+          );
+          setSendUsers([...sendUsers, item]);
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    };
+    addFriend();
+  };
+
+  const handelSkip = (id: string) => {
+    setSuggestUsers((prev: any) =>
+      prev.filter((item: any) => item.friendId != id),
+    );
+  };
+
   return (
-    <div className="flex-1 flex flex-col bg-white overflow-hidden">
+    <div className="flex-1 overflow-y-auto flex-col bg-white overflow-hidden">
       <header className="h-[64px] border-b border-[#e5e7eb] flex items-center px-4 shrink-0">
         <div className="flex items-center gap-3">
           <UserPlus className="w-5 h-5 text-gray-600" />
@@ -56,14 +120,19 @@ const ContactRequest = () => {
         <div className="flex-1">
           <div className="mb-5">
             <span className="text-[16px] font-semibold text-gray-800">
-              Lời mời kết bạn (3)
+              Lời mời kết bạn ({receivedUsers.length || 0})
             </span>
           </div>
           <div className="flex justify-content-between">
             {receivedUsers?.length > 0 ? (
-              <div className="w-[30%]">
+              <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {receivedUsers.map((item: any) => (
-                  <UserRequestCart key={item.id} item={item} />
+                  <UserRequestCart
+                    key={item.friendId}
+                    item={item}
+                    handelAccept={handelAccept}
+                    handelReject={handelReject}
+                  />
                 ))}
               </div>
             ) : (
@@ -74,45 +143,50 @@ const ContactRequest = () => {
             )}
           </div>
         </div>
+
         <div>
           <div className="mb-5">
             <span className="text-[16px] font-semibold text-gray-800">
-              Lời mời đã gửi (2)
+              Lời mời đã gửi ({sendUsers.length || 0})
             </span>
           </div>
           <div className="flex justify-content-between">
             {sendUsers?.length > 0 ? (
-              <div className="w-[30%]">
-                {receivedUsers.map((item: any) => (
-                  <UserSendCart key={item.id} item={item} />
+              <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {sendUsers.map((item: any) => (
+                  <UserSendCart
+                    key={item.friendId}
+                    item={item}
+                    handelRecall={handelRecall}
+                  />
                 ))}
               </div>
             ) : (
-              <div className="flex-1 flex-column justify-content-center align-items-center text-center">
-                <UserPlus className="w-16 h-16 mx-auto opacity-20 mb-4" />
-                <p className="text-sm">Chưa có lời mời kết bạn nào</p>
-              </div>
+              <div className="flex-1 flex-column justify-content-center align-items-center text-center"></div>
             )}
           </div>
         </div>
+
         <div>
           <div className="mb-5">
             <span className="text-[16px] font-semibold text-gray-800">
-              Gợi ý kết bạn (10)
+              Gợi ý kết bạn ({suggestUsers.length || 0})
             </span>
           </div>
           <div className="flex justify-content-between">
             {suggestUsers?.length > 0 ? (
-              <div className="w-[30%]">
-                {receivedUsers.map((item: any) => (
-                  <UserSuggestCart key={item.id} item={item} />
+              <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {suggestUsers.map((item: any) => (
+                  <UserSuggestCart
+                    key={item.friendId}
+                    item={item}
+                    handelAddFriend={handelAddFriend}
+                    handelSkip={handelSkip}
+                  />
                 ))}
               </div>
             ) : (
-              <div className="flex-1 flex-column justify-content-center align-items-center text-center">
-                <UserPlus className="w-16 h-16 mx-auto opacity-20 mb-4" />
-                <p className="text-sm">Chưa có lời mời kết bạn nào</p>
-              </div>
+              <div className="flex-1 flex-column justify-content-center align-items-center text-center"></div>
             )}
           </div>
         </div>
