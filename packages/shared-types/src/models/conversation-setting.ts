@@ -9,4 +9,5 @@ export interface ConversationSetting {
   pinned: boolean;
   hidden: boolean;
   category: String;
+  deletedAt: Date | null;
 }

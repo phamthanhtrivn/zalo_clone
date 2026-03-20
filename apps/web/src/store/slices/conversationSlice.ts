@@ -49,11 +49,16 @@ const conversationSlice = createSlice({
             if (c) {
                 c.category = action.payload.category;
             }
-        }
+        },
+        removeConversation: (state, action) => {
+            state.conversations = state.conversations.filter(
+                (c) => c.conversationId !== action.payload
+            );
+        },
     }
 })
 
-export const { setConversations, togglePinConversation, hideConversationLocal, toggleMuteConversation, setCategoryLocal } =
+export const { setConversations, togglePinConversation, hideConversationLocal, toggleMuteConversation, setCategoryLocal, removeConversation } =
     conversationSlice.actions;
 
 export default conversationSlice.reducer

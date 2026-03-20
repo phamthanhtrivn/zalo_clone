@@ -102,3 +102,17 @@ export const setCategory = async (
         throw error;
     }
 };
+
+// Xóa cuộc hội thoại
+export const deleteConversation = async (userId: string, conversationId: string) => {
+    try {
+        const response = await apiClient.patch('/api/conversation-settings/delete', {
+            userId,
+            conversationId,
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error deleting conversation:', error);
+        throw error;
+    }
+};  

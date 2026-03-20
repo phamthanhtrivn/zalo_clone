@@ -88,5 +88,15 @@ export class ConversationSettingsController {
             category
         );
     }
+    @Patch('delete')
+    deleteConversation(
+        @Body('userId') userId: string,
+        @Body('conversationId') conversationId: string,
+    ) {
+        return this.conversationSettingsService.deleteConversation(
+            new Types.ObjectId(userId),
+            new Types.ObjectId(conversationId),
+        );
+    }
 
 }

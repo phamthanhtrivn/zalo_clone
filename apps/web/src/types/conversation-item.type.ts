@@ -7,6 +7,7 @@ export interface ConversationItemType {
   pinned: boolean;
   hidden: boolean;
   category?: ConversationCategory;
+  deletedAt: Date | null;
   lastMessage: {
     senderName: string;
     content: {

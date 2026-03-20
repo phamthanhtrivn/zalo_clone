@@ -169,5 +169,27 @@ export class ConversationSettingsService {
 
         return setting;
     }
+    async deleteConversation(
+        userId: Types.ObjectId,
+        conversationId: Types.ObjectId,
+    ) {
+        const setting = await this.conversationSettingModel.findOneAndUpdate(
+            { userId, conversationId },
+            {
+                $set: { deletedAt: new Date() },
+            },
+            {
+                new: true,
+                upsert: true,
+                setDefaultsOnInsert: true,
+            },
+        );
+
+        return {
+            success: true,
+            message: 'Đã xoá cuộc hội thoại',
+            data: setting,
+        };
+    }
 }
 

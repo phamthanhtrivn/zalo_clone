@@ -23,6 +23,8 @@ export class ConversationSetting {
     default: null,
   })
   category: string | null;
+  @Prop({ type: Date, default: null })
+  deletedAt: Date | null;
 }
 
 export type ConversationSettingDocument = ConversationSetting & Document;

@@ -16,6 +16,8 @@ import { IoNotificationsOff } from "react-icons/io5";
 import { setCategoryLocal } from "@/store/slices/conversationSlice";
 import { setCategory } from "@/services/conversation-settings.service";
 import { IoCheckmark } from "react-icons/io5";
+import { removeConversation } from "@/store/slices/conversationSlice";
+import { deleteConversation } from "@/services/conversation-settings.service";
 const CURRENT_USER_ID = "699d2b94f9075fe800282901";
 type Props = {
   conversation: ConversationItemType;
@@ -129,6 +131,19 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
 
     } catch (error) {
       console.error("Set category failed:", error);
+    }
+  };
+
+  const handleDeleteConversation = async () => {
+    try {
+      setOpenMenu(null);
+
+      await deleteConversation(CURRENT_USER_ID, conversation.conversationId);
+
+
+      dispatch(removeConversation(conversation.conversationId));
+    } catch (error) {
+      console.error("Delete failed:", error);
     }
   };
   return (
@@ -411,6 +426,7 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
                     <div
                       onMouseEnter={closeSubMenu}
                       className="p-3 text-red-500 hover:bg-gray-100 cursor-pointer"
+                      onClick={handleDeleteConversation}
                     >
                       Xóa hội thoại
                     </div>
