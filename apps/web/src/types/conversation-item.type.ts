@@ -6,6 +6,7 @@ export interface ConversationItemType {
   muted: boolean;
   pinned: boolean;
   hidden: boolean;
+  category?: ConversationCategory;
   lastMessage: {
     senderName: string;
     content: {
@@ -22,3 +23,12 @@ export interface File {
   fileSize: number;
   type: "IMAGE" | "VIDEO" | "LINK";
 }
+
+export type ConversationCategory =
+  | 'customer'
+  | 'family'
+  | 'work'
+  | 'friends'
+  | 'later'
+  | 'colleague'
+  | null;

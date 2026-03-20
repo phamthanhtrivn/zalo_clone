@@ -78,4 +78,27 @@ export const unmuteConversation = async (userId: string, conversationId: string)
         console.error('Error unmuting conversation:', error);
         throw error;
     };
+
+
+
 }
+// Phân loại cuộc hội thoại
+
+// Phân loại cuộc hội thoại
+export const setCategory = async (
+    userId: string,
+    conversationId: string,
+    category: 'customer' | 'family' | 'work' | 'friends' | 'later' | 'colleague'
+) => {
+    try {
+        const response = await apiClient.patch('/api/conversation-settings/category', {
+            userId,
+            conversationId,
+            category,
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error setting category:', error);
+        throw error;
+    }
+};

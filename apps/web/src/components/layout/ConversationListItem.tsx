@@ -1,4 +1,4 @@
-import type { ConversationItemType } from "@/types/conversation-item.type";
+import type { ConversationCategory, ConversationItemType } from "@/types/conversation-item.type";
 import { Link } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,9 @@ import { useAppDispatch } from "@/store";
 import { togglePinConversation, hideConversationLocal, toggleMuteConversation } from "@/store/slices/conversationSlice";
 import { PiPushPinFill } from "react-icons/pi";
 import { IoNotificationsOff } from "react-icons/io5";
+import { setCategoryLocal } from "@/store/slices/conversationSlice";
+import { setCategory } from "@/services/conversation-settings.service";
+import { IoCheckmark } from "react-icons/io5";
 const CURRENT_USER_ID = "699d2b94f9075fe800282901";
 type Props = {
   conversation: ConversationItemType;
@@ -20,7 +23,14 @@ type Props = {
   openMenu: string | null
   setOpenMenu: React.Dispatch<React.SetStateAction<string | null>>
 };
-
+const CATEGORY_STYLE = {
+  customer: "bg-red-500 before:bg-red-500",
+  family: "bg-green-500 before:bg-green-500",
+  work: "bg-orange-500 before:bg-orange-500",
+  friends: "bg-purple-500 before:bg-purple-500",
+  later: "bg-yellow-500 before:bg-yellow-500",
+  colleague: "bg-blue-500 before:bg-blue-500",
+};
 const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }: Props) => {
   const getPreviewContent = useMemo(() => {
     const content = conversation.lastMessage?.content;
@@ -97,7 +107,30 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
       console.error("Mute failed:", error);
     }
   };
+  const handleCategory = async (category: ConversationCategory) => {
+    try {
+      setOpenMenu(null);
 
+      const newCategory =
+        conversation.category === category ? null : category;
+
+      await setCategory(
+        CURRENT_USER_ID,
+        conversation.conversationId,
+        newCategory as any
+      );
+
+      dispatch(
+        setCategoryLocal({
+          conversationId: conversation.conversationId,
+          category: newCategory,
+        })
+      );
+
+    } catch (error) {
+      console.error("Set category failed:", error);
+    }
+  };
   return (
     <Link
       to={`/conversation/${conversation.conversationId}`}
@@ -125,6 +158,7 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
             {conversation.type === "GROUP" && (
               <MdGroups size={18} color="gray" />
             )}
+
 
             {conversation.name}
 
@@ -185,34 +219,82 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
                           onMouseLeave={closeSubMenu}
                           className="w-56 bg-white rounded-xl shadow-lg border text-sm"
                         >
-                          <div className="p-3 hover:bg-gray-100 cursor-pointer flex items-center gap-2">
-                            <span className="w-3 h-3 bg-red-500 rounded-sm"></span>
-                            Khách hàng
+                          <div
+                            onClick={() => handleCategory('customer')}
+                            className="p-3 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="w-3 h-3 bg-red-500 rounded-sm"></span>
+                              Khách hàng
+                            </div>
+                            {conversation.category === "customer" && (
+                              <IoCheckmark className="text-blue-500 w-4 h-4" />
+                            )}
                           </div>
 
-                          <div className="p-3 hover:bg-gray-100 cursor-pointer flex items-center gap-2">
-                            <span className="w-3 h-3 bg-green-500 rounded-sm"></span>
-                            Gia đình
+                          <div
+                            onClick={() => handleCategory('family')}
+                            className="p-3 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="w-3 h-3 bg-green-500 rounded-sm"></span>
+                              Gia đình
+                            </div>
+                            {conversation.category === "family" && (
+                              <IoCheckmark className="text-blue-500 w-4 h-4" />
+                            )}
                           </div>
 
-                          <div className="p-3 hover:bg-gray-100 cursor-pointer flex items-center gap-2">
-                            <span className="w-3 h-3 bg-orange-500 rounded-sm"></span>
-                            Công việc
+                          <div
+                            onClick={() => handleCategory('work')}
+                            className="p-3 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="w-3 h-3 bg-orange-500 rounded-sm"></span>
+                              Công việc
+                            </div>
+                            {conversation.category === "work" && (
+                              <IoCheckmark className="text-blue-500 w-4 h-4" />
+                            )}
                           </div>
 
-                          <div className="p-3 hover:bg-gray-100 cursor-pointer flex items-center gap-2">
-                            <span className="w-3 h-3 bg-purple-500 rounded-sm"></span>
-                            Bạn bè
+                          <div
+                            onClick={() => handleCategory('friends')}
+                            className="p-3 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="w-3 h-3 bg-purple-500 rounded-sm"></span>
+                              Bạn bè
+                            </div>
+                            {conversation.category === "friends" && (
+                              <IoCheckmark className="text-blue-500 w-4 h-4" />
+                            )}
                           </div>
 
-                          <div className="p-3 hover:bg-gray-100 cursor-pointer flex items-center gap-2">
-                            <span className="w-3 h-3 bg-yellow-500 rounded-sm"></span>
-                            Trả lời sau
+                          <div
+                            onClick={() => handleCategory('later')}
+                            className="p-3 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="w-3 h-3 bg-yellow-500 rounded-sm"></span>
+                              Trả lời sau
+                            </div>
+                            {conversation.category === "later" && (
+                              <IoCheckmark className="text-blue-500 w-4 h-4" />
+                            )}
                           </div>
 
-                          <div className="p-3 hover:bg-gray-100 cursor-pointer flex items-center gap-2">
-                            <span className="w-3 h-3 bg-blue-500 rounded-sm"></span>
-                            Đồng nghiệp
+                          <div
+                            onClick={() => handleCategory('colleague')}
+                            className="p-3 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="w-3 h-3 bg-blue-500 rounded-sm"></span>
+                              Đồng nghiệp
+                            </div>
+                            {conversation.category === "colleague" && (
+                              <IoCheckmark className="text-blue-500 w-4 h-4" />
+                            )}
                           </div>
 
                           <div className="border-t"></div>
@@ -347,12 +429,33 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
           </div>
         </div>
 
-        <p className="text-[13px] text-gray-500 truncate">
-          {conversation.type === "PRIVATE" &&
-            conversation.lastMessage?.senderName !== "Bạn"
-            ? ""
-            : conversation.lastMessage?.senderName + ": "}
-          {getPreviewContent}
+        <p className="text-[13px] text-gray-500 truncate flex items-center gap-2">
+          {/* 👉 TAG */}
+          {conversation.category && (
+            <span
+              className={cn(
+                "relative inline-flex items-center px-2 py-[2px] text-[10px] font-medium text-white rounded-l-md",
+                "before:absolute before:right-[-6px] before:top-0 before:h-full before:w-3 before:skew-x-[-30deg]",
+                CATEGORY_STYLE[conversation.category]
+              )}
+            >
+              {conversation.category === "customer" && "KH"}
+              {conversation.category === "family" && "GĐ"}
+              {conversation.category === "work" && "CV"}
+              {conversation.category === "friends" && "BB"}
+              {conversation.category === "later" && "Sau"}
+              {conversation.category === "colleague" && "ĐN"}
+            </span>
+          )}
+
+          {/* 👉 TEXT */}
+          <span className="truncate">
+            {conversation.type === "PRIVATE" &&
+              conversation.lastMessage?.senderName !== "Bạn"
+              ? ""
+              : conversation.lastMessage?.senderName + ": "}
+            {getPreviewContent}
+          </span>
         </p>
       </div>
     </Link>

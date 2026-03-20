@@ -1,8 +1,12 @@
+
+
+
 export interface ConversationSetting {
   _id: string;
   userId: string;
   conversationId: string;
-  muted: boolean;
+  mutedUntil: Date | null;
   pinned: boolean;
   hidden: boolean;
+  category: String;
 }

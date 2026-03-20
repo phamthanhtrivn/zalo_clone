@@ -17,6 +17,12 @@ export class ConversationSetting {
 
   @Prop({ default: false })
   hidden: boolean;
+  @Prop({
+    type: String,
+    enum: ['customer', 'family', 'work', 'friends', 'later', 'colleague'],
+    default: null,
+  })
+  category: string | null;
 }
 
 export type ConversationSettingDocument = ConversationSetting & Document;

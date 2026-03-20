@@ -136,5 +136,38 @@ export class ConversationSettingsService {
         }
         return setting;
     }
+
+
+    // Phân loại hội thoại
+    async setCategory(
+        userId: Types.ObjectId,
+        conversationId: Types.ObjectId,
+        category: string | null
+    ) {
+        const validCategories = [
+            'customer',
+            'family',
+            'work',
+            'friends',
+            'later',
+            'colleague'
+        ];
+
+        if (category !== null && !validCategories.includes(category)) {
+            throw new BadRequestException('Invalid category');
+        }
+
+        const setting = await this.conversationSettingModel.findOneAndUpdate(
+            { userId, conversationId },
+            { $set: { category } }, // 👈 cho phép null
+            {
+                new: true,
+                upsert: true,
+                setDefaultsOnInsert: true,
+            }
+        );
+
+        return setting;
+    }
 }
 

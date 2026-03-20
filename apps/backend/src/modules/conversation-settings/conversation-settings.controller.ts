@@ -74,5 +74,19 @@ export class ConversationSettingsController {
             new Types.ObjectId(userId),
             new Types.ObjectId(conversationId));
     }
+    // Phân loại cuộc hội thoại
+    // Phân loại
+    @Patch('category')
+    setCategory(
+        @Body('userId') userId: string,
+        @Body('conversationId') conversationId: string,
+        @Body('category') category: string,
+    ) {
+        return this.conversationSettingsService.setCategory(
+            new Types.ObjectId(userId),
+            new Types.ObjectId(conversationId),
+            category
+        );
+    }
 
 }
