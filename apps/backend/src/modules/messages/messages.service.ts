@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   BadRequestException,
@@ -27,6 +28,7 @@ import { UpdateCallMessageDto } from './dto/update-call-message.dto';
 import { GetMessagesDto } from './dto/get-messages.dto';
 import { GetMediasPreviewDto } from './dto/get-medias-preview.dto';
 import { GetMediasFileTypeDto } from './dto/get-medias-file-type.dto';
+import { MessageResponse } from './types/message-response.type';
 
 @Injectable()
 export class MessagesService {
@@ -46,9 +48,12 @@ export class MessagesService {
   ) {
     const { userId, cursor, limit = '15' } = getMesssagesDto;
 
+    const conversationObjectId = new Types.ObjectId(conversationId);
+    const userObjectId = new Types.ObjectId(userId);
+
     const member = await this.memberModel.findOne({
-      userId: new Types.ObjectId(userId),
-      conversationId: new Types.ObjectId(conversationId),
+      userId: userObjectId,
+      conversationId: conversationObjectId,
       leftAt: null,
     });
 
@@ -58,15 +63,12 @@ export class MessagesService {
       );
     }
 
-    const query: any = {
-      conversationId: new Types.ObjectId(conversationId),
+    const query = {
+      conversationId: conversationObjectId,
+      ...(cursor && { _id: { $lt: new Types.ObjectId(cursor) } }),
     };
 
-    if (cursor) {
-      query._id = { $lt: new Types.ObjectId(cursor) };
-    }
-
-    let messages = await this.messageModel
+    const messages = await this.messageModel
       .find(query)
       .sort({ _id: -1 })
       .limit(Number(limit))
@@ -80,21 +82,35 @@ export class MessagesService {
           select: 'profile.name profile.avatarUrl',
         },
       })
-      .lean();
+      .lean<MessageResponse[]>();
 
-    for (const message of messages) {
-      if (message.content?.file) {
-        (message.content as any).file.fileKey = this.storageService.signFileUrl(
-          (message.content as any).file.fileKey,
-        );
-      }
-    }
+    const transformedMessages = messages.map((message) => ({
+      ...message,
 
-    messages = messages.reverse();
+      content: {
+        ...message.content,
+        file: this.signFile(message.content?.file),
+      },
+
+      senderId: this.signUser(message.senderId),
+
+      reactions: message.reactions?.map((r) => ({
+        ...r,
+        userId: this.signUser(r.userId),
+      })),
+
+      readReceipts: message.readReceipts?.map((rr) => ({
+        ...rr,
+        userId: this.signUser(rr.userId),
+      })),
+    }));
+
+    const finalMessages = transformedMessages.reverse();
 
     return {
-      messages,
-      nextCursor: messages.length > 0 ? messages[0]._id : null,
+      messages: finalMessages,
+      nextCursor:
+        transformedMessages.length > 0 ? transformedMessages[0]._id : null,
     };
   }
 
@@ -861,4 +877,30 @@ export class MessagesService {
 
     return updated;
   }
+
+  private signAvatar = (avatar?: string) =>
+    avatar ? this.storageService.signFileUrl(avatar) : avatar;
+
+  private signUser = (user?: any) =>
+    user
+      ? {
+          ...user,
+          profile: user.profile
+            ? {
+                ...user.profile,
+                avatarUrl: this.signAvatar(user.profile.avatarUrl),
+              }
+            : user.profile,
+        }
+      : user;
+
+  private signFile = (file?: any) =>
+    file
+      ? {
+          ...file,
+          fileKey: file.fileKey
+            ? this.storageService.signFileUrl(file.fileKey)
+            : file.fileKey,
+        }
+      : file;
 }

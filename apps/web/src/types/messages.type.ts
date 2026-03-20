@@ -1,3 +1,5 @@
+import type { File } from "./conversation-item.type";
+
 export interface MessagesType {
   _id: string;
   senderId: {
@@ -11,7 +13,7 @@ export interface MessagesType {
   content: {
     text: string | null;
     icon: string | null;
-    file: string | null;
+    file: File;
   };
   pinned: boolean;
   recalled: boolean;

@@ -120,6 +120,20 @@ const ConversationPage = () => {
     }
   }, [messages]);
 
+  useEffect(() => {
+    const handleMediaLoaded = () => {
+      if (!containerRef.current) return;
+
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    };
+
+    window.addEventListener("message-media-loaded", handleMediaLoaded);
+
+    return () => {
+      window.removeEventListener("message-media-loaded", handleMediaLoaded);
+    };
+  }, []);
+
   return (
     <div className="flex flex-1 h-full">
       {conversation && (
