@@ -16,6 +16,7 @@ export interface ConversationItemType {
 
 export interface File {
   fileKey: string;
+  fileName: string;
   fileSize: number;
-  type: "IMAGE" | "VIDEO" | "LINK";
+  type: "IMAGE" | "VIDEO" | "FILE";
 }

@@ -9,6 +9,9 @@ export class File {
   fileKey: string;
 
   @Prop()
+  fileName: string;
+
+  @Prop()
   fileSize: number;
 
   @Prop({ type: String, enum: FileType })

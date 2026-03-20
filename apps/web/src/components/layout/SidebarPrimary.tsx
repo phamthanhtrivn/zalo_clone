@@ -23,7 +23,7 @@ export const SidebarPrimary = () => {
   const location = useLocation()
 
   return (
-    <aside className="w-[64px] bg-[#005AE0] flex flex-col items-center py-4 flex-shrink-0 z-20">
+    <aside className="w-16 bg-[#005AE0] flex flex-col items-center py-4 shrink-0 z-20">
       {/* User Avatar */}
       <div className="relative mb-6">
         <Tooltip>
@@ -59,7 +59,7 @@ export const SidebarPrimary = () => {
                     isActive ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
                   )}
                 >
-                  <item.icon className="w-[30px] h-[30px] stroke-[1.5]" />
+                  <item.icon className="w-7.5 h-7.5 stroke-[1.5]" />
                   <span className="sr-only">{item.label}</span>
                   {isActive && (
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-white" />
@@ -79,7 +79,7 @@ export const SidebarPrimary = () => {
         <Tooltip>
           <TooltipTrigger asChild>
             <button className="w-full aspect-square flex items-center justify-center text-white/70 hover:bg-white/10 hover:text-white transition-colors group relative cursor-pointer">
-              <Settings className="w-[26px] h-[26px] stroke-[1.5]" />
+              <Settings className="w-6.5 h-6.5 stroke-[1.5]" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="right">

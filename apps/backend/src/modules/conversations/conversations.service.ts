@@ -17,6 +17,7 @@ import { TransferOwnerDto } from './dto/transfer-owenr.dto';
 import { RemoveMemberDto } from './dto/remove-member.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { ConversationItemDto } from './dto/conversation-item.dto';
+import { StorageService } from 'src/common/storage/storage.service';
 
 @Injectable()
 export class ConversationsService {
@@ -25,8 +26,8 @@ export class ConversationsService {
     private conversationModel: Model<Conversation>,
     @InjectModel(Member.name) private memberModel: Model<Member>,
     @InjectModel(Message.name) private messageModel: Model<Message>,
-
     @InjectConnection() private connection: Connection,
+    private readonly storageService: StorageService,
   ) {}
 
   async createGroup(creatorId: string, dto: CreateGroupDto) {
@@ -562,6 +563,9 @@ export class ConversationsService {
         },
       ]);
 
-    return conversations;
+    return conversations.map((c) => ({
+      ...c,
+      avatar: c.avatar ? this.storageService.signFileUrl(c.avatar) : null,
+    }));
   }
 }

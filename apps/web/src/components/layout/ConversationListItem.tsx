@@ -6,6 +6,11 @@ import { formatMessageTime } from "@/utils/format-message-time..util";
 import { MoreHorizontal } from "lucide-react";
 import { MdGroups } from "react-icons/md";
 import React, { useMemo } from "react";
+import { CiImageOn } from "react-icons/ci";
+import { RiVideoLine } from "react-icons/ri";
+import { LuSticker } from "react-icons/lu";
+import { HiMiniLink } from "react-icons/hi2";
+import { GoFileSymlinkFile } from "react-icons/go";
 
 type Props = {
   conversation: ConversationItemType;
@@ -15,13 +20,44 @@ type Props = {
 const ConversationListItem = ({ conversation, isActive }: Props) => {
   const getPreviewContent = useMemo(() => {
     const content = conversation.lastMessage?.content;
-
     if (!content) return "";
-    if (content.text) return content.text;
-    if (content.icon) return "[Sticker]";
-    if (content.file) return content.file.fileKey;
 
-    return "";
+    let icon = null;
+    let text = "";
+
+    if (content.text && /https?:\/\//.test(content.text)) {
+      icon = <HiMiniLink />;
+      text = content.text;
+    } else if (content.icon) {
+      icon = <LuSticker />;
+      text = "Sticker";
+    } else if (content.file) {
+      switch (content.file.type) {
+        case "IMAGE":
+          icon = <CiImageOn />;
+          text = "Hình ảnh";
+          break;
+        case "VIDEO":
+          icon = <RiVideoLine />;
+          text = "Video";
+          break;
+        case "FILE":
+          icon = <GoFileSymlinkFile />;
+          text = content.file.fileName;
+          break;
+        default:
+          text = "";
+      }
+    } else if (content.text) {
+      text = content.text;
+    }
+
+    return (
+      <div className="flex items-center gap-1 truncate">
+        {icon}
+        <span className="truncate">{text}</span>
+      </div>
+    );
   }, [conversation.lastMessage]);
 
   return (
@@ -67,7 +103,7 @@ const ConversationListItem = ({ conversation, isActive }: Props) => {
           </div>
         </div>
 
-        <p className="text-[13px] text-gray-500 truncate">
+        <p className="flex items-center gap-1 text-[13px] text-gray-500 truncate">
           {conversation.type === "PRIVATE" &&
           conversation.lastMessage?.senderName !== "Bạn"
             ? ""
