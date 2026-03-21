@@ -17,6 +17,7 @@ type Props = {
   reactionMessage: (emojiType: EmojiType, messageId: string) => void;
   removeReaction: (messageId: string) => void;
   handleRecalledMessage: (messageId: string) => void;
+  handlePinneddMessage: (messageId: string) => void;
 };
 
 const MessageList = ({
@@ -27,6 +28,7 @@ const MessageList = ({
   reactionMessage,
   removeReaction,
   handleRecalledMessage,
+  handlePinneddMessage
 }: Props) => {
   const [selectedMessageReactions, setSelectedMessageReactions] = useState<
     ReactionType[] | null
@@ -99,6 +101,7 @@ const MessageList = ({
               }
               removeReaction={removeReaction}
               handleRecalledMessage={handleRecalledMessage}
+              handlePinneddMessage={handlePinneddMessage}
             />
           </div>
         );

@@ -58,4 +58,16 @@ export const messageService = {
     });
     return response.data;
   },
+  pinnedMessage: async (
+    userId: string,
+    messageId: string,
+    conversationId: string,
+  ) => {
+    const response = await apiClient.patch(`/api/messages/pinned`, {
+      userId,
+      messageId,
+      conversationId,
+    });
+    return response.data;
+  },
 };

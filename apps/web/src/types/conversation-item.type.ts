@@ -10,6 +10,7 @@ export interface ConversationItemType {
       icon: string;
       file: File;
     };
+    recalled: boolean;
   };
   lastMessageAt: string;
 }

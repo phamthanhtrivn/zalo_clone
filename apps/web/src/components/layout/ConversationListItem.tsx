@@ -20,6 +20,9 @@ type Props = {
 const ConversationListItem = ({ conversation, isActive }: Props) => {
   const getPreviewContent = useMemo(() => {
     const content = conversation.lastMessage?.content;
+    const recalled = conversation.lastMessage?.recalled;
+    if (recalled) return "Tin nhắn đã được thu hồi";
+
     if (!content) return "";
 
     let icon = null;

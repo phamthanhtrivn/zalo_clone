@@ -550,6 +550,7 @@ export class ConversationsService {
               },
 
               content: '$lastMessage.content',
+              recalled: '$lastMessage.recalled',
             },
 
             lastMessageAt: '$conversation.lastMessageAt',

@@ -1,5 +1,5 @@
 import { useLocation, useParams } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ChatHeader from "@/components/layout/message/ChatHeader";
 import MessageList from "@/components/layout/message/MessageList";
 import ChatInput from "@/components/layout/message/ChatInput";
@@ -106,29 +106,45 @@ const ConversationPage = () => {
     }
   };
 
+  const toastAlert = useCallback((noti: string) => {
+    toast(noti, {
+      position: "top-center",
+      autoClose: 3000,
+      hideProgressBar: true,
+      closeOnClick: false,
+      pauseOnHover: true,
+      draggable: true,
+      progress: undefined,
+      theme: "dark",
+      closeButton: false,
+      transition: Zoom,
+      style: {
+        display: "flex",
+        justifyContent: "center",
+        width: "500px",
+        maxWidth: "80%",
+      },
+    });
+  }, [])
+
   const handleRecalledMessage = async (messageId: string) => {
     if (!id) return;
 
     try {
-      const res = await messageService.recalledMessage(
-        CURRENT_USER_ID,
-        messageId,
-        id,
-      );
-      if (!res.success) {
-      }
+      await messageService.recalledMessage(CURRENT_USER_ID, messageId, id);
     } catch (error) {
-      toast("Bạn chỉ có thể thu hồi tin nhắn trong vòng 24 giờ", {
-        position: "top-center",
-        autoClose: 3000,
-        hideProgressBar: true,
-        closeOnClick: false,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "dark",
-        transition: Zoom,
-      });
+      toastAlert("Bạn chỉ có thể thu hồi tin nhắn trong vòng 24 giờ");
+      console.error(error);
+    }
+  };
+
+  const handlePinneddMessage = async (messageId: string) => {
+    if (!id) return;
+
+    try {
+      await messageService.pinnedMessage(CURRENT_USER_ID, messageId, id);
+    } catch (error) {
+      toastAlert("Bạn chỉ có thể ghim tối đa 3 tin nhắn");
       console.error(error);
     }
   };
@@ -180,6 +196,7 @@ const ConversationPage = () => {
             reactionMessage={reactionMessage}
             removeReaction={removeReaction}
             handleRecalledMessage={handleRecalledMessage}
+            handlePinneddMessage={handlePinneddMessage}
           />
 
           <ChatInput chatName={conversation.name} />

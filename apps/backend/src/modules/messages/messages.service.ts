@@ -29,6 +29,7 @@ import { GetMessagesDto } from './dto/get-messages.dto';
 import { GetMediasPreviewDto } from './dto/get-medias-preview.dto';
 import { GetMediasFileTypeDto } from './dto/get-medias-file-type.dto';
 import { MessageResponse } from './types/message-response.type';
+import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
 
 @Injectable()
 export class MessagesService {
@@ -111,6 +112,53 @@ export class MessagesService {
       messages: finalMessages,
       nextCursor:
         transformedMessages.length > 0 ? transformedMessages[0]._id : null,
+    };
+  }
+
+  async getPinnedMessagesFromConversation(
+    conversationId: string,
+    getPinnedMessagesDto: GetPinnedMessagesDto,
+  ) {
+    const { userId } = getPinnedMessagesDto;
+
+    const conversationObjectId = new Types.ObjectId(conversationId);
+    const userObjectId = new Types.ObjectId(userId);
+
+    const member = await this.memberModel.findOne({
+      userId: userObjectId,
+      conversationId: conversationObjectId,
+      leftAt: null,
+    });
+
+    if (!member) {
+      throw new NotFoundException(
+        'User is not a participant in this conversation',
+      );
+    }
+
+    const messages = await this.messageModel
+      .find({
+        conversationId: conversationObjectId,
+        pinned: true,
+        recalled: false,
+      })
+      .sort({ updatedAt: 1 })
+      .populate('senderId', 'profile.name')
+      .lean();
+
+    const transformedMessages = messages.map((message) => ({
+      ...message,
+
+      content: {
+        ...message.content,
+        file: this.signFile(message.content?.file),
+      },
+    }));
+
+    const finalMessages = transformedMessages.reverse();
+
+    return {
+      messages: finalMessages,
     };
   }
 
@@ -610,7 +658,7 @@ export class MessagesService {
           })
           .session(session);
 
-        if (pinnedCount >= 4) {
+        if (pinnedCount >= 3) {
           throw new BadRequestException('Maximum pinned messages reached');
         }
       }

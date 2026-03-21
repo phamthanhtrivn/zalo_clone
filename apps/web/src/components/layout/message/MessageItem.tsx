@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import { BsPinAngle } from "react-icons/bs";
 import { IoIosInformationCircleOutline } from "react-icons/io";
 import { CgUndo } from "react-icons/cg";
+import { RiUnpinLine } from "react-icons/ri";
 
 interface Props {
   message: MessagesType;
@@ -19,6 +20,7 @@ interface Props {
   onOpenReactionModal: (reactions: ReactionType[]) => void;
   removeReaction: (messageId: string) => void;
   handleRecalledMessage: (messageId: string) => void;
+  handlePinneddMessage: (messageId: string) => void;
 }
 
 export const MessageItem = ({
@@ -30,6 +32,7 @@ export const MessageItem = ({
   onOpenReactionModal,
   removeReaction,
   handleRecalledMessage,
+  handlePinneddMessage,
 }: Props) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
@@ -123,12 +126,21 @@ export const MessageItem = ({
                 <button
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                   onClick={() => {
-                    console.log("Ghim", message._id);
+                    handlePinneddMessage(openMenuId);
                     setOpenMenuId(null);
                   }}
                 >
-                  <BsPinAngle className="text-base text-gray-500" />
-                  <span>Ghim tin nhắn</span>
+                  {!message.pinned ? (
+                    <>
+                      <BsPinAngle className="text-base text-gray-500" />
+                      <span>Ghim tin nhắn</span>
+                    </>
+                  ) : (
+                    <>
+                      <RiUnpinLine className="text-base text-gray-500" />
+                      <span>Bỏ ghim tin nhắn</span>
+                    </>
+                  )}
                 </button>
 
                 {/* Chi tiết */}
