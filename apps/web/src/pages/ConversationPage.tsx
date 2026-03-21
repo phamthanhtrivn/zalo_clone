@@ -7,6 +7,7 @@ import ConversationInfoPanel from "@/components/layout/message/ConversationInfoP
 import { messageService } from "@/services/message.service";
 import type { MessagesType } from "@/types/messages.type";
 import type { EmojiType } from "@/constants/emoji.constant";
+import { toast, Zoom } from "react-toastify";
 
 const CURRENT_USER_ID = "699d2b94f9075fe800282901";
 
@@ -105,6 +106,33 @@ const ConversationPage = () => {
     }
   };
 
+  const handleRecalledMessage = async (messageId: string) => {
+    if (!id) return;
+
+    try {
+      const res = await messageService.recalledMessage(
+        CURRENT_USER_ID,
+        messageId,
+        id,
+      );
+      if (!res.success) {
+      }
+    } catch (error) {
+      toast("Bạn chỉ có thể thu hồi tin nhắn trong vòng 24 giờ", {
+        position: "top-center",
+        autoClose: 3000,
+        hideProgressBar: true,
+        closeOnClick: false,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "dark",
+        transition: Zoom,
+      });
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     setMessages([]);
     setNextCursor(null);
@@ -151,6 +179,7 @@ const ConversationPage = () => {
             handleScrollToTop={handleScrollToTop}
             reactionMessage={reactionMessage}
             removeReaction={removeReaction}
+            handleRecalledMessage={handleRecalledMessage}
           />
 
           <ChatInput chatName={conversation.name} />

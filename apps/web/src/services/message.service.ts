@@ -34,12 +34,28 @@ export const messageService = {
     });
     return response.data;
   },
-  removeReaction: async (userId: string, messageId: string, conversationId: string) => {
+  removeReaction: async (
+    userId: string,
+    messageId: string,
+    conversationId: string,
+  ) => {
     const response = await apiClient.patch(`/api/messages/remove-reaction`, {
       userId,
       messageId,
       conversationId,
     });
     return response.data;
-  }
+  },
+  recalledMessage: async (
+    userId: string,
+    messageId: string,
+    conversationId: string,
+  ) => {
+    const response = await apiClient.patch(`/api/messages/recalled`, {
+      userId,
+      messageId,
+      conversationId,
+    });
+    return response.data;
+  },
 };

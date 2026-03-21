@@ -52,12 +52,30 @@ export const MessageBubble = ({ message, isMe, showTime }: Props) => {
   const handleDownload = () => {
     const a = document.createElement("a");
     a.href = file.fileKey;
-    a.target="_blank"
+    a.target = "_blank";
     a.download = file.fileName;
     document.body.appendChild(a);
     a.click();
     a.remove();
   };
+
+  if (message.recalled) {
+    return (
+      <div
+        className={`rounded-lg px-3 py-2 max-w-md border shadow-sm text-gray-500 ${
+          isMe ? "bg-[#E5F1FF]" : "bg-white"
+        }`}
+      >
+        <p>Tin nhắn đã được thu hồi</p>
+
+        {showTime && (
+          <div className="text-[12px] text-gray-400 mt-1 text-right not-italic">
+            {formatTime(message.createdAt)}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div

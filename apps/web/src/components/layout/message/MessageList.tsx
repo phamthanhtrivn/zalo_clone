@@ -16,6 +16,7 @@ type Props = {
   handleScrollToTop: () => void;
   reactionMessage: (emojiType: EmojiType, messageId: string) => void;
   removeReaction: (messageId: string) => void;
+  handleRecalledMessage: (messageId: string) => void;
 };
 
 const MessageList = ({
@@ -24,7 +25,8 @@ const MessageList = ({
   containerRef,
   handleScrollToTop,
   reactionMessage,
-  removeReaction
+  removeReaction,
+  handleRecalledMessage,
 }: Props) => {
   const [selectedMessageReactions, setSelectedMessageReactions] = useState<
     ReactionType[] | null
@@ -51,7 +53,7 @@ const MessageList = ({
         const showDivider =
           !prev ||
           new Date(prev.createdAt).toDateString() !==
-          new Date(message.createdAt).toDateString();
+            new Date(message.createdAt).toDateString();
 
         const sameSenderPrev =
           prev && prev.senderId._id === message.senderId._id;
@@ -96,6 +98,7 @@ const MessageList = ({
                 setSelectedMessageReactions(reactions)
               }
               removeReaction={removeReaction}
+              handleRecalledMessage={handleRecalledMessage}
             />
           </div>
         );
