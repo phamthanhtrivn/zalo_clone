@@ -8,6 +8,7 @@ export interface ConversationItemType {
   hidden: boolean;
   category?: ConversationCategory;
   deletedAt: Date | null;
+  expireDuration: number;
   lastMessage: {
     senderName: string;
     content: {

@@ -32,11 +32,13 @@ const MessageList = ({
         const next = messages[index + 1];
 
         const isMe = message.senderId._id === currentUserId;
-
+        const isExpired =
+          message.expiresAt &&
+          new Date(message.expiresAt) < new Date();
         const showDivider =
           !prev ||
           new Date(prev.createdAt).toDateString() !==
-            new Date(message.createdAt).toDateString();
+          new Date(message.createdAt).toDateString();
 
         const sameSenderPrev =
           prev && prev.senderId._id === message.senderId._id;
@@ -55,7 +57,6 @@ const MessageList = ({
 
         const showAvatar = !isMe && isFirstInCluster;
         const showTime = isLastInCluster;
-
         return (
           <div key={message._id}>
             {showDivider && (
@@ -82,20 +83,33 @@ const MessageList = ({
                 ))}
 
               <div
-                className={`rounded-md px-3 py-2 max-w-md border shadow-sm ${
-                  isMe ? "bg-[#E5F1FF]" : "bg-white"
-                }`}
+                className={`rounded-md px-3 py-2 max-w-md border shadow-sm ${isExpired
+                  ? "bg-gray-100 text-gray-400"
+                  : isMe
+                    ? "bg-[#E5F1FF]"
+                    : "bg-white"
+                  }`}
               >
+                {/* 🔥 Nội dung */}
                 <div className="space-y-1 wrap-break-word">
-                  {message.content?.text && <p>{message.content.text}</p>}
 
-                  {message.content?.icon && (
-                    <p className="text-2xl">{message.content.icon}</p>
+                  {isExpired ? (
+                    <div className="text-gray-400 italic">
+                      Tin nhắn đã hết hạn
+                    </div>
+                  ) : (
+                    <>
+                      {message.content?.text && <p>{message.content.text}</p>}
+                      {message.content?.icon && (
+                        <p className="text-2xl">{message.content.icon}</p>
+                      )}
+                      {message.content?.file && <div>File</div>}
+                    </>
                   )}
 
-                  {message.content?.file && <div>File</div>}
                 </div>
 
+                {/* Time */}
                 {showTime && (
                   <div className="text-[13px] text-gray-700 mt-1">
                     {formatTime(message.createdAt)}

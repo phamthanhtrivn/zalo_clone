@@ -19,11 +19,12 @@ export interface MessagesType {
   readReceipts: [ReadReceiptType];
   repliedId: string | null;
   call: string | null;
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface ReactionType {}
+export interface ReactionType { }
 
 export interface ReadReceiptType {
   userId: {

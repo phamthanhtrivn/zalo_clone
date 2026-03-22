@@ -25,6 +25,8 @@ export class ConversationSetting {
   category: string | null;
   @Prop({ type: Date, default: null })
   deletedAt: Date | null;
+  @Prop({ default: 0 })
+  expireDuration: number;
 }
 
 export type ConversationSettingDocument = ConversationSetting & Document;

@@ -9,6 +9,7 @@ import { MembersModule } from './modules/members/members.module';
 import { ConversationSettingsModule } from './modules/conversation-settings/conversation-settings.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { RedisModule } from './common/redis/redis.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RedisModule } from './common/redis/redis.module';
         uri: configService.get<string>('mongoUri'),
       }),
     }),
+    ScheduleModule.forRoot(),
     RedisModule,
     UsersModule,
     ConversationsModule,
@@ -31,4 +33,4 @@ import { RedisModule } from './common/redis/redis.module';
     AuthModule,
   ],
 })
-export class AppModule {}
+export class AppModule { }

@@ -17,7 +17,7 @@ import { setCategoryLocal } from "@/store/slices/conversationSlice";
 import { setCategory } from "@/services/conversation-settings.service";
 import { IoCheckmark } from "react-icons/io5";
 import { removeConversation } from "@/store/slices/conversationSlice";
-import { deleteConversation } from "@/services/conversation-settings.service";
+import { deleteConversation, expireMessage } from "@/services/conversation-settings.service";
 const CURRENT_USER_ID = "699d2b94f9075fe800282901";
 type Props = {
   conversation: ConversationItemType;
@@ -146,6 +146,22 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
       console.error("Delete failed:", error);
     }
   };
+  const handleExpire = async (days: number) => {
+    setOpenMenu(null);
+
+    const duration = days === 0 ? 0 : days * 24 * 60 * 60 * 1000;
+
+    try {
+      await expireMessage(
+        CURRENT_USER_ID,
+        conversation.conversationId,
+        duration
+      );
+    } catch (error) {
+      console.error("Set expire failed:", error);
+    }
+  };
+  const expireDays = conversation.expireDuration / (24 * 60 * 60 * 1000);
   return (
     <Link
       to={`/conversation/${conversation.conversationId}`}
@@ -400,6 +416,7 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
                     </div>
 
                     {/* DELETE TIMER */}
+                    {/* DELETE TIMER */}
                     <div
                       onMouseEnter={() => setHoverMenu("delete")}
                       className="p-3 hover:bg-gray-100 cursor-pointer flex justify-between relative"
@@ -407,16 +424,30 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
                       Tin nhắn tự xóa <span>›</span>
 
                       {hoverMenu === "delete" && (
-                        <div
-                          onMouseEnter={() => setHoverMenu("delete")}
-                          onMouseLeave={closeSubMenu}
-                          className="absolute left-full ml-1 top-0 w-44 bg-white rounded-xl shadow-lg border"
-                        >
-                          <div className="p-3 hover:bg-gray-100 cursor-pointer">1 ngày</div>
-                          <div className="p-3 hover:bg-gray-100 cursor-pointer">7 ngày</div>
-                          <div className="p-3 hover:bg-gray-100 cursor-pointer">14 ngày</div>
-                          <div className="border-t"></div>
-                          <div className="p-3 hover:bg-gray-100 cursor-pointer">Không bao giờ</div>
+                        <div className="absolute left-full ml-1 top-0 w-44 bg-white rounded-xl shadow-lg border">
+                          <div
+                            className="p-3 hover:bg-gray-100 cursor-pointer flex justify-between"
+                            onClick={() => handleExpire(1)}
+                          >
+                            1 ngày
+                            {expireDays === 1 && <IoCheckmark className="text-blue-500 w-4 h-4" />}
+                          </div>
+
+                          <div
+                            className="p-3 hover:bg-gray-100 cursor-pointer flex justify-between"
+                            onClick={() => handleExpire(7)}
+                          >
+                            7 ngày
+                            {expireDays === 7 && <IoCheckmark className="text-blue-500 w-4 h-4" />}
+                          </div>
+
+                          <div
+                            className="p-3 hover:bg-gray-100 cursor-pointer flex justify-between"
+                            onClick={() => handleExpire(0)}
+                          >
+                            Không bao giờ
+                            {expireDays === 0 && <IoCheckmark className="text-blue-500 w-4 h-4" />}
+                          </div>
                         </div>
                       )}
                     </div>

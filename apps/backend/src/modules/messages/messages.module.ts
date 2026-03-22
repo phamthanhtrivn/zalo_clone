@@ -10,7 +10,7 @@ import {
   ConversationSchema,
 } from '../conversations/schemas/conversation.schema';
 import { StorageModule } from 'src/common/storage/storage.module';
-
+import { ChatGateway } from './messages.gateway';
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -21,7 +21,7 @@ import { StorageModule } from 'src/common/storage/storage.module';
     MembersModule,
     StorageModule,
   ],
-  providers: [MessagesService],
+  providers: [MessagesService, ChatGateway],
   controllers: [MessagesController],
 })
-export class MessagesModule {}
+export class MessagesModule { }

@@ -191,5 +191,29 @@ export class ConversationSettingsService {
             data: setting,
         };
     }
+
+    async setExpire(body: {
+        userId: string;
+        conversationId: string;
+        duration: number;
+    }) {
+        const { userId, conversationId, duration } = body;
+
+        return this.conversationSettingModel.findOneAndUpdate(
+            {
+                userId: new Types.ObjectId(userId),
+                conversationId: new Types.ObjectId(conversationId),
+            },
+            {
+                $set: { expireDuration: duration },
+            },
+            {
+                new: true,
+                upsert: true,
+            },
+        );
+    }
+
+
 }
 

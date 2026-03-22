@@ -27,7 +27,8 @@ import { UpdateCallMessageDto } from './dto/update-call-message.dto';
 import { GetMessagesDto } from './dto/get-messages.dto';
 import { GetMediasPreviewDto } from './dto/get-medias-preview.dto';
 import { GetMediasFileTypeDto } from './dto/get-medias-file-type.dto';
-
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { ChatGateway } from './messages.gateway';
 @Injectable()
 export class MessagesService {
   constructor(
@@ -38,7 +39,8 @@ export class MessagesService {
     @InjectModel(Conversation.name)
     private readonly conversationModel: Model<Conversation>,
     private readonly storageService: StorageService,
-  ) {}
+    private readonly gateway: ChatGateway,
+  ) { }
 
   async getMessagesFromConversation(
     conversationId: string,
@@ -255,7 +257,10 @@ export class MessagesService {
     const { senderId, conversationId, content, repliedId } = sendMessageDto;
 
     const conversation = await this.conversationModel.findById(conversationId);
-
+    let expiresAt: Date | undefined;
+    if (sendMessageDto.expireDuration) {
+      expiresAt = new Date(Date.now() + sendMessageDto.expireDuration);
+    }
     if (!conversation) {
       throw new NotFoundException('Conversation not found');
     }
@@ -308,6 +313,8 @@ export class MessagesService {
       conversationId: new Types.ObjectId(conversationId),
       content: formattedContent,
       call: null,
+      expiresAt,
+      expired: false,
       pinned: false,
       recalled: false,
       reactions: [],
@@ -845,4 +852,43 @@ export class MessagesService {
 
     return updated;
   }
+  @Cron(CronExpression.EVERY_10_SECONDS)
+  async handleExpiredMessages() {
+    const now = new Date();
+
+    const expiredMessages = await this.messageModel.find({
+      expiresAt: { $lte: now },
+      expired: false,
+    });
+
+    if (!expiredMessages.length) return;
+
+    const ids = expiredMessages.map(m => m._id);
+
+    await this.messageModel.updateMany(
+      { _id: { $in: ids } },
+      { $set: { expired: true } },
+    );
+    expiredMessages.forEach(m => {
+      this.gateway.server.to(m.conversationId.toString()).emit('messages_expired', { messageIds: [m._id.toString()] });
+    });
+  }
+  async checkExpiredMessages() {
+    const now = new Date();
+
+    const expiredMessages = await this.messageModel.find({
+      expiresAt: { $lte: now, $ne: null },
+    });
+
+    if (!expiredMessages.length) return;
+
+    const ids = expiredMessages.map((m) => m._id.toString());
+
+    // 🔥 emit realtime
+    expiredMessages.forEach(m => {
+      this.gateway.server.to(m.conversationId.toString()).emit('messages_expired', { messageIds: [m._id.toString()] });
+    });
+    console.log('Expired messages:', ids);
+  }
+
 }

@@ -6,7 +6,7 @@ import ChatInput from "@/components/layout/ChatInput";
 import ConversationInfoPanel from "@/components/layout/ConversationInfoPanel";
 import { messageService } from "@/services/message.service";
 import type { MessagesType } from "@/types/messages..type";
-
+import { io } from "socket.io-client";
 const CURRENT_USER_ID = "699d2b94f9075fe800282901";
 
 const ConversationPage = () => {
@@ -84,6 +84,23 @@ const ConversationPage = () => {
     }
   }, [messages]);
 
+  useEffect(() => {
+    const socket = io("http://localhost:3000");
+
+    if (id) {
+      socket.emit('joinRoom', id); // tham gia room conversation hiện tại
+    }
+
+    socket.on('messages_expired', ({ messageIds }: { messageIds: string[] }) => {
+      setMessages(prev =>
+        prev.filter(msg => !messageIds.includes(msg._id.toString()))
+      );
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [id]);
   return (
     <div className="flex flex-1 h-full">
       {conversation && (

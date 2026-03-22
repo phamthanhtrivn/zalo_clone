@@ -98,5 +98,15 @@ export class ConversationSettingsController {
             new Types.ObjectId(conversationId),
         );
     }
+    @Patch('expire')
+    async setExpire(
+        @Body() body: {
+            userId: string;
+            conversationId: string;
+            duration: number;
+        },
+    ) {
+        return this.conversationSettingsService.setExpire(body);
+    }
 
 }

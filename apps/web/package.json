@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@floating-ui/react": "^0.27.19",
+    "@nestjs/platform-socket.io": "^10.4.22",
+    "@nestjs/websockets": "^10.4.22",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
@@ -27,6 +29,8 @@
     "react-router-dom": "^7.13.1",
     "shadcn-ui": "^0.9.5",
     "shared-types": "*",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {

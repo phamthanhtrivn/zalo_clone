@@ -77,11 +77,9 @@ export const unmuteConversation = async (userId: string, conversationId: string)
     } catch (error) {
         console.error('Error unmuting conversation:', error);
         throw error;
-    };
+    }
+};
 
-
-
-}
 // Phân loại cuộc hội thoại
 
 // Phân loại cuộc hội thoại
@@ -115,4 +113,20 @@ export const deleteConversation = async (userId: string, conversationId: string)
         console.error('Error deleting conversation:', error);
         throw error;
     }
-};  
+
+};
+// tin nhắn tự xóa
+
+export const expireMessage = async (userId: string, conversationId: string, duration: number) => {
+    try {
+        const response = await apiClient.patch('/api/conversation-settings/expire', {
+            userId,
+            conversationId,
+            duration,
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error expiring message:', error);
+        throw error;
+    }
+};

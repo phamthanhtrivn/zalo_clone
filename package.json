@@ -16,5 +16,8 @@
     "@types/multer": "^2.1.0",
     "prettier": "latest",
     "turbo": "latest"
+  },
+  "dependencies": {
+    "@nestjs/schedule": "^6.1.1"
   }
 }
