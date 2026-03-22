@@ -204,6 +204,7 @@ export class MessagesService {
         'User is not a participant in this conversation',
       );
     }
+
     const target = await this.messageModel.findById(messageId);
 
     if (!target) {
@@ -212,26 +213,69 @@ export class MessagesService {
 
     const half = Math.floor(Number(limit) / 2);
 
+    // 🔥 OLDER
     const older = await this.messageModel
       .find({
         conversationId: target.conversationId,
         _id: { $lt: target._id },
       })
       .sort({ _id: -1 })
-      .limit(half);
+      .limit(half)
+      .populate('senderId', 'profile.name profile.avatarUrl')
+      .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
+      .populate('reactions.userId', 'profile.name profile.avatarUrl')
+      .populate({
+        path: 'repliedId',
+        populate: {
+          path: 'senderId',
+          select: 'profile.name profile.avatarUrl',
+        },
+      })
+      .lean();
 
+    // 🔥 TARGET
+    const targetMessage = await this.messageModel
+      .findById(messageId)
+      .populate('senderId', 'profile.name profile.avatarUrl')
+      .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
+      .populate('reactions.userId', 'profile.name profile.avatarUrl')
+      .populate({
+        path: 'repliedId',
+        populate: {
+          path: 'senderId',
+          select: 'profile.name profile.avatarUrl',
+        },
+      })
+      .lean();
+
+    // 🔥 NEWER
     const newer = await this.messageModel
       .find({
         conversationId: target.conversationId,
         _id: { $gt: target._id },
       })
       .sort({ _id: 1 })
-      .limit(half);
+      .limit(half)
+      .populate('senderId', 'profile.name profile.avatarUrl')
+      .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
+      .populate('reactions.userId', 'profile.name profile.avatarUrl')
+      .populate({
+        path: 'repliedId',
+        populate: {
+          path: 'senderId',
+          select: 'profile.name profile.avatarUrl',
+        },
+      })
+      .lean();
 
-    const messages = [...older.reverse(), target, ...newer];
+    // merge
+    const messages = [...older.reverse(), targetMessage, ...newer].filter(
+      (m): m is NonNullable<typeof m> => m !== null,
+    );
 
+    // transform giống API kia
     const transformed = messages.map((message) => ({
-      ...message.toObject(),
+      ...message,
       content: {
         ...message.content,
         file: this.signFile(message.content?.file),

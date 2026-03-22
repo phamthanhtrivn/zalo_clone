@@ -37,7 +37,10 @@ const PinnedMessagesBar = ({
       >
         <div
           className="flex-1 cursor-pointer flex items-center gap-3"
-          onClick={() => onClickMessage(first._id)}
+          onClick={() => {
+            onClickMessage(first._id);
+            setOpenList(false);
+          }}
         >
           <div className="bg-blue-100 p-2 rounded-full">
             <BiMessageRoundedDetail className="w-5 h-5 text-[#689DED]" />
@@ -105,7 +108,10 @@ const PinnedMessagesBar = ({
               className="flex items-center justify-between px-4 py-3 border-b hover:bg-gray-50"
             >
               <div
-                onClick={() => onClickMessage(msg._id)}
+                onClick={() => {
+                  onClickMessage(msg._id);
+                  setOpenList(false);
+                }}
                 className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
               >
                 <div className="bg-blue-100 p-2 rounded-full">

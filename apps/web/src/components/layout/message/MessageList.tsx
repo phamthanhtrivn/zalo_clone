@@ -82,6 +82,7 @@ const MessageList = ({
 
         return (
           <div
+            id={message._id}
             key={message._id}
             className={
               message.reactions && message.reactions.length > 0 ? "mb-4" : ""

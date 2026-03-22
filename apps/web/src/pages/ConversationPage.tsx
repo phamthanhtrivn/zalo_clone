@@ -24,6 +24,7 @@ const ConversationPage = () => {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const isFirstLoad = useRef(true);
+  const isJumpingRef = useRef(false);
 
   const handleScrollToTop = async () => {
     const container = containerRef.current;
@@ -58,8 +59,10 @@ const ConversationPage = () => {
     const container = containerRef.current;
     if (!container || !prevCursor || !id) return;
 
+    if (isJumpingRef.current) return;
+
     const isBottom =
-      container.scrollHeight - container.scrollTop === container.clientHeight;
+      container.scrollHeight - container.scrollTop - container.clientHeight < 5;
 
     if (isBottom) {
       const res = await messageService.getNewerMessages(
@@ -72,15 +75,51 @@ const ConversationPage = () => {
       if (res.success && res.data.messages.length) {
         setMessages((prev) => [...prev, ...res.data.messages]);
 
-        // update cursor
         const lastMsg = res.data.messages[res.data.messages.length - 1];
         setPrevCursor(lastMsg._id);
+
+        requestAnimationFrame(() => {
+          container.scrollTop = container.scrollHeight;
+        });
       }
+    }
+  };
+
+  const scrollToMessage = (messageId: string, retry = 0) => {
+    const el = document.getElementById(messageId);
+
+    if (el) {
+      el.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+
+      el.classList.add("highlight");
+
+      setTimeout(() => {
+        el.classList.remove("highlight");
+      }, 5000);
+
+       setTimeout(() => {
+      isJumpingRef.current = false;
+    }, 300);
+
+
+      return;
+    }
+
+    // retry tối đa 10 lần (~500ms)
+    if (retry < 10) {
+      setTimeout(() => {
+        scrollToMessage(messageId, retry + 1);
+      }, 50);
     }
   };
 
   const handleJumpToMessage = async (messageId: string) => {
     if (!id) return;
+
+    isJumpingRef.current = true;
 
     const res = await messageService.getMessagesAroundPinnedMessage(
       id,
@@ -92,23 +131,17 @@ const ConversationPage = () => {
     if (res.success) {
       const data = res.data;
 
-      // replace list
       setMessages(data.messages);
-
-      // set lại cursor
       setNextCursor(data.nextCursor);
       setPrevCursor(data.prevCursor);
 
-      // scroll tới message
       setTimeout(() => {
-        const el = document.getElementById(messageId);
-        if (el) {
-          el.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
-        }
-      }, 0);
+        scrollToMessage(messageId);
+
+        setTimeout(() => {
+          isJumpingRef.current = false;
+        }, 500);
+      }, 100);
     }
   };
 
@@ -248,6 +281,8 @@ const ConversationPage = () => {
   useEffect(() => {
     const handleMediaLoaded = () => {
       if (!containerRef.current) return;
+
+      if (isJumpingRef.current) return;
 
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     };
