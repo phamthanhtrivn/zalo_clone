@@ -30,6 +30,7 @@ import { GetMediasPreviewDto } from './dto/get-medias-preview.dto';
 import { GetMediasFileTypeDto } from './dto/get-medias-file-type.dto';
 import { MessageResponse } from './types/message-response.type';
 import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
+import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
 
 @Injectable()
 export class MessagesService {
@@ -112,6 +113,145 @@ export class MessagesService {
       messages: finalMessages,
       nextCursor:
         transformedMessages.length > 0 ? transformedMessages[0]._id : null,
+    };
+  }
+
+  async getNewerMessages(
+    conversationId: string,
+    getMessagesDto: GetMessagesDto,
+  ) {
+    const { userId, cursor, limit = '15' } = getMessagesDto;
+
+    const conversationObjectId = new Types.ObjectId(conversationId);
+    const userObjectId = new Types.ObjectId(userId);
+
+    const member = await this.memberModel.findOne({
+      userId: userObjectId,
+      conversationId: conversationObjectId,
+      leftAt: null,
+    });
+
+    if (!member) {
+      throw new NotFoundException(
+        'User is not a participant in this conversation',
+      );
+    }
+
+    const cursorObjectId = new Types.ObjectId(cursor);
+
+    const messages = await this.messageModel
+      .find({
+        conversationId: conversationObjectId,
+        _id: { $gt: cursorObjectId },
+      })
+      .sort({ _id: 1 })
+      .limit(Number(limit))
+      .populate('senderId', 'profile.name profile.avatarUrl')
+      .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
+      .populate('reactions.userId', 'profile.name profile.avatarUrl')
+      .populate({
+        path: 'repliedId',
+        populate: {
+          path: 'senderId',
+          select: 'profile.name profile.avatarUrl',
+        },
+      })
+      .lean<MessageResponse[]>();
+
+    const transformedMessages = messages.map((message) => ({
+      ...message,
+      content: {
+        ...message.content,
+        file: this.signFile(message.content?.file),
+      },
+      senderId: this.signUser(message.senderId),
+      reactions: message.reactions?.map((r) => ({
+        ...r,
+        userId: this.signUser(r.userId),
+      })),
+      readReceipts: message.readReceipts?.map((rr) => ({
+        ...rr,
+        userId: this.signUser(rr.userId),
+      })),
+    }));
+
+    return {
+      messages: transformedMessages,
+      prevCursor:
+        transformedMessages.length > 0
+          ? transformedMessages[transformedMessages.length - 1]._id
+          : null,
+    };
+  }
+
+  async getMessagesAroundPinnedMessage(
+    conversationId: string,
+    getAroundPinnedMessage: GetAroundPinnedMessage,
+  ) {
+    const { userId, messageId, limit = '15' } = getAroundPinnedMessage;
+
+    const conversationObjectId = new Types.ObjectId(conversationId);
+    const userObjectId = new Types.ObjectId(userId);
+
+    const member = await this.memberModel.findOne({
+      userId: userObjectId,
+      conversationId: conversationObjectId,
+      leftAt: null,
+    });
+
+    if (!member) {
+      throw new NotFoundException(
+        'User is not a participant in this conversation',
+      );
+    }
+    const target = await this.messageModel.findById(messageId);
+
+    if (!target) {
+      throw new NotFoundException('Message not found');
+    }
+
+    const half = Math.floor(Number(limit) / 2);
+
+    const older = await this.messageModel
+      .find({
+        conversationId: target.conversationId,
+        _id: { $lt: target._id },
+      })
+      .sort({ _id: -1 })
+      .limit(half);
+
+    const newer = await this.messageModel
+      .find({
+        conversationId: target.conversationId,
+        _id: { $gt: target._id },
+      })
+      .sort({ _id: 1 })
+      .limit(half);
+
+    const messages = [...older.reverse(), target, ...newer];
+
+    const transformed = messages.map((message) => ({
+      ...message.toObject(),
+      content: {
+        ...message.content,
+        file: this.signFile(message.content?.file),
+      },
+      senderId: this.signUser(message.senderId),
+      reactions: message.reactions?.map((r) => ({
+        ...r,
+        userId: this.signUser(r.userId),
+      })),
+      readReceipts: message.readReceipts?.map((rr) => ({
+        ...rr,
+        userId: this.signUser(rr.userId),
+      })),
+    }));
+
+    return {
+      messages: transformed,
+      targetId: messageId,
+      nextCursor: transformed[0]?._id,
+      prevCursor: transformed[transformed.length - 1]?._id,
     };
   }
 
@@ -658,7 +798,7 @@ export class MessagesService {
           })
           .session(session);
 
-        if (pinnedCount >= 3) {
+        if (pinnedCount > 3) {
           throw new BadRequestException('Maximum pinned messages reached');
         }
       }

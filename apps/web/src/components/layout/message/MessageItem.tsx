@@ -20,7 +20,7 @@ interface Props {
   onOpenReactionModal: (reactions: ReactionType[]) => void;
   removeReaction: (messageId: string) => void;
   handleRecalledMessage: (messageId: string) => void;
-  handlePinneddMessage: (messageId: string) => void;
+  handlePinnedMessage: (messageId: string) => void;
 }
 
 export const MessageItem = ({
@@ -32,7 +32,7 @@ export const MessageItem = ({
   onOpenReactionModal,
   removeReaction,
   handleRecalledMessage,
-  handlePinneddMessage,
+  handlePinnedMessage,
 }: Props) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
@@ -126,7 +126,7 @@ export const MessageItem = ({
                 <button
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                   onClick={() => {
-                    handlePinneddMessage(openMenuId);
+                    handlePinnedMessage(openMenuId);
                     setOpenMenuId(null);
                   }}
                 >

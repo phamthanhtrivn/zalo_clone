@@ -14,10 +14,11 @@ type Props = {
   currentUserId: string;
   containerRef: RefObject<HTMLDivElement | null>;
   handleScrollToTop: () => void;
+  handleScrollToBottom: () => void;
   reactionMessage: (emojiType: EmojiType, messageId: string) => void;
   removeReaction: (messageId: string) => void;
   handleRecalledMessage: (messageId: string) => void;
-  handlePinneddMessage: (messageId: string) => void;
+  handlePinnedMessage: (messageId: string) => void;
 };
 
 const MessageList = ({
@@ -25,10 +26,11 @@ const MessageList = ({
   currentUserId,
   containerRef,
   handleScrollToTop,
+  handleScrollToBottom,
   reactionMessage,
   removeReaction,
   handleRecalledMessage,
-  handlePinneddMessage
+  handlePinnedMessage,
 }: Props) => {
   const [selectedMessageReactions, setSelectedMessageReactions] = useState<
     ReactionType[] | null
@@ -37,7 +39,10 @@ const MessageList = ({
   return (
     <div
       ref={containerRef}
-      onScroll={handleScrollToTop}
+      onScroll={() => {
+        handleScrollToTop();
+        handleScrollToBottom();
+      }}
       className="flex-1 overflow-y-auto p-4 space-y-1"
     >
       {selectedMessageReactions && (
@@ -101,7 +106,7 @@ const MessageList = ({
               }
               removeReaction={removeReaction}
               handleRecalledMessage={handleRecalledMessage}
-              handlePinneddMessage={handlePinneddMessage}
+              handlePinnedMessage={handlePinnedMessage}
             />
           </div>
         );

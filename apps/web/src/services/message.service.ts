@@ -20,6 +20,47 @@ export const messageService = {
     );
     return response.data;
   },
+  getNewerMessages: async (
+    conversationId: string,
+    userId: string,
+    cursor?: string | null,
+    limit: number = 15,
+  ) => {
+    const response = await apiClient.get(
+      `/api/messages/conversation/${conversationId}/newer`,
+      {
+        params: {
+          userId,
+          cursor,
+          limit,
+        },
+      },
+    );
+    return response.data;
+  },
+  getPinnedMessages: async (conversationId: string, userId: string) => {
+    const response = await apiClient.get(
+      `/api/messages/conversation/${conversationId}/pinned`,
+      {
+        params: { userId },
+      },
+    );
+    return response.data;
+  },
+  getMessagesAroundPinnedMessage: async (
+    conversationId: string,
+    userId: string,
+    messageId: string,
+    limit: number = 15,
+  ) => {
+    const response = await apiClient.get(
+      `/api/messages/conversation/${conversationId}/around`,
+      {
+        params: { userId, messageId, limit },
+      },
+    );
+    return response.data;
+  },
   reactionMessage: async (
     conversationId: string,
     userId: string,

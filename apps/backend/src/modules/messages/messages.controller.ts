@@ -23,6 +23,7 @@ import { GetMessagesDto } from './dto/get-messages.dto';
 import { GetMediasPreviewDto } from './dto/get-medias-preview.dto';
 import { GetMediasFileTypeDto } from './dto/get-medias-file-type.dto';
 import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
+import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
 
 @Controller('messages')
 export class MessagesController {
@@ -36,6 +37,28 @@ export class MessagesController {
     return this.messagesService.getMessagesFromConversation(
       conversationId,
       getMessagesDto,
+    );
+  }
+
+  @Get('conversation/:conversationId/newer')
+  async getNewerMessages(
+    @Param('conversationId') conversationId: string,
+    @Query() getMessagesDto: GetMessagesDto,
+  ) {
+    return this.messagesService.getNewerMessages(
+      conversationId,
+      getMessagesDto,
+    );
+  }
+
+  @Get('conversation/:conversationId/around')
+  async getMessagesAroundPinnedMessage(
+    @Param('conversationId') conversationId: string,
+    @Query() getAroundPinnedMessage: GetAroundPinnedMessage,
+  ) {
+    return this.messagesService.getMessagesAroundPinnedMessage(
+      conversationId,
+      getAroundPinnedMessage,
     );
   }
 

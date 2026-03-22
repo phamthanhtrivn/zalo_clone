@@ -17,8 +17,10 @@ const ConversationPage = () => {
   const { conversation } = location.state || {};
 
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
   const [messages, setMessages] = useState<MessagesType[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null); // mốc để lấy tin nhắn cũ hơn
+  const [prevCursor, setPrevCursor] = useState<string | null>(null); // mốc để lấy tin nhắn mới hơn
 
   const containerRef = useRef<HTMLDivElement>(null);
   const isFirstLoad = useRef(true);
@@ -41,11 +43,72 @@ const ConversationPage = () => {
         setMessages((prev) => [...res.data.messages, ...prev]);
         setNextCursor(res.data.nextCursor);
 
+        const lastMsg = res.data.messages[res.data.messages.length - 1]?._id;
+        setPrevCursor(lastMsg?._id || null);
+
         requestAnimationFrame(() => {
           const newHeight = container.scrollHeight;
           container.scrollTop = newHeight - prevHeight;
         });
       }
+    }
+  };
+
+  const handleScrollToBottom = async () => {
+    const container = containerRef.current;
+    if (!container || !prevCursor || !id) return;
+
+    const isBottom =
+      container.scrollHeight - container.scrollTop === container.clientHeight;
+
+    if (isBottom) {
+      const res = await messageService.getNewerMessages(
+        id,
+        CURRENT_USER_ID,
+        prevCursor,
+        10,
+      );
+
+      if (res.success && res.data.messages.length) {
+        setMessages((prev) => [...prev, ...res.data.messages]);
+
+        // update cursor
+        const lastMsg = res.data.messages[res.data.messages.length - 1];
+        setPrevCursor(lastMsg._id);
+      }
+    }
+  };
+
+  const handleJumpToMessage = async (messageId: string) => {
+    if (!id) return;
+
+    const res = await messageService.getMessagesAroundPinnedMessage(
+      id,
+      CURRENT_USER_ID,
+      messageId,
+      15,
+    );
+
+    if (res.success) {
+      const data = res.data;
+
+      // replace list
+      setMessages(data.messages);
+
+      // set lại cursor
+      setNextCursor(data.nextCursor);
+      setPrevCursor(data.prevCursor);
+
+      // scroll tới message
+      setTimeout(() => {
+        const el = document.getElementById(messageId);
+        if (el) {
+          el.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }
+      }, 0);
     }
   };
 
@@ -68,6 +131,20 @@ const ConversationPage = () => {
       }
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const handleLoadPinnedMessages = async () => {
+    if (!id) return;
+
+    try {
+      const res = await messageService.getPinnedMessages(id, CURRENT_USER_ID);
+
+      if (res.success) {
+        setPinnedMessages(res.data.messages);
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -125,7 +202,7 @@ const ConversationPage = () => {
         maxWidth: "80%",
       },
     });
-  }, [])
+  }, []);
 
   const handleRecalledMessage = async (messageId: string) => {
     if (!id) return;
@@ -138,7 +215,7 @@ const ConversationPage = () => {
     }
   };
 
-  const handlePinneddMessage = async (messageId: string) => {
+  const handlePinnedMessage = async (messageId: string) => {
     if (!id) return;
 
     try {
@@ -151,10 +228,14 @@ const ConversationPage = () => {
 
   useEffect(() => {
     setMessages([]);
+    setPinnedMessages([]);
     setNextCursor(null);
+    setPrevCursor(null);
+
     isFirstLoad.current = true;
 
     handleLoadMessagesFromConversation();
+    handleLoadPinnedMessages();
   }, [id]);
 
   useEffect(() => {
@@ -186,6 +267,9 @@ const ConversationPage = () => {
             conversation={conversation}
             isInfoOpen={isInfoOpen}
             toggleInfo={() => setIsInfoOpen(!isInfoOpen)}
+            pinnedMessages={pinnedMessages}
+            handlePinnedMessage={handlePinnedMessage}
+            handleJumpToMessage={handleJumpToMessage}
           />
 
           <MessageList
@@ -193,10 +277,11 @@ const ConversationPage = () => {
             currentUserId={CURRENT_USER_ID}
             containerRef={containerRef}
             handleScrollToTop={handleScrollToTop}
+            handleScrollToBottom={handleScrollToBottom}
             reactionMessage={reactionMessage}
             removeReaction={removeReaction}
             handleRecalledMessage={handleRecalledMessage}
-            handlePinneddMessage={handlePinneddMessage}
+            handlePinnedMessage={handlePinnedMessage}
           />
 
           <ChatInput chatName={conversation.name} />
