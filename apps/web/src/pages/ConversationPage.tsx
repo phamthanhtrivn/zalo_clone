@@ -303,6 +303,56 @@ const ConversationPage = () => {
     }
   };
 
+  const onSendMessage = async (text: string) => {
+    if (!id || !text.trim()) return;
+
+    try {
+      const res = await messageService.sendMessage(id, CURRENT_USER_ID, {
+        text,
+      });
+      if (res.success) {
+        // Sau khi gửi thành công, load lại tin nhắn mới nhất
+        await handleLoadMessagesFromConversation();
+        requestAnimationFrame(() => {
+          if (containerRef.current) {
+            containerRef.current.scrollTop = containerRef.current.scrollHeight;
+          }
+        });
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const onSendFiles = async (files: FileList) => {
+    if (!id || !files.length) return;
+
+    try {
+      const promises = Array.from(files).map((file) =>
+        messageService.sendMessage(id, CURRENT_USER_ID, undefined, file)
+      );
+
+      const results = await Promise.all(promises);
+
+      results.forEach((res, index) => {
+        if (!res.success) {
+          console.error(`Lỗi file ${files[index].name}`);
+        }
+      });
+
+      await handleLoadMessagesFromConversation();
+
+      requestAnimationFrame(() => {
+        if (containerRef.current) {
+          containerRef.current.scrollTop =
+            containerRef.current.scrollHeight;
+        }
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     setMessages([]);
     setPinnedMessages([]);
@@ -363,7 +413,11 @@ const ConversationPage = () => {
             handlePinnedMessage={handlePinnedMessage}
           />
 
-          <ChatInput chatName={conversation.name} />
+          <ChatInput
+            chatName={conversation.name}
+            onSendMessage={onSendMessage}
+            onSendFiles={onSendFiles}
+          />
         </div>
       )}
 

@@ -233,7 +233,7 @@ export class MessagesService {
       })
       .lean();
 
-    // 🔥 TARGET
+    // TARGET
     const targetMessage = await this.messageModel
       .findById(messageId)
       .populate('senderId', 'profile.name profile.avatarUrl')
@@ -248,7 +248,7 @@ export class MessagesService {
       })
       .lean();
 
-    // 🔥 NEWER
+    // NEWER
     const newer = await this.messageModel
       .find({
         conversationId: target.conversationId,
@@ -273,7 +273,7 @@ export class MessagesService {
       (m): m is NonNullable<typeof m> => m !== null,
     );
 
-    // transform giống API kia
+    // transform data
     const transformed = messages.map((message) => ({
       ...message,
       content: {

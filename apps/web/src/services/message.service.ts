@@ -111,4 +111,37 @@ export const messageService = {
     });
     return response.data;
   },
+  sendMessage: async (
+    conversationId: string,
+    senderId: string,
+    content?: { text?: string; icon?: string },
+    file?: File | null,
+  ) => {
+    if (file) {
+      const formData = new FormData();
+      formData.append("conversationId", conversationId);
+      formData.append("senderId", senderId);
+      if (content?.text) {
+        formData.append("content[text]", content.text);
+      }
+      if (content?.icon) {
+        formData.append("content[icon]", content.icon);
+      }
+      formData.append("file", file);
+
+      const response = await apiClient.post(`/api/messages`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      return response.data;
+    }
+
+    const response = await apiClient.post(`/api/messages`, {
+      conversationId,
+      senderId,
+      content,
+    });
+    return response.data;
+  },
 };
