@@ -25,62 +25,108 @@ const ConversationPage = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isFirstLoad = useRef(true);
   const isJumpingRef = useRef(false);
+  const isFetchingRef = useRef(false); // flag để tránh gọi API old messages nhiều lần khi scroll nhanh
+  const isFetchingNewerRef = useRef(false); // flag để tránh gọi API newer messages nhiều lần khi scroll nhanh
 
   const handleScrollToTop = async () => {
     const container = containerRef.current;
-    if (!container || !nextCursor || !id) return;
+    if (
+      !container ||
+      !nextCursor ||
+      !id ||
+      isJumpingRef.current ||
+      isFetchingRef.current
+    )
+      return;
 
-    if (container.scrollTop === 0) {
+    if (container.scrollTop < 100) {
+      isFetchingRef.current = true;
       const prevHeight = container.scrollHeight;
 
-      const res = await messageService.getMessagesFromConversation(
-        id,
-        CURRENT_USER_ID,
-        nextCursor,
-        10,
-      );
+      try {
+        const res = await messageService.getMessagesFromConversation(
+          id,
+          CURRENT_USER_ID,
+          nextCursor,
+          20,
+        );
 
-      if (res.success) {
-        setMessages((prev) => [...res.data.messages, ...prev]);
-        setNextCursor(res.data.nextCursor);
+        if (res.success) {
+          if (res.data.messages.length > 0) {
+            setMessages((prev) => {
+              const existingIds = new Set(prev.map((m) => m._id));
+              const uniqueNew = res.data.messages.filter(
+                (m: MessagesType) => !existingIds.has(m._id),
+              );
+              return [...uniqueNew, ...prev];
+            });
+            setNextCursor(res.data.nextCursor);
 
-        const lastMsg = res.data.messages[res.data.messages.length - 1]?._id;
-        setPrevCursor(lastMsg?._id || null);
-
-        requestAnimationFrame(() => {
-          const newHeight = container.scrollHeight;
-          container.scrollTop = newHeight - prevHeight;
-        });
+            requestAnimationFrame(() => {
+              const newHeight = container.scrollHeight;
+              container.scrollTop = newHeight - prevHeight;
+            });
+          } else {
+            setNextCursor(null);
+          }
+        }
+      } finally {
+        isFetchingRef.current = false;
       }
     }
   };
 
   const handleScrollToBottom = async () => {
     const container = containerRef.current;
-    if (!container || !prevCursor || !id) return;
-
-    if (isJumpingRef.current) return;
+    if (
+      !container ||
+      !prevCursor ||
+      !id ||
+      isJumpingRef.current ||
+      isFetchingNewerRef.current
+    )
+      return;
 
     const isBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight < 5;
+      container.scrollHeight - container.scrollTop - container.clientHeight <
+      100;
 
     if (isBottom) {
-      const res = await messageService.getNewerMessages(
-        id,
-        CURRENT_USER_ID,
-        prevCursor,
-        10,
-      );
+      isFetchingNewerRef.current = true;
+      try {
+        const res = await messageService.getNewerMessages(
+          id,
+          CURRENT_USER_ID,
+          prevCursor,
+          20,
+        );
 
-      if (res.success && res.data.messages.length) {
-        setMessages((prev) => [...prev, ...res.data.messages]);
+        if (res.success) {
+          if (res.data.messages.length) {
+            setMessages((prev) => {
+              const existingIds = new Set(prev.map((m) => m._id));
+              const uniqueNew = res.data.messages.filter(
+                (m: MessagesType) => !existingIds.has(m._id),
+              );
+              return [...prev, ...uniqueNew];
+            });
 
-        const lastMsg = res.data.messages[res.data.messages.length - 1];
-        setPrevCursor(lastMsg._id);
+            const lastMsg = res.data.messages[res.data.messages.length - 1];
+            setPrevCursor(lastMsg._id);
 
-        requestAnimationFrame(() => {
-          container.scrollTop = container.scrollHeight;
-        });
+            requestAnimationFrame(() => {
+              container.scrollTo({
+                top: container.scrollHeight,
+                behavior: "smooth",
+              });
+            });
+          } else {
+            // Nếu không có tin nhắn mới hơn, set prevCursor về null để tránh gọi lại
+            setPrevCursor(null);
+          }
+        }
+      } finally {
+        isFetchingNewerRef.current = false;
       }
     }
   };
@@ -99,11 +145,6 @@ const ConversationPage = () => {
       setTimeout(() => {
         el.classList.remove("highlight");
       }, 5000);
-
-       setTimeout(() => {
-      isJumpingRef.current = false;
-    }, 300);
-
 
       return;
     }
@@ -131,6 +172,7 @@ const ConversationPage = () => {
     if (res.success) {
       const data = res.data;
 
+      // Deduplicate when jumping as well, though usually messages are replaced
       setMessages(data.messages);
       setNextCursor(data.nextCursor);
       setPrevCursor(data.prevCursor);
@@ -138,9 +180,10 @@ const ConversationPage = () => {
       setTimeout(() => {
         scrollToMessage(messageId);
 
+        // Tăng timeout để chờ scroll behavior: "smooth" hoàn tất
         setTimeout(() => {
           isJumpingRef.current = false;
-        }, 500);
+        }, 1000);
       }, 100);
     }
   };
@@ -153,12 +196,13 @@ const ConversationPage = () => {
         id,
         CURRENT_USER_ID,
         null,
-        10,
+        20,
       );
 
       if (res.success) {
         setMessages(res.data.messages);
         setNextCursor(res.data.nextCursor);
+        setPrevCursor(null); // Reset when loading entire conversation again
       } else {
         console.error(res);
       }
