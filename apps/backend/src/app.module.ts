@@ -9,6 +9,7 @@ import { MembersModule } from './modules/members/members.module';
 import { ConversationSettingsModule } from './modules/conversation-settings/conversation-settings.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { RedisModule } from './common/redis/redis.module';
+import { ChatModule } from './modules/chat/chat.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { RedisModule } from './common/redis/redis.module';
     MembersModule,
     ConversationSettingsModule,
     AuthModule,
+    ChatModule,
   ],
 })
 export class AppModule {}

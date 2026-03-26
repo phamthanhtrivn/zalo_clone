@@ -8,6 +8,7 @@ import { messageService } from "@/services/message.service";
 import type { MessagesType } from "@/types/messages.type";
 import type { EmojiType } from "@/constants/emoji.constant";
 import { toast, Zoom } from "react-toastify";
+import { useSocket } from "@/contexts/SocketContext";
 
 const CURRENT_USER_ID = "699d2b94f9075fe800282901";
 
@@ -27,6 +28,8 @@ const ConversationPage = () => {
   const isJumpingRef = useRef(false);
   const isFetchingRef = useRef(false); // flag để tránh gọi API old messages nhiều lần khi scroll nhanh
   const isFetchingNewerRef = useRef(false); // flag để tránh gọi API newer messages nhiều lần khi scroll nhanh
+
+  const { socket } = useSocket();
 
   const handleScrollToTop = async () => {
     const container = containerRef.current;
@@ -307,18 +310,9 @@ const ConversationPage = () => {
     if (!id || !text.trim()) return;
 
     try {
-      const res = await messageService.sendMessage(id, CURRENT_USER_ID, {
+      await messageService.sendMessage(id, CURRENT_USER_ID, {
         text,
       });
-      if (res.success) {
-        // Sau khi gửi thành công, load lại tin nhắn mới nhất
-        await handleLoadMessagesFromConversation();
-        requestAnimationFrame(() => {
-          if (containerRef.current) {
-            containerRef.current.scrollTop = containerRef.current.scrollHeight;
-          }
-        });
-      }
     } catch (error) {
       console.error(error);
     }
@@ -329,7 +323,7 @@ const ConversationPage = () => {
 
     try {
       const promises = Array.from(files).map((file) =>
-        messageService.sendMessage(id, CURRENT_USER_ID, undefined, file)
+        messageService.sendMessage(id, CURRENT_USER_ID, undefined, file),
       );
 
       const results = await Promise.all(promises);
@@ -340,12 +334,9 @@ const ConversationPage = () => {
         }
       });
 
-      await handleLoadMessagesFromConversation();
-
       requestAnimationFrame(() => {
         if (containerRef.current) {
-          containerRef.current.scrollTop =
-            containerRef.current.scrollHeight;
+          containerRef.current.scrollTop = containerRef.current.scrollHeight;
         }
       });
     } catch (error) {
@@ -387,6 +378,81 @@ const ConversationPage = () => {
       window.removeEventListener("message-media-loaded", handleMediaLoaded);
     };
   }, []);
+
+  useEffect(() => {
+    if (!socket || !id) return;
+
+    socket.emit("join_room", id);
+
+    const handleNewMessage = (newMessage: MessagesType) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === newMessage._id)) return prev;
+        return [...prev, newMessage];
+      });
+
+      const container = containerRef.current;
+      if (!container) return;
+
+      const isMedia =
+        newMessage.content?.file?.type === "IMAGE" ||
+        newMessage.content?.file?.type === "VIDEO";
+
+      const isNearBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight <
+        100;
+
+      if (!isMedia && isNearBottom) {
+        requestAnimationFrame(() => {
+          container.scrollTop = container.scrollHeight;
+        });
+      }
+    };
+
+    const handleMessageReacted = (data: {
+      messageId: string;
+      reactions: any[];
+    }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId ? { ...m, reactions: data.reactions } : m,
+        ),
+      );
+    };
+
+    const handleMessageRecalled = (data: { messageId: string }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId ? { ...m, recalled: true } : m,
+        ),
+      );
+    };
+
+    const handleMessagePinned = (data: {
+      messageId: string;
+      pinned: boolean;
+    }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId ? { ...m, pinned: data.pinned } : m,
+        ),
+      );
+      // Trigger a reload of pinned messages
+      handleLoadPinnedMessages();
+    };
+
+    socket.on("new_message", handleNewMessage);
+    socket.on("message_reacted", handleMessageReacted);
+    socket.on("message_recalled", handleMessageRecalled);
+    socket.on("message_pinned", handleMessagePinned);
+
+    return () => {
+      socket.off("new_message", handleNewMessage);
+      socket.off("message_reacted", handleMessageReacted);
+      socket.off("message_recalled", handleMessageRecalled);
+      socket.off("message_pinned", handleMessagePinned);
+      socket.emit("leave_room", id);
+    };
+  }, [socket, id]);
 
   return (
     <div className="flex flex-1 h-full">

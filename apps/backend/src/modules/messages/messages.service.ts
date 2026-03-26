@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
@@ -32,6 +33,9 @@ import { MessageResponse } from './types/message-response.type';
 import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
 import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
 
+import { ChatGateway } from '../chat/chat.gateway';
+import { ConversationsService } from '../conversations/conversations.service';
+
 @Injectable()
 export class MessagesService {
   constructor(
@@ -42,6 +46,8 @@ export class MessagesService {
     @InjectModel(Conversation.name)
     private readonly conversationModel: Model<Conversation>,
     private readonly storageService: StorageService,
+    private readonly conversationService: ConversationsService,
+    private readonly chatGateway: ChatGateway,
   ) {}
 
   async getMessagesFromConversation(
@@ -572,6 +578,53 @@ export class MessagesService {
       lastMessageAt: (message as any).createdAt,
     });
 
+    // Emitting for realtime
+    const populatedMessage = (await this.messageModel
+      .findById(message._id)
+      .populate('senderId', 'profile.name profile.avatarUrl')
+      .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
+      .populate('reactions.userId', 'profile.name profile.avatarUrl')
+      .populate({
+        path: 'repliedId',
+        populate: {
+          path: 'senderId',
+          select: 'profile.name profile.avatarUrl',
+        },
+      })
+      .lean()) as any;
+
+    if (populatedMessage) {
+      const conversationIdStr = conversationId.toString();
+
+      const transformedMessage = this.transformMessage(populatedMessage);
+
+      this.chatGateway.server
+        .to(conversationIdStr)
+        .emit('new_message', transformedMessage);
+    }
+
+    const members = await this.memberModel.find({
+      conversationId: new Types.ObjectId(conversationId),
+      leftAt: null,
+    });
+
+    for (const member of members) {
+      const conversations =
+        await this.conversationService.getConversationsFromUser(
+          member.userId.toString(),
+        );
+
+      const conversation = conversations.find(
+        (c) => c.conversationId.toString() === conversationId,
+      );
+
+      if (conversation) {
+        this.chatGateway.server
+          .to(member.userId.toString())
+          .emit('new_message_sidebar', conversation);
+      }
+    }
+
     return message;
   }
 
@@ -615,11 +668,52 @@ export class MessagesService {
       repliedId: null,
     });
 
+    const conversationIdStr = conversationId.toString();
+    await this.conversationModel.findByIdAndUpdate(conversationIdStr, {
+      lastMessageId: message._id,
+      lastMessageAt: (message as any).createdAt,
+    });
+
+    // Populate and emit
+    const populatedMessage = (await this.messageModel
+      .findById(message._id)
+      .populate('senderId', 'profile.name profile.avatarUrl')
+      .lean()) as any;
+
+    if (populatedMessage) {
+      const signedMessage = {
+        ...populatedMessage,
+        _id: populatedMessage._id.toString(),
+        conversationId: conversationIdStr,
+        senderId: this.signUser(populatedMessage.senderId),
+      };
+
+      if (signedMessage.senderId && signedMessage.senderId._id) {
+        signedMessage.senderId._id = signedMessage.senderId._id.toString();
+      }
+
+      this.chatGateway.server
+        .to(conversationIdStr)
+        .emit('new_message', signedMessage);
+
+      // Notify sidebar
+      const members = await this.memberModel.find({
+        conversationId: new Types.ObjectId(conversationIdStr),
+        leftAt: null,
+      });
+
+      members.forEach((member) => {
+        this.chatGateway.server
+          .to(member.userId.toString())
+          .emit('new_message_sidebar', signedMessage);
+      });
+    }
+
     return message;
   }
 
   async updateCallMessage(updateCallMessageDto: UpdateCallMessageDto) {
-    const { messageId, status } = updateCallMessageDto;
+    const { messageId, conversationId, status } = updateCallMessageDto;
 
     const objectMessageId = new Types.ObjectId(messageId);
 
@@ -667,6 +761,13 @@ export class MessagesService {
         );
       }
 
+      console.log(
+        `[Socket] Emitting call_updated (MISSED) to room: ${conversationId}`,
+      );
+      this.chatGateway.server
+        .to(conversationId)
+        .emit('call_updated', { messageId, status: CallStatus.MISSED });
+
       return updated;
     } else if (status === CallStatus.REJECTED) {
       const updated = await this.messageModel.updateOne(
@@ -689,6 +790,13 @@ export class MessagesService {
           'Call message not found or not in RINGING status',
         );
       }
+
+      console.log(
+        `[Socket] Emitting call_updated (REJECTED/MISSED) to room: ${conversationId}`,
+      );
+      this.chatGateway.server
+        .to(conversationId)
+        .emit('call_updated', { messageId, status: CallStatus.MISSED });
 
       return updated;
     } else if (status === CallStatus.BUSY) {
@@ -713,6 +821,13 @@ export class MessagesService {
         );
       }
 
+      console.log(
+        `[Socket] Emitting call_updated (BUSY) to room: ${conversationId}`,
+      );
+      this.chatGateway.server
+        .to(conversationId)
+        .emit('call_updated', { messageId, status: CallStatus.BUSY });
+
       return updated;
     } else if (status === CallStatus.ACCEPTED) {
       const updated = await this.messageModel.updateOne(
@@ -733,6 +848,13 @@ export class MessagesService {
           'Call message not found or not in RINGING status',
         );
       }
+
+      console.log(
+        `[Socket] Emitting call_updated (ACCEPTED) to room: ${conversationId}`,
+      );
+      this.chatGateway.server
+        .to(conversationId)
+        .emit('call_updated', { messageId, status: CallStatus.ACCEPTED });
 
       return updated;
     } else if (status === CallStatus.ENDED) {
@@ -765,6 +887,15 @@ export class MessagesService {
           },
         },
       );
+
+      console.log(
+        `[Socket] Emitting call_updated (ENDED) to room: ${conversationId}`,
+      );
+      this.chatGateway.server.to(conversationId).emit('call_updated', {
+        messageId,
+        status: CallStatus.ENDED,
+        duration: Math.floor(duration),
+      });
 
       return updated;
     }
@@ -842,7 +973,7 @@ export class MessagesService {
           })
           .session(session);
 
-        if (pinnedCount > 3) {
+        if (pinnedCount >= 3) {
           throw new BadRequestException('Maximum pinned messages reached');
         }
       }
@@ -852,6 +983,16 @@ export class MessagesService {
 
       await session.commitTransaction();
       session.endSession();
+
+      console.log(
+        `[Socket] Emitting message_pinned to room: ${conversationId.toString()}`,
+      );
+      this.chatGateway.server
+        .to(conversationId.toString())
+        .emit('message_pinned', {
+          messageId: messageId.toString(),
+          pinned: message.pinned,
+        });
 
       return message;
     } catch (error) {
@@ -912,7 +1053,36 @@ export class MessagesService {
       );
     }
 
-    return await this.messageModel.findById(objectMessageId);
+    const updatedMessage = await this.messageModel.findById(objectMessageId);
+
+    if (updatedMessage) {
+      const conversationIdStr = conversationId.toString();
+      const messageIdStr = messageId.toString();
+
+      console.log(
+        `[Socket] Emitting message_recalled to room: ${conversationIdStr}`,
+      );
+      this.chatGateway.server
+        .to(conversationIdStr)
+        .emit('message_recalled', { messageId: messageIdStr });
+
+      // Notify participants for sidebar update
+      const members = await this.memberModel.find({
+        conversationId: new Types.ObjectId(conversationIdStr),
+        leftAt: null,
+      });
+
+      members.forEach((member) => {
+        this.chatGateway.server
+          .to(member.userId.toString())
+          .emit('message_recalled_sidebar', {
+            conversationId: conversationIdStr,
+            messageId: messageIdStr,
+          });
+      });
+    }
+
+    return updatedMessage;
   }
 
   async reactionMessage(reactionDto: ReactionDto) {
@@ -960,7 +1130,17 @@ export class MessagesService {
     );
 
     if (incResult.modifiedCount > 0) {
-      return await this.messageModel.findById(objectMessageId);
+      const updatedMessage = await this.messageModel
+        .findById(objectMessageId)
+        .populate('reactions.userId', 'profile.name profile.avatarUrl')
+        .lean();
+
+      this.chatGateway.server.to(conversationId).emit('message_reacted', {
+        messageId,
+        reactions: updatedMessage?.reactions,
+      });
+
+      return updatedMessage;
     }
 
     const pushEmojiResult = await this.messageModel.updateOne(
@@ -991,7 +1171,17 @@ export class MessagesService {
     );
 
     if (pushEmojiResult.modifiedCount > 0) {
-      return await this.messageModel.findById(objectMessageId);
+      const updatedMessage = await this.messageModel
+        .findById(objectMessageId)
+        .populate('reactions.userId', 'profile.name profile.avatarUrl')
+        .lean();
+
+      this.chatGateway.server.to(conversationId).emit('message_reacted', {
+        messageId,
+        reactions: updatedMessage?.reactions,
+      });
+
+      return updatedMessage;
     }
 
     const pushUserResult = await this.messageModel.updateOne(
@@ -1023,7 +1213,22 @@ export class MessagesService {
       );
     }
 
-    return await this.messageModel.findById(objectMessageId);
+    const finalMessage = await this.messageModel
+      .findById(objectMessageId)
+      .populate('reactions.userId', 'profile.name profile.avatarUrl')
+      .lean();
+
+    console.log(
+      `[Socket] Emitting message_reacted to room: ${conversationId.toString()}`,
+    );
+    this.chatGateway.server
+      .to(conversationId.toString())
+      .emit('message_reacted', {
+        messageId: messageId.toString(),
+        reactions: finalMessage?.reactions,
+      });
+
+    return finalMessage;
   }
 
   async removeReactionMessage(removeReactionDto: RemoveReactionDto) {
@@ -1066,7 +1271,19 @@ export class MessagesService {
       );
     }
 
-    return await this.messageModel.findById(objectMessageId);
+    const updatedMessage = await this.messageModel
+      .findById(objectMessageId)
+      .populate('reactions.userId', 'profile.name profile.avatarUrl')
+      .lean();
+
+    this.chatGateway.server
+      .to(conversationId.toString())
+      .emit('message_reacted', {
+        messageId: messageId.toString(),
+        reactions: updatedMessage?.reactions,
+      });
+
+    return updatedMessage;
   }
 
   async readReceiptMessage(readReceiptDto: ReadReceiptDto) {
@@ -1135,4 +1352,34 @@ export class MessagesService {
             : file.fileKey,
         }
       : file;
+
+  private transformMessage(message: any) {
+    return {
+      ...message,
+
+      content: {
+        ...message.content,
+        file: this.signFile(message.content?.file),
+      },
+
+      senderId: this.signUser(message.senderId),
+
+      reactions: message.reactions?.map((r) => ({
+        ...r,
+        userId: this.signUser(r.userId),
+      })),
+
+      readReceipts: message.readReceipts?.map((rr) => ({
+        ...rr,
+        userId: this.signUser(rr.userId),
+      })),
+
+      repliedId: message.repliedId
+        ? {
+            ...message.repliedId,
+            senderId: this.signUser(message.repliedId.senderId),
+          }
+        : null,
+    };
+  }
 }

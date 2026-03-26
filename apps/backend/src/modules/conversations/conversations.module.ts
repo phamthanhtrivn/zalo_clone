@@ -21,5 +21,6 @@ import { StorageModule } from 'src/common/storage/storage.module';
   ],
   providers: [ConversationsService],
   controllers: [ConversationsController],
+  exports: [ConversationsService],
 })
 export class ConversationsModule {}

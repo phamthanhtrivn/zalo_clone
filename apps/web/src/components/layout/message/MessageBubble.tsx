@@ -59,6 +59,12 @@ export const MessageBubble = ({ message, isMe, showTime }: Props) => {
     a.remove();
   };
 
+  const dispatchMediaLoaded = () => {
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("message-media-loaded"));
+    });
+  };
+
   if (message.recalled) {
     return (
       <div
@@ -93,9 +99,7 @@ export const MessageBubble = ({ message, isMe, showTime }: Props) => {
             src={file.fileKey}
             alt="image"
             className="max-w-xs rounded-lg object-cover"
-            onLoad={() =>
-              window.dispatchEvent(new Event("message-media-loaded"))
-            }
+            onLoad={dispatchMediaLoaded}
           />
         )}
 
@@ -104,9 +108,7 @@ export const MessageBubble = ({ message, isMe, showTime }: Props) => {
             src={file.fileKey}
             controls
             className="max-w-xs rounded-lg"
-            onLoadedMetadata={() =>
-              window.dispatchEvent(new Event("message-media-loaded"))
-            }
+            onLoadedMetadata={dispatchMediaLoaded}
           />
         )}
 

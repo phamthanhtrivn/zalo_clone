@@ -108,7 +108,7 @@ const ConversationListItem = ({ conversation, isActive }: Props) => {
 
         <div className="flex items-center gap-1 text-[13px] text-gray-500 truncate">
           {conversation.type === "PRIVATE" &&
-          conversation.lastMessage?.senderName !== "Bạn"
+            conversation.lastMessage?.senderName !== "Bạn"
             ? ""
             : conversation.lastMessage?.senderName + ": "}
           {getPreviewContent}

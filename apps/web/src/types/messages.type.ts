@@ -17,8 +17,8 @@ export interface MessagesType {
   };
   pinned: boolean;
   recalled: boolean;
-  reactions: [ReactionType];
-  readReceipts: [ReadReceiptType];
+  reactions: ReactionType[];
+  readReceipts: ReadReceiptType[];
   repliedId: string | null;
   call: string | null;
   createdAt: string;

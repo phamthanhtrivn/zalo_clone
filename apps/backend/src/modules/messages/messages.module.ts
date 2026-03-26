@@ -10,6 +10,8 @@ import {
   ConversationSchema,
 } from '../conversations/schemas/conversation.schema';
 import { StorageModule } from 'src/common/storage/storage.module';
+import { ChatModule } from '../chat/chat.module';
+import { ConversationsModule } from '../conversations/conversations.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { StorageModule } from 'src/common/storage/storage.module';
     ]),
     MembersModule,
     StorageModule,
+    ChatModule,
+    ConversationsModule,
   ],
   providers: [MessagesService],
   controllers: [MessagesController],
