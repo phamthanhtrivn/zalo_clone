@@ -4,6 +4,7 @@ export interface ConversationItemType {
   name: string;
   avatar: string;
   lastMessage: {
+    _id: string;
     senderName: string;
     content: {
       text: string;

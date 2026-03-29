@@ -541,6 +541,7 @@ export class ConversationsService {
             },
 
             lastMessage: {
+              _id: '$lastMessage._id',
               senderName: {
                 $cond: [
                   { $eq: ['$lastMessage.senderId', '$userId'] },

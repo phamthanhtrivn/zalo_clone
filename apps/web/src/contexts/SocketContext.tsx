@@ -7,7 +7,10 @@ import React, {
 } from "react";
 import { io, Socket } from "socket.io-client";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { updateConversation } from "@/store/slices/conversationSlice";
+import {
+  updateConversation,
+  updateRecallMessageInConversation,
+} from "@/store/slices/conversationSlice";
 
 const CURRENT_USER_ID = "699d2b94f9075fe800282901";
 
@@ -37,6 +40,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     dispatch(updateConversation(data));
   };
 
+  const handleRecallMessageSidebar = (data: {
+    conversationId: string;
+    messageId: string;
+  }) => {
+    dispatch(updateRecallMessageInConversation(data));
+  };
+
   useEffect(() => {
     if (!socketRef.current) {
       socketRef.current = io(apiUrl);
@@ -58,28 +68,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     // Global listener for sidebar updates
     socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
 
-    socketInstance.on(
-      "message_recalled_sidebar",
-      (data: { conversationId: string; messageId: string }) => {
-        // dispatch(
-        //   updateLastMessage({
-        //     conversationId: data.conversationId,
-        //     lastMessage: {
-        //       senderName: "", // The UI handles recalled messages differently
-        //       content: { text: "Tin nhắn đã được thu hồi" },
-        //       recalled: true,
-        //       createdAt: new Date().toISOString(),
-        //     },
-        //   }),
-        // );
-      },
-    );
+    socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
 
     setSocket(socketInstance);
 
     return () => {
       socketInstance.off("new_message_sidebar", handleNewMessageSidebar);
-      socketInstance.off("message_recalled_sidebar");
+      socketInstance.off(
+        "message_recalled_sidebar",
+        handleRecallMessageSidebar,
+      );
     };
   }, [apiUrl, dispatch]);
 

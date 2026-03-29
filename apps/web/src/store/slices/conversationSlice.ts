@@ -30,9 +30,23 @@ const conversationSlice = createSlice({
         state.conversations.unshift(action.payload);
       }
     },
+    updateRecallMessageInConversation(
+      state,
+      action: PayloadAction<{ conversationId: string; messageId: string }>,
+    ) {
+      const { conversationId, messageId } = action.payload;
+
+      const conversation = state.conversations.find(
+        (c) => c.conversationId === conversationId,
+      );
+
+      if (conversation && conversation.lastMessage?._id === messageId) {
+        conversation.lastMessage.recalled = true;
+      }
+    },
   },
 });
 
-export const { setConversations, updateConversation } =
+export const { setConversations, updateConversation, updateRecallMessageInConversation } =
   conversationSlice.actions;
 export default conversationSlice.reducer;

@@ -984,14 +984,31 @@ export class MessagesService {
       await session.commitTransaction();
       session.endSession();
 
-      console.log(
-        `[Socket] Emitting message_pinned to room: ${conversationId.toString()}`,
-      );
+      const messages = await this.messageModel
+        .find({
+          conversationId: objectConversationId,
+          pinned: true,
+          recalled: false,
+        })
+        .sort({ updatedAt: -1 })
+        .populate('senderId', 'profile.name')
+        .lean();
+
+      const transformedMessages = messages.map((message) => ({
+        ...message,
+
+        content: {
+          ...message.content,
+          file: this.signFile(message.content?.file),
+        },
+      }));
+
       this.chatGateway.server
         .to(conversationId.toString())
         .emit('message_pinned', {
           messageId: messageId.toString(),
           pinned: message.pinned,
+          pinnedMessages: transformedMessages,
         });
 
       return message;
@@ -1059,14 +1076,10 @@ export class MessagesService {
       const conversationIdStr = conversationId.toString();
       const messageIdStr = messageId.toString();
 
-      console.log(
-        `[Socket] Emitting message_recalled to room: ${conversationIdStr}`,
-      );
       this.chatGateway.server
         .to(conversationIdStr)
         .emit('message_recalled', { messageId: messageIdStr });
 
-      // Notify participants for sidebar update
       const members = await this.memberModel.find({
         conversationId: new Types.ObjectId(conversationIdStr),
         leftAt: null,
@@ -1218,14 +1231,18 @@ export class MessagesService {
       .populate('reactions.userId', 'profile.name profile.avatarUrl')
       .lean();
 
-    console.log(
-      `[Socket] Emitting message_reacted to room: ${conversationId.toString()}`,
-    );
+    if (!finalMessage) return;
+
+    const reactions = (finalMessage?.reactions || []).map((r) => ({
+      ...r,
+      userId: this.signUser(r.userId),
+    }));
+
     this.chatGateway.server
       .to(conversationId.toString())
       .emit('message_reacted', {
         messageId: messageId.toString(),
-        reactions: finalMessage?.reactions,
+        reactions: reactions,
       });
 
     return finalMessage;

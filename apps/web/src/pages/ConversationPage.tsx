@@ -430,14 +430,15 @@ const ConversationPage = () => {
     const handleMessagePinned = (data: {
       messageId: string;
       pinned: boolean;
+      pinnedMessages: any[];
     }) => {
       setMessages((prev) =>
         prev.map((m) =>
           m._id === data.messageId ? { ...m, pinned: data.pinned } : m,
         ),
       );
-      // Trigger a reload of pinned messages
-      handleLoadPinnedMessages();
+
+      setPinnedMessages(data.pinnedMessages);
     };
 
     socket.on("new_message", handleNewMessage);
