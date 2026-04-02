@@ -144,4 +144,26 @@ export const messageService = {
     });
     return response.data;
   },
+  getMediasPreview: async (conversationId: string, userId: string) => {
+    const response = await apiClient.get(
+      `/api/messages/conversation/${conversationId}/medias/preview`,
+      {
+        params: { userId },
+      },
+    );
+    return response.data;
+  },
+  getMediasFileType: async (
+    conversationId: string,
+    userId: string,
+    type: "FILE" | "LINK",
+  ) => {
+    const response = await apiClient.get(
+      `/api/messages/conversation/${conversationId}/medias`,
+      {
+        params: { userId, type },
+      },
+    );
+    return response.data;
+  },
 };

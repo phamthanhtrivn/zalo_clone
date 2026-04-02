@@ -1,6 +1,7 @@
 import { formatTime } from "@/utils/format-message-time..util";
 import type { MessagesType } from "@/types/messages.type";
 import { Download } from "lucide-react";
+import { getFileIcon } from "@/utils/file-icon.util";
 
 interface Props {
   message: MessagesType;
@@ -8,41 +9,26 @@ interface Props {
   showTime: boolean;
 }
 
-const getFileIcon = (fileName: string) => {
-  if (fileName.endsWith(".pdf"))
-    return (
-      <img
-        src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/pdf/default.svg"
-        alt="PDF"
-        width="24"
-        height="24"
-      />
-    );
-  if (fileName.endsWith(".doc") || fileName.endsWith(".docx"))
-    return (
-      <img
-        src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/microsoft-word/default.svg"
-        alt="word"
-        className="w-6 h-6"
-      />
-    );
+const renderTextWithLinks = (text: string) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
 
-  if (fileName.endsWith(".xls") || fileName.endsWith(".xlsx"))
-    return (
-      <img
-        src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/microsoft-excel/default.svg"
-        alt="excel"
-        className="w-6 h-6"
-      />
-    );
-  return (
-    <img
-      src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/files/default.svg"
-      alt="Files"
-      width="24"
-      height="24"
-    />
-  );
+  return text.split(urlRegex).map((part, index) => {
+    if (urlRegex.test(part)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 underline hover:text-blue-600"
+        >
+          {part}
+        </a>
+      );
+    }
+
+    return <span key={index}>{part}</span>;
+  });
 };
 
 export const MessageBubble = ({ message, isMe, showTime }: Props) => {
@@ -90,7 +76,7 @@ export const MessageBubble = ({ message, isMe, showTime }: Props) => {
       }`}
     >
       <div className="space-y-2 wrap-break-word">
-        {content?.text && <p>{content.text}</p>}
+        {content?.text && <p>{renderTextWithLinks(content.text)}</p>}
 
         {content?.icon && <p className="text-2xl">{content.icon}</p>}
 

@@ -488,7 +488,11 @@ const ConversationPage = () => {
         </div>
       )}
 
-      <ConversationInfoPanel isOpen={isInfoOpen} />
+      <ConversationInfoPanel
+        isOpen={isInfoOpen}
+        conversation={conversation}
+        currentUser={{ _id: CURRENT_USER_ID }}
+      />
     </div>
   );
 };

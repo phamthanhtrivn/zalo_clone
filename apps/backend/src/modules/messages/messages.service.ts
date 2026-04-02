@@ -370,7 +370,7 @@ export class MessagesService {
       );
     }
 
-    const [images_videos, files, links] = await Promise.all([
+    const [images_videos, files, rawLinks] = await Promise.all([
       this.messageModel
         .find({
           conversationId: new Types.ObjectId(conversationId),
@@ -401,6 +401,18 @@ export class MessagesService {
         .limit(3)
         .lean(),
     ]);
+
+    const links = rawLinks.flatMap((msg) => {
+      const matches = msg.content?.text?.match(/https?:\/\/[^\s]+/g) || [];
+
+      return matches.map((url) => ({
+        _id: msg._id,
+        createdAt: (msg as any).createdAt,
+        content: {
+          text: url,
+        },
+      }));
+    });
 
     for (const message of images_videos) {
       if (message.content?.file) {
