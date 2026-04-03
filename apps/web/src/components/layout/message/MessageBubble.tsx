@@ -2,6 +2,7 @@ import { formatTime } from "@/utils/format-message-time..util";
 import type { MessagesType } from "@/types/messages.type";
 import { Download } from "lucide-react";
 import { getFileIcon } from "@/utils/file-icon.util";
+import { saveAs } from "file-saver";
 
 interface Props {
   message: MessagesType;
@@ -35,14 +36,20 @@ export const MessageBubble = ({ message, isMe, showTime }: Props) => {
   const content = message.content;
   const file = content?.file;
 
-  const handleDownload = () => {
-    const a = document.createElement("a");
-    a.href = file.fileKey;
-    a.target = "_blank";
-    a.download = file.fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(file.fileKey);
+
+      if (!response.ok) {
+        throw new Error("Download failed");
+      }
+
+      const blob = await response.blob();
+
+      saveAs(blob, file.fileName);
+    } catch (error) {
+      console.error("Download error:", error);
+    }
   };
 
   const dispatchMediaLoaded = () => {

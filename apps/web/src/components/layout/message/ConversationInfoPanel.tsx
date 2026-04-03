@@ -18,11 +18,13 @@ import {
   ChevronRight,
   X,
   Download,
+  ChevronLeft,
 } from "lucide-react";
 import { messageService } from "@/services/message.service";
 import type { ConversationItemType } from "@/types/conversation-item.type";
 import { getFileIcon } from "@/utils/file-icon.util";
 import { getDateLabel } from "@/utils/format-message-time..util";
+import { saveAs } from "file-saver";
 
 interface ConversationInfoPanelProps {
   isOpen: boolean;
@@ -47,6 +49,14 @@ const ConversationInfoPanel = ({
   });
 
   const isGroup = conversation?.type === "GROUP";
+
+  const [preview, setPreview] = useState<{
+    isOpen: boolean;
+    index: number;
+  }>({
+    isOpen: false,
+    index: 0,
+  });
 
   useEffect(() => {
     if (isOpen && conversation?.conversationId) {
@@ -80,6 +90,49 @@ const ConversationInfoPanel = ({
       [section]: !prev[section],
     }));
   };
+
+  const handleDownload = async (file: any) => {
+    try {
+      const response = await fetch(file.fileKey);
+
+      if (!response.ok) {
+        throw new Error("Download failed");
+      }
+
+      const blob = await response.blob();
+
+      saveAs(blob, file.fileName);
+    } catch (error) {
+      console.error("Download error:", error);
+    }
+  };
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (!preview.isOpen) return;
+
+      if (e.key === "Escape") {
+        setPreview({ isOpen: false, index: 0 });
+      }
+
+      if (e.key === "ArrowRight") {
+        setPreview((prev) => ({
+          ...prev,
+          index: Math.min(prev.index + 1, medias.length - 1),
+        }));
+      }
+
+      if (e.key === "ArrowLeft") {
+        setPreview((prev) => ({
+          ...prev,
+          index: Math.max(prev.index - 1, 0),
+        }));
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [preview.isOpen, medias.length]);
 
   if (!isOpen) return <div className="w-0 overflow-hidden" />;
 
@@ -182,7 +235,13 @@ const ConversationInfoPanel = ({
                     return (
                       <div
                         key={idx}
-                        className="aspect-square bg-gray-100 overflow-hidden relative"
+                        className="aspect-square bg-gray-100 overflow-hidden relative cursor-pointer"
+                        onClick={() =>
+                          setPreview({
+                            isOpen: true,
+                            index: idx,
+                          })
+                        }
                       >
                         {isVideo ? (
                           <>
@@ -246,15 +305,6 @@ const ConversationInfoPanel = ({
                   {files.slice(0, 6).map((item, idx) => {
                     const file = item.content?.file;
 
-                    const handleDownload = () => {
-                      const a = document.createElement("a");
-                      a.href = file.fileKey;
-                      a.download = file.fileName;
-                      document.body.appendChild(a);
-                      a.click();
-                      a.remove();
-                    };
-
                     return (
                       <div
                         key={idx}
@@ -278,7 +328,7 @@ const ConversationInfoPanel = ({
 
                         {/* DOWNLOAD */}
                         <button
-                          onClick={handleDownload}
+                          onClick={() => handleDownload(file)}
                           className="p-1 border rounded-md hover:bg-gray-100 cursor-pointer"
                         >
                           <Download className="w-4 h-4" />
@@ -399,6 +449,87 @@ const ConversationInfoPanel = ({
           </button>
         </div>
       </div>
+
+      {preview.isOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+        >
+          {/* CLOSE */}
+          <button
+            onClick={() => setPreview({ isOpen: false, index: 0 })}
+            className="absolute top-5 right-5 text-white hover:opacity-70 cursor-pointer"
+          >
+            <X size={28} />
+          </button>
+
+          {/* DOWNLOAD */}
+          <button
+            onClick={() => {
+              const file = medias[preview.index]?.content?.file;
+              handleDownload(file);
+            }}
+            className="absolute top-5 left-5 text-white hover:opacity-70 cursor-pointer"
+          >
+            <Download size={24} />
+          </button>
+
+          {/* PREV */}
+          {preview.index > 0 && (
+            <button
+              onClick={() =>
+                setPreview((prev) => ({
+                  ...prev,
+                  index: prev.index - 1,
+                }))
+              }
+              className="absolute left-5 text-white bg-black/50 p-2 rounded-full cursor-pointer"
+            >
+              <ChevronLeft size={28} />
+            </button>
+          )}
+
+          {/* NEXT */}
+          {preview.index < medias.length - 1 && (
+            <button
+              onClick={() =>
+                setPreview((prev) => ({
+                  ...prev,
+                  index: prev.index + 1,
+                }))
+              }
+              className="absolute right-5 text-white bg-black/50 p-2 rounded-full cursor-pointer"
+            >
+              <ChevronRight size={28} />
+            </button>
+          )}
+
+          {/* CONTENT */}
+          <div
+            className="max-w-[90%] max-h-[90%]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(() => {
+              const file = medias[preview.index]?.content?.file;
+
+              if (!file) return null;
+
+              return file.type === "VIDEO" ? (
+                <video
+                  src={file.fileKey}
+                  controls
+                  autoPlay
+                  className="max-h-[85vh] rounded-lg"
+                />
+              ) : (
+                <img
+                  src={file.fileKey}
+                  className="max-h-[85vh] rounded-lg object-contain"
+                />
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
