@@ -48,6 +48,7 @@ export class AuthController {
     if (signUpDto.password !== signUpDto.repassword) {
       throw new BadRequestException('Mật khẩu xác nhận không khớp !');
     }
+    const device = req.headers['user-agent'] as string;
     try {
       return await this.authService.completeSignUp(
         req.user.phone,
@@ -55,6 +56,7 @@ export class AuthController {
         signUpDto.gender,
         signUpDto.birthDay,
         signUpDto.password,
+        device,
       );
     } catch (err) {
       console.log(`Lỗi khi sign up: ${err}`);

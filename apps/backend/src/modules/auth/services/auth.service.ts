@@ -130,15 +130,28 @@ export class AuthService {
     gender: Gender,
     birthday: Date,
     password: string,
+    device: string,
   ) {
-    await this.userService.createRegister(
+    const user = await this.userService.createRegister(
       phone,
       name,
       gender,
       birthday,
       password,
     );
-    return { message: 'Đăng ký tài khoản thành công !' };
+
+    const authUser: AuthUser = {
+      userId: user._id.toString(),
+      phone: user.phone,
+      name: user.profile?.name,
+    };
+
+    const authData = await this.signIn(authUser, device);
+
+    return {
+      message: 'Đăng ký thành công!',
+      ...authData,
+    };
   }
 
   async validateUser(phone: string, pass: string): Promise<any> {
