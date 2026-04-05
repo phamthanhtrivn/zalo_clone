@@ -59,10 +59,11 @@ const ConversationInfoPanel = ({
   });
 
   useEffect(() => {
-    if (isOpen && conversation?.conversationId) {
-      fetchMediaPreview();
-    }
-  }, [isOpen, conversation?.conversationId]);
+    if (!isOpen) return;
+    if (!conversation?.conversationId) return;
+
+    fetchMediaPreview();
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen || !conversation?.conversationId) return;
@@ -451,9 +452,7 @@ const ConversationInfoPanel = ({
       </div>
 
       {preview.isOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
-        >
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
           {/* CLOSE */}
           <button
             onClick={() => setPreview({ isOpen: false, index: 0 })}

@@ -365,11 +365,18 @@ const ConversationPage = () => {
 
   useEffect(() => {
     const handleMediaLoaded = () => {
-      if (!containerRef.current) return;
+      const container = containerRef.current;
+      if (!container) return;
 
       if (isJumpingRef.current) return;
 
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      const prevScrollBottom = container.scrollHeight - container.scrollTop;
+
+      requestAnimationFrame(() => {
+        const newScrollTop = container.scrollHeight - prevScrollBottom;
+
+        container.scrollTop = newScrollTop;
+      });
     };
 
     window.addEventListener("message-media-loaded", handleMediaLoaded);
