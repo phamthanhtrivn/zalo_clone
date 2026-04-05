@@ -156,6 +156,16 @@ export const messageService = {
     });
     return response.data;
   },
+  readReceipt: async (
+    userId: string,
+    conversationId: string,
+  ) => {
+    const response = await apiClient.patch(`/api/messages/read-receipt`, {
+      userId,
+      conversationId,
+    });
+    return response.data;
+  },
   getMediasPreview: async (userId: string, conversationId: string) => {
     const response = await apiClient.get(
       `/api/messages/conversation/${conversationId}/medias/preview`,

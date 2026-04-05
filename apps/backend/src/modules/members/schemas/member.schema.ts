@@ -21,6 +21,9 @@ export class Member {
 
   @Prop({ type: String, enum: MemberRole, required: true })
   role: MemberRole;
+  
+  @Prop({ type: Types.ObjectId, ref: 'Message', default: null })
+  lastReadMessageId?: Types.ObjectId | null;
 }
 
 export const MemberSchema = SchemaFactory.createForClass(Member);
@@ -28,3 +31,4 @@ export const MemberSchema = SchemaFactory.createForClass(Member);
 MemberSchema.index({ userId: 1, conversationId: 1 }, { unique: true });
 MemberSchema.index({ conversationId: 1 });
 MemberSchema.index({ userId: 1 });
+MemberSchema.index({ conversationId: 1, lastReadMessageId: 1 });

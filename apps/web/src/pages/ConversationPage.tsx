@@ -370,6 +370,16 @@ const ConversationPage = () => {
     }
   };
 
+  const handleOpenConversation = async () => {
+    try {
+      if (!id) return;
+
+      await messageService.readReceipt(CURRENT_USER_ID, id);
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
   useEffect(() => {
     setMessages([]);
     setPinnedMessages([]);
@@ -380,6 +390,7 @@ const ConversationPage = () => {
 
     handleLoadMessagesFromConversation();
     handleLoadPinnedMessages();
+    handleOpenConversation();
   }, [id]);
 
   useEffect(() => {
@@ -474,16 +485,28 @@ const ConversationPage = () => {
       setPinnedMessages(data.pinnedMessages);
     };
 
+    const handleReadReceipt = (data: { conversationId: string; messages: MessagesType[] }) => {
+      if (data.conversationId === id) {
+        setMessages((prev) => {
+          const updatedMap = new Map(data.messages.map((m) => [m._id, m]));
+          return prev.map((m) => updatedMap.get(m._id) || m);
+        }
+        );
+      } 
+    };
+
     socket.on("new_message", handleNewMessage);
     socket.on("message_reacted", handleMessageReacted);
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
+    socket.on("read_receipt", handleReadReceipt);
 
     return () => {
       socket.off("new_message", handleNewMessage);
       socket.off("message_reacted", handleMessageReacted);
       socket.off("message_recalled", handleMessageRecalled);
       socket.off("message_pinned", handleMessagePinned);
+      socket.off("read_receipt", handleReadReceipt);
       socket.emit("leave_room", id);
     };
   }, [socket, id]);

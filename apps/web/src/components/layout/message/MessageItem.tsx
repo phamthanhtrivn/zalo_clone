@@ -11,6 +11,7 @@ import { IoIosInformationCircleOutline } from "react-icons/io";
 import { CgUndo } from "react-icons/cg";
 import { RiUnpinLine } from "react-icons/ri";
 import { FaRegTrashAlt } from "react-icons/fa";
+import ViewDetailMessageModal from "./ViewDetailMessageModal";
 
 interface Props {
   message: MessagesType;
@@ -38,6 +39,7 @@ export const MessageItem = ({
   handleDeleteMessageForMe,
 }: Props) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
@@ -150,7 +152,7 @@ export const MessageItem = ({
                 <button
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                   onClick={() => {
-                    console.log("Chi tiết", message._id);
+                    setShowDetailModal(true);
                     setOpenMenuId(null);
                   }}
                 >
@@ -189,6 +191,12 @@ export const MessageItem = ({
           </div>
         )}
       </div>
+      {showDetailModal && (
+        <ViewDetailMessageModal
+          selectedMessage={message}
+          setShowDetailModal={() => setShowDetailModal(false)}
+        />
+      )}
     </div>
   );
 };

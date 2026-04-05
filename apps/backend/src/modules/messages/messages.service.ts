@@ -1372,13 +1372,12 @@ export class MessagesService {
   }
 
   async readReceiptMessage(readReceiptDto: ReadReceiptDto) {
-    const { userId, messageId, conversationId } = readReceiptDto;
+    const { userId, conversationId } = readReceiptDto;
 
     const objectUserId = new Types.ObjectId(userId);
-    const objectMessageId = new Types.ObjectId(messageId);
     const objectConversationId = new Types.ObjectId(conversationId);
 
-    const member = await this.memberModel.exists({
+    const member = await this.memberModel.findOne({
       userId: objectUserId,
       conversationId: objectConversationId,
       leftAt: null,
@@ -1390,26 +1389,74 @@ export class MessagesService {
       );
     }
 
-    const updated = await this.messageModel.updateOne(
-      {
-        _id: objectMessageId,
-        conversationId: objectConversationId,
-        'readReceipts.userId': { $ne: objectUserId },
-      },
-      {
-        $push: {
-          readReceipts: {
-            userId: objectUserId,
-          },
-        },
-      },
+    const conversation = await this.conversationModel.findById(
+      objectConversationId,
+      { lastMessageId: 1 },
     );
 
-    if (updated.modifiedCount === 0) {
-      throw new BadRequestException('Message already read by this user');
+    if (!conversation?.lastMessageId) {
+      return { message: 'No messages' };
     }
 
-    return updated;
+    const lastMessageId = conversation.lastMessageId;
+
+    if (member.lastReadMessageId?.equals(lastMessageId)) {
+      return { message: 'Already read' };
+    }
+
+    const filter: any = {
+      conversationId: objectConversationId,
+      'readReceipts.userId': { $ne: objectUserId },
+    };
+
+    if (member.lastReadMessageId) {
+      filter._id = { $gt: member.lastReadMessageId };
+    }
+
+    await this.messageModel.updateMany(filter, {
+      $addToSet: {
+        readReceipts: {
+          userId: objectUserId,
+        },
+      },
+    });
+
+    const updatedMessages = await this.messageModel
+      .find(filter)
+      .populate({
+        path: 'readReceipts.userId',
+        select: '_id profile.name profile.avatarUrl',
+      })
+      .lean();
+
+    const transformedMessages = updatedMessages.map((msg) => {
+      if (msg.readReceipts?.length) {
+        msg.readReceipts = msg.readReceipts.map((r) => {
+          const user = r.userId as any;
+          if (user?.profile?.avatarUrl) {
+            user.profile.avatarUrl = this.signAvatar(user.profile.avatarUrl);
+          }
+          return r;
+        });
+      }
+      return msg;
+    });
+
+    this.chatGateway.server.to(conversationId.toString()).emit('read_receipt', {
+      conversationId,
+      messages: transformedMessages,
+    });
+
+    await this.memberModel.updateOne(
+      { _id: member._id },
+      { $set: { lastReadMessageId: lastMessageId } },
+    );
+
+    return {
+      conversationId,
+      userId,
+      lastReadMessageId: lastMessageId,
+    };
   }
 
   private signAvatar = (avatar?: string) =>
