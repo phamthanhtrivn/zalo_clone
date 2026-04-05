@@ -5,7 +5,8 @@ import {
   SendHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
 
 type Props = {
   chatName: string;
@@ -15,10 +16,33 @@ type Props = {
 
 const ChatInput = ({ chatName, onSendMessage, onSendFiles }: Props) => {
   const [text, setText] = useState("");
+  const [showEmoji, setShowEmoji] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
+
+  const handleSelectEmoji = (emojiData: EmojiClickData) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart ?? 0;
+    const end = textarea.selectionEnd ?? 0;
+
+    setText((prev) => {
+      const newText =
+        prev.substring(0, start) + emojiData.emoji + prev.substring(end);
+
+      requestAnimationFrame(() => {
+        textarea.focus();
+        const pos = start + emojiData.emoji.length;
+        textarea.setSelectionRange(pos, pos);
+      });
+
+      return newText;
+    });
+  };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
@@ -55,6 +79,17 @@ const ChatInput = ({ chatName, onSendMessage, onSendFiles }: Props) => {
     }
   };
 
+  useEffect(() => {
+    const handleClickOutside = (e: any) => {
+      if (!emojiRef.current?.contains(e.target)) {
+        setShowEmoji(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
     <div className="bg-white border-t">
       <div className="flex items-center gap-1 px-2 border-b py-1 ">
@@ -62,9 +97,21 @@ const ChatInput = ({ chatName, onSendMessage, onSendFiles }: Props) => {
           variant="ghost"
           size="icon"
           className="w-10 h-10 text-gray-500 cursor-pointer"
+          onClick={() => setShowEmoji(!showEmoji)}
         >
           <Smile className="w-10 h-10" />
         </Button>
+
+        {showEmoji && (
+          <div ref={emojiRef} className="absolute bottom-16 left-2 z-50">
+            <EmojiPicker
+              onEmojiClick={handleSelectEmoji}
+              previewConfig={{ showPreview: false }}
+              width={300}
+              height={400}
+            />
+          </div>
+        )}
 
         <input
           type="file"
