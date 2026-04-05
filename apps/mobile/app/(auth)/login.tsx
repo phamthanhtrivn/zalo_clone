@@ -19,7 +19,7 @@ import { useSelector } from "react-redux";
 export default function Login() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, error, loading } = useSelector((state: any) => state.auth);
+  const { user, error, message, loading } = useSelector((state: any) => state.auth);
   const [phone, setPhone] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [isHiddenPass, setHiddenPass] = useState<boolean>(true);
@@ -50,13 +50,23 @@ export default function Login() {
       await dispatch(signIn({ phone, password })).unwrap();
       ToastAndroid.show("Đăng nhập thành công", ToastAndroid.SHORT);
     } catch (err: any) {
-      ToastAndroid.show(err || "Đăng nhập thất bại", ToastAndroid.SHORT);
+      console.log(err)
+      ToastAndroid.show(
+        err.message || "Đăng nhập thất bại",
+        ToastAndroid.SHORT,
+      );
     }
   };
 
   return (
     <Container>
-      <Header back gradient />
+      <Header
+        back
+        gradient
+        centerChild={
+          <Text className="text-white text-sm font-semibolds">Đăng nhập</Text>
+        }
+      />
       <Tips text="Vui lòng nhập số tài khoản và mật khẩu để đăng nhập" />
       <View className="px-screen-edge gap-5 mt-2">
         <Input
@@ -64,17 +74,17 @@ export default function Login() {
           icon="close-outline"
           value={phone}
           onChangeText={handleOnChangePhone}
-          onPress={clearPhone}
+          onPressOnIcon={clearPhone}
         />
         <Input
           placeholder="Mật khẩu"
           value={password}
           icon={isHiddenPass ? `eye-off-outline` : `eye-outline`}
-          onPress={changHiddenPass}
+          onPressOnIcon={changHiddenPass}
           security={isHiddenPass}
           onChangeText={handleOnChangePassword}
         />
-        <Text className="text-red-600">{error}</Text>
+        <Text className="text-red-600">{error.message}</Text>
         <TouchableOpacity className="w-32" onPress={handleForgotPassword}>
           <Text className="text-primary/70 font-semibold">
             Lấy lại mật khẩu
