@@ -45,6 +45,9 @@ export class AuthController {
   @RequireTempPurpose(Purpose.SignUp)
   @UseGuards(TempVerifyGuard)
   async completeSignUp(@Request() req, @Body() signUpDto: SignUpDto) {
+    if (signUpDto.password !== signUpDto.repassword) {
+      throw new BadRequestException('Mật khẩu xác nhận không khớp !');
+    }
     try {
       return await this.authService.completeSignUp(
         req.user.phone,

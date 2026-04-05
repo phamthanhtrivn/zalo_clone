@@ -117,7 +117,10 @@ export class AuthService {
       );
     }
     if (await this.sendOtp(phone)) {
-      return { message: 'Mã otp đã được gọi. Vui lòng kiểm tra hộp thư !' };
+      return {
+        message: 'Mã otp đã được gọi. Vui lòng kiểm tra hộp thư !',
+        expiresIn: process.env.OTP_RESEND_SECONDS,
+      };
     }
   }
 
