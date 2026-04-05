@@ -22,19 +22,21 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const res = exception.getResponse();
 
       if (typeof res === 'string') {
-        message = res;
+        message = res; // Này là trường hợp tự throw lỗi
       } else if (typeof res === 'object' && res !== null && 'message' in res) {
-        const r = res as { message?: string | string[] };
-        message = r.message ?? 'Internal server error';
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        message = (res as any).message || res;
       }
     }
 
     response.status(status).json({
       success: false,
       statusCode: status,
+      // Ta trả về thêm một trường errors để dễ xử lý ở Mobile
+      errors: Array.isArray(message) ? message : null,
+      message: Array.isArray(message) ? 'Dữ liệu không hợp lệ' : message,
       timestamp: new Date().toISOString(),
       path: request.url,
-      message,
     });
   }
 }
