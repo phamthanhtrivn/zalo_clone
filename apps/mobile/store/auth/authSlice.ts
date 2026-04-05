@@ -2,6 +2,7 @@ import { createSlice } from "@reduxjs/toolkit";
 import {
   completeSignUp,
   logOut,
+  resetPassword,
   restoreSession,
   signIn,
   verifyOtp,
@@ -94,6 +95,18 @@ const authSlice = createSlice({
         state.loading = false;
       })
       .addCase(verifyOtp.rejected, (state, action) => {
+        state.error = action.payload;
+        state.loading = false;
+      })
+      .addCase(resetPassword.pending, (state, action) => {
+        state.loading = true;
+        state.error = {};
+      })
+      .addCase(resetPassword.fulfilled, (state, action) => {
+         state.user = action.payload;
+        state.loading = false;
+      })
+      .addCase(resetPassword.rejected, (state, action) => {
         state.error = action.payload;
         state.loading = false;
       });

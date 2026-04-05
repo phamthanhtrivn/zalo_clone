@@ -1,4 +1,9 @@
-import { CompleteSignUp, OtpVerify, UserLogin } from "@/constants/types";
+import {
+  CompleteSignUp,
+  OtpVerify,
+  ResetPassword,
+  UserLogin,
+} from "@/constants/types";
 import { api } from "@/services/api";
 import { authService } from "@/services/auth.service";
 import { createAsyncThunk } from "@reduxjs/toolkit";
@@ -28,6 +33,39 @@ export const signUp = createAsyncThunk(
     try {
       const res = await authService.signUp(phone);
       return res;
+    } catch (err: any) {
+      return thunkAPI.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const forgotPassword = createAsyncThunk(
+  "auth/forgot-password",
+  async (phone: string, thunkAPI) => {
+    try {
+      const res = await authService.forgotPassWord(phone);
+      return res;
+    } catch (err: any) {
+      return thunkAPI.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const resetPassword = createAsyncThunk(
+  "auth/reset-password",
+  async (payload: { data: ResetPassword; tempToken: string }, thunkAPI) => {
+    try {
+      const data = await authService.resetPassword(
+        payload.data,
+        payload.tempToken,
+      );
+      await SecureStore.setItemAsync("refresh_token", data.refreshToken);
+      await SecureStore.setItemAsync("access_token", data.accessToken);
+
+      api.defaults.headers.common["Authorization"] =
+        `Bearer ${data.accessToken}`;
+
+      return data.user;
     } catch (err: any) {
       return thunkAPI.rejectWithValue(err.response?.data);
     }

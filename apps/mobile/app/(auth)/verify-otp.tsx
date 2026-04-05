@@ -10,7 +10,13 @@ import Button from "@/components/common/Button";
 import { useEffect, useState } from "react";
 import { formatTime } from "@/utils/formater";
 import { useAppDispatch, useAppSelector } from "@/store/store";
-import { signUp, verifyOtp } from "@/store/auth/authThunk";
+import {
+  forgotPassword,
+  resetPassword,
+  signUp,
+  verifyOtp,
+} from "@/store/auth/authThunk";
+import { Purpose } from "@/constants/types";
 
 export default function VerifyOtp() {
   const router = useRouter();
@@ -36,8 +42,13 @@ export default function VerifyOtp() {
   }, [timeLeft]);
 
   const handleOnResendOtp = async () => {
+    let data;
     try {
-      const data = await dispatch(signUp(String(phone))).unwrap();
+      if (purpose === Purpose.SignUp) {
+        data = await dispatch(signUp(String(phone))).unwrap();
+      } else {
+        data = await dispatch(forgotPassword(String(phone))).unwrap();
+      }
 
       setTimeLeft(data.expiresIn);
       ToastAndroid.show(data.message, ToastAndroid.SHORT);
@@ -49,10 +60,14 @@ export default function VerifyOtp() {
   const handleOnContinue = async () => {
     try {
       const data = await dispatch(verifyOtp({ phone, otp, purpose })).unwrap();
-      router.push("/(auth)/complete-register");
+      if (purpose === Purpose.SignUp) {
+        router.push("/(auth)/complete-register");
+      } else {
+        router.push("/(auth)/reset-password");
+      }
       console.log(data);
     } catch (err: any) {
-      console.log(error)
+      console.log(error);
       ToastAndroid.show(err.message, ToastAndroid.SHORT);
     }
   };

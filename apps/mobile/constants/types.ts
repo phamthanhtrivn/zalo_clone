@@ -28,3 +28,8 @@ export interface CompleteSignUp {
   password: string;
   repassword: string;
 }
+
+export interface ResetPassword {
+  newPassword: string;
+  confirmPassword: string;
+}
