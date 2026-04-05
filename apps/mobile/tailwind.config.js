@@ -12,7 +12,7 @@ export default {
       },
       fontSize: {
         xsm: 11,
-        xs: 12,
+        xs: 13,
         sm: 15,
         base: 16,
         lg: 22,
