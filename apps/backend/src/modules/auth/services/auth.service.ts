@@ -6,6 +6,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Gender } from '@zalo-clone/shared-types';
@@ -93,10 +94,13 @@ export class AuthService {
   async forgotPassword(phone: string) {
     const user = await this.userService.findByPhone(phone);
     if (!user) {
-      return { message: 'Số điện thoại chưa được đăng ký !' };
+      throw new NotFoundException('Số điện thoại chưa được đăng ký');
     }
     if (await this.sendOtp(phone)) {
-      return { message: 'Mã otp đã được gọi. Vui lòng kiểm tra hộp thư !' };
+      return {
+        message: 'Mã otp đã được gọi. Vui lòng kiểm tra hộp thư !',
+        expiresIn: process.env.OTP_RESEND_SECONDS,
+      };
     }
   }
 
