@@ -1,4 +1,4 @@
-import { UserLogin } from "@/constants/types";
+import { CompleteSignUp, OtpVerify, UserLogin } from "@/constants/types";
 import { api } from "./api";
 
 export const authService = {
@@ -12,6 +12,18 @@ export const authService = {
   },
   signOut: async (refreshToken: string) => {
     const res = await api.post("/auth/sign-out", { refreshToken });
+    return res.data;
+  },
+  signUp: async (phone: string) => {
+    const res = await api.post("/auth/sign-up", { phone });
+    return res.data;
+  },
+  completeRegister: async (data: CompleteSignUp, tempToken: string) => {
+    const res = await api.post("/auth/complete-sign-up",  data, {headers: {Authorization: `Bearer ${tempToken}`}});
+    return res.data;
+  },
+  verifyOtp: async (payload: OtpVerify) => {
+    const res = await api.post("/auth/otp/verify", payload);
     return res.data;
   },
 };

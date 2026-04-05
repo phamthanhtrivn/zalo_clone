@@ -9,6 +9,11 @@ export const api = axios.create({
   timeout: 10000,
 });
 
+// dùng instance riêng để refresh (tránh loop)
+const refreshApi = axios.create({
+  baseURL: `${config.apiUrl}/api`,
+});
+
 api.interceptors.request.use(async (config) => {
   const token = await SecureStore.getItemAsync("access_token");
 
@@ -20,16 +25,7 @@ api.interceptors.request.use(async (config) => {
 });
 
 api.interceptors.response.use(
-  (response) => {
-    return response.data;
-  },
-  (error) => {
-    return Promise.reject(error);
-  },
-);
-
-api.interceptors.response.use(
-  (res) => res,
+  (res) => res.data,
   async (error) => {
     const originalRequest = error.config;
 
@@ -42,7 +38,7 @@ api.interceptors.response.use(
 
       const refreshToken = await SecureStore.getItemAsync("refresh_token");
 
-      const res = await api.post("/auth/token/refresh", {
+      const res = await refreshApi.post("/auth/token/refresh", {
         refreshToken,
       });
 

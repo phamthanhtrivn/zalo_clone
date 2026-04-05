@@ -1,4 +1,4 @@
-import { UserLogin } from "@/constants/types";
+import { CompleteSignUp, OtpVerify, UserLogin } from "@/constants/types";
 import { api } from "@/services/api";
 import { authService } from "@/services/auth.service";
 import { createAsyncThunk } from "@reduxjs/toolkit";
@@ -17,9 +17,41 @@ export const signIn = createAsyncThunk(
 
       return data.user;
     } catch (err: any) {
-      return thunkAPI.rejectWithValue(
-        err.response?.data?.message || "Login failed",
+      return thunkAPI.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const signUp = createAsyncThunk(
+  "auth/signUp",
+  async (phone: string, thunkAPI) => {
+    try {
+      const res = await authService.signUp(phone);
+      return res;
+    } catch (err: any) {
+      return thunkAPI.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const completeSignUp = createAsyncThunk(
+  "auth/complete-sign-up",
+  async (payload: { data: CompleteSignUp; tempToken: string }, thunkAPI) => {
+    try {
+      const data = await authService.completeRegister(
+        payload.data,
+        payload.tempToken,
       );
+
+      await SecureStore.setItemAsync("refresh_token", data.refreshToken);
+      await SecureStore.setItemAsync("access_token", data.accessToken);
+
+      api.defaults.headers.common["Authorization"] =
+        `Bearer ${data.accessToken}`;
+
+      return data.user;
+    } catch (err: any) {
+      return thunkAPI.rejectWithValue(err.response?.data);
     }
   },
 );
@@ -58,8 +90,18 @@ export const logOut = createAsyncThunk("auth/logOut", async (_, thunkApi) => {
 
     return message;
   } catch (err: any) {
-    return thunkApi.rejectWithValue(
-      err.response.data.message || "Lỗi hệ thống !",
-    );
+    return thunkApi.rejectWithValue(err.response?.data);
   }
 });
+
+export const verifyOtp = createAsyncThunk(
+  "auth/verifyOtp",
+  async (payload: OtpVerify, thunkAPI) => {
+    try {
+      const res = await authService.verifyOtp(payload);
+      return res;
+    } catch (err: any) {
+      return thunkAPI.rejectWithValue(err.response?.data);
+    }
+  },
+);

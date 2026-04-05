@@ -1,17 +1,25 @@
 import { createSlice } from "@reduxjs/toolkit";
-import { logOut, restoreSession, signIn } from "./authThunk";
+import {
+  completeSignUp,
+  logOut,
+  restoreSession,
+  signIn,
+  verifyOtp,
+} from "./authThunk";
 import { AuthUser } from "@/constants/types";
 
 interface AuthSliceState {
-  error: string;
+  error: any;
   loading: boolean;
   user: AuthUser | null;
+  tmp_token: string;
 }
 
 const initialState = {
-  error: "",
+  error: {},
   loading: false,
   user: null,
+  tmp_token: "",
 } as AuthSliceState;
 
 const authSlice = createSlice({
@@ -19,7 +27,7 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     clearAuth(state) {
-      state.error = "";
+      state.error = {};
       state.user = null;
       state.loading = false;
     },
@@ -28,41 +36,66 @@ const authSlice = createSlice({
     builder
       .addCase(signIn.pending, (state) => {
         state.loading = true;
-        state.error = "";
+        state.error = {};
       })
       .addCase(signIn.fulfilled, (state, action) => {
         state.loading = false;
         state.user = action.payload;
-        state.error = "";
+        state.error = {};
       })
       .addCase(signIn.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error = action.payload;
       })
       .addCase(restoreSession.pending, (state) => {
         state.loading = true;
-        state.error = "";
+        state.error = {};
       })
       .addCase(restoreSession.fulfilled, (state, action) => {
         state.loading = false;
         state.user = action.payload;
-        state.error = "";
+        state.error = {};
       })
       .addCase(restoreSession.rejected, (state) => {
         state.loading = false;
       })
       .addCase(logOut.pending, (state) => {
         state.loading = true;
-        state.error = "";
+        state.error = {};
       })
       .addCase(logOut.fulfilled, (state) => {
         state.loading = false;
-        state.error = "";
+        state.error = {};
         state.user = null;
       })
       .addCase(logOut.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error = action.payload;
+      })
+      .addCase(completeSignUp.pending, (state, action) => {
+        state.loading = true;
+        state.error = {};
+      })
+      .addCase(completeSignUp.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = action.payload;
+        state.error = {};
+      })
+      .addCase(completeSignUp.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(verifyOtp.pending, (state, action) => {
+        state.loading = true;
+        state.error = {};
+      })
+      .addCase(verifyOtp.fulfilled, (state, action) => {
+        state.tmp_token = action.payload.tmp_token;
+        state.loading = false;
+      })
+      .addCase(verifyOtp.rejected, (state, action) => {
+        state.error = action.payload;
+        state.loading = false;
       });
   },
 });

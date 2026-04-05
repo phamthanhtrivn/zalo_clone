@@ -41,7 +41,7 @@ export default function Header({
             <Ionicons
               name="arrow-back"
               size={moderateScale(24)}
-              color="white"
+              color={`${gradient ? "white" : "black"}`}
             />
           </TouchableOpacity>
         )}
