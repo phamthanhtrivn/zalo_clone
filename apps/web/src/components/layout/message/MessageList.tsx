@@ -19,6 +19,7 @@ type Props = {
   removeReaction: (messageId: string) => void;
   handleRecalledMessage: (messageId: string) => void;
   handlePinnedMessage: (messageId: string) => void;
+  handleDeleteMessageForMe: (messageId: string) => void;
 };
 
 const MessageList = ({
@@ -31,6 +32,7 @@ const MessageList = ({
   removeReaction,
   handleRecalledMessage,
   handlePinnedMessage,
+  handleDeleteMessageForMe,
 }: Props) => {
   const [selectedMessageReactions, setSelectedMessageReactions] = useState<
     ReactionType[] | null
@@ -108,6 +110,7 @@ const MessageList = ({
               removeReaction={removeReaction}
               handleRecalledMessage={handleRecalledMessage}
               handlePinnedMessage={handlePinnedMessage}
+              handleDeleteMessageForMe={handleDeleteMessageForMe}
             />
           </div>
         );

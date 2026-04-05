@@ -9,6 +9,9 @@ import type { MessagesType } from "@/types/messages.type";
 import type { EmojiType } from "@/constants/emoji.constant";
 import { toast, Zoom } from "react-toastify";
 import { useSocket } from "@/contexts/SocketContext";
+import { conversationService } from "@/services/conversation.service";
+import { useAppDispatch } from "@/store";
+import { setConversations } from "@/store/slices/conversationSlice";
 
 const CURRENT_USER_ID = "699d2b94f9075fe800282901";
 
@@ -16,6 +19,7 @@ const ConversationPage = () => {
   const { id } = useParams();
   const location = useLocation();
   const { conversation } = location.state || {};
+  const dispatch = useAppDispatch();
 
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
@@ -344,6 +348,28 @@ const ConversationPage = () => {
     }
   };
 
+  const handleDeleteMessageForMe = async (messageId: string) => {
+    if (!id) return;
+
+    const res = await messageService.deleteMessageForMe(
+      CURRENT_USER_ID,
+      messageId,
+      id,
+    );
+
+    if (res.success) {
+      setMessages((prev) => prev.filter((m) => m._id !== messageId));
+
+      const res = await conversationService.getConversationsFromUserId(
+        CURRENT_USER_ID,
+      );
+
+      if (res.success) {
+        dispatch(setConversations(res.data));
+      }
+    }
+  };
+
   useEffect(() => {
     setMessages([]);
     setPinnedMessages([]);
@@ -485,6 +511,7 @@ const ConversationPage = () => {
             removeReaction={removeReaction}
             handleRecalledMessage={handleRecalledMessage}
             handlePinnedMessage={handlePinnedMessage}
+            handleDeleteMessageForMe={handleDeleteMessageForMe}
           />
 
           <ChatInput

@@ -429,8 +429,48 @@ export class ConversationsService {
         {
           $lookup: {
             from: 'messages',
-            localField: 'conversation.lastMessageId',
-            foreignField: '_id',
+            let: {
+              conversationId: '$conversation._id',
+              lastMessageId: '$conversation.lastMessageId',
+              currentUser: '$userId',
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$conversationId', '$$conversationId'] },
+
+                      {
+                        $not: {
+                          $in: [
+                            '$$currentUser',
+                            { $ifNull: ['$deletedFor', []] },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+
+              {
+                $addFields: {
+                  isLastMessage: {
+                    $eq: ['$_id', '$$lastMessageId'],
+                  },
+                },
+              },
+
+              {
+                $sort: {
+                  isLastMessage: -1,
+                  createdAt: -1,
+                },
+              },
+
+              { $limit: 1 },
+            ],
             as: 'lastMessage',
           },
         },

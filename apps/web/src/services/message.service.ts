@@ -144,7 +144,19 @@ export const messageService = {
     });
     return response.data;
   },
-  getMediasPreview: async (conversationId: string, userId: string) => {
+  deleteMessageForMe: async (
+    userId: string,
+    messageId: string,
+    conversationId: string,
+  ) => {
+    const response = await apiClient.patch(`/api/messages/delete-for-me`, {
+      userId,
+      messageId,
+      conversationId,
+    });
+    return response.data;
+  },
+  getMediasPreview: async (userId: string, conversationId: string) => {
     const response = await apiClient.get(
       `/api/messages/conversation/${conversationId}/medias/preview`,
       {

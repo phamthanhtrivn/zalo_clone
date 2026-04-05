@@ -72,8 +72,8 @@ const ConversationInfoPanel = ({
   const fetchMediaPreview = async () => {
     try {
       const res = await messageService.getMediasPreview(
-        conversation.conversationId,
         currentUser._id,
+        conversation.conversationId,
       );
       if (res.success) {
         setMedias(res.data.images_videos || []);

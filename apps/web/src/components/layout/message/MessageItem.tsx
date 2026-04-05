@@ -10,6 +10,7 @@ import { BsPinAngle } from "react-icons/bs";
 import { IoIosInformationCircleOutline } from "react-icons/io";
 import { CgUndo } from "react-icons/cg";
 import { RiUnpinLine } from "react-icons/ri";
+import { FaRegTrashAlt } from "react-icons/fa";
 
 interface Props {
   message: MessagesType;
@@ -21,6 +22,7 @@ interface Props {
   removeReaction: (messageId: string) => void;
   handleRecalledMessage: (messageId: string) => void;
   handlePinnedMessage: (messageId: string) => void;
+  handleDeleteMessageForMe: (messageId: string) => void;
 }
 
 export const MessageItem = ({
@@ -33,6 +35,7 @@ export const MessageItem = ({
   removeReaction,
   handleRecalledMessage,
   handlePinnedMessage,
+  handleDeleteMessageForMe,
 }: Props) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
@@ -155,11 +158,11 @@ export const MessageItem = ({
                   <span>Xem chi tiết</span>
                 </button>
 
+                <div className="my-1 border-t border-gray-200" />
+
                 {/* Divider */}
                 {isMe && (
                   <>
-                    <div className="my-1 border-t border-gray-200" />
-
                     <button
                       className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                       onClick={() => {
@@ -172,6 +175,15 @@ export const MessageItem = ({
                     </button>
                   </>
                 )}
+
+                {/* Xóa chỉ ở phía tôi */}
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                  onClick={() => handleDeleteMessageForMe(message._id)}
+                >
+                  <FaRegTrashAlt className="text-base" />
+                  <span>Xóa chỉ ở phía tôi</span>
+                </button>
               </div>
             )}
           </div>

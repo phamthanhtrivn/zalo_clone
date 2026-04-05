@@ -89,6 +89,9 @@ export class Message {
   @Prop({ default: false })
   recalled: boolean;
 
+  @Prop({ type: [Types.ObjectId], default: [] })
+  deletedFor?: Types.ObjectId[];
+
   @Prop({ type: [Reaction], default: [] })
   reactions?: Reaction[];
 

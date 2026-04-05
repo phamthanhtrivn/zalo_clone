@@ -24,6 +24,7 @@ import { GetMediasPreviewDto } from './dto/get-medias-preview.dto';
 import { GetMediasFileTypeDto } from './dto/get-medias-file-type.dto';
 import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
 import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
+import { DeleteMessageForMeDto } from './dto/delete-message-for-me.dto';
 
 @Controller('messages')
 export class MessagesController {
@@ -122,6 +123,13 @@ export class MessagesController {
   @Patch('recalled')
   async recalledMessage(@Body() recalledMessageDto: RecalledMessageDto) {
     return this.messagesService.recalledMessage(recalledMessageDto);
+  }
+
+  @Patch('delete-for-me')
+  async deleteMessageForMe(
+    @Body() deleteMessageForMeDto: DeleteMessageForMeDto,
+  ) {
+    return this.messagesService.deleteMessageForMe(deleteMessageForMeDto);
   }
 
   @Patch('reaction')

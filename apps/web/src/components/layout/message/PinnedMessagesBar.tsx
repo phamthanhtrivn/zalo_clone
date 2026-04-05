@@ -51,7 +51,7 @@ const PinnedMessagesBar = ({
               Tin nhắn ghim
             </div>
             <div className="text-[13px] text-gray-800 truncate">
-              <span className="font-medium">
+              <span className="font-medium truncate">
                 {first.senderId?.profile?.name}
               </span>
               : {renderContent(first)}

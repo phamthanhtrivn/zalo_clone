@@ -35,6 +35,7 @@ import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
 
 import { ChatGateway } from '../chat/chat.gateway';
 import { ConversationsService } from '../conversations/conversations.service';
+import { DeleteMessageForMeDto } from './dto/delete-message-for-me.dto';
 
 @Injectable()
 export class MessagesService {
@@ -73,6 +74,7 @@ export class MessagesService {
 
     const query = {
       conversationId: conversationObjectId,
+      deletedFor: { $ne: userObjectId },
       ...(cursor && { _id: { $lt: new Types.ObjectId(cursor) } }),
     };
 
@@ -149,6 +151,7 @@ export class MessagesService {
       .find({
         conversationId: conversationObjectId,
         _id: { $gt: cursorObjectId },
+        deletedFor: { $ne: userObjectId },
       })
       .sort({ _id: 1 })
       .limit(Number(limit))
@@ -223,6 +226,7 @@ export class MessagesService {
     const older = await this.messageModel
       .find({
         conversationId: target.conversationId,
+        deletedFor: { $ne: userObjectId },
         _id: { $lt: target._id },
       })
       .sort({ _id: -1 })
@@ -259,6 +263,7 @@ export class MessagesService {
       .find({
         conversationId: target.conversationId,
         _id: { $gt: target._id },
+        deletedFor: { $ne: userObjectId },
       })
       .sort({ _id: 1 })
       .limit(half)
@@ -329,6 +334,7 @@ export class MessagesService {
     const messages = await this.messageModel
       .find({
         conversationId: conversationObjectId,
+        deletedFor: { $ne: userObjectId },
         pinned: true,
         recalled: false,
       })
@@ -394,6 +400,7 @@ export class MessagesService {
       this.messageModel
         .find({
           conversationId: new Types.ObjectId(conversationId),
+          deletedFor: { $ne: new Types.ObjectId(userId) },
           'content.text': { $regex: /(http|https):\/\// },
         })
         .select('_id content.text createdAt')
@@ -465,6 +472,7 @@ export class MessagesService {
 
     const query: any = {
       conversationId: new Types.ObjectId(conversationId),
+      deletedFor: { $ne: new Types.ObjectId(userId) },
     };
 
     if (type === FileType.IMAGE || type === FileType.VIDEO) {
@@ -1108,6 +1116,54 @@ export class MessagesService {
     }
 
     return updatedMessage;
+  }
+
+  async deleteMessageForMe(deleteMessageForMeDto: DeleteMessageForMeDto) {
+    const { userId, messageId, conversationId } = deleteMessageForMeDto;
+
+    const objectUserId = new Types.ObjectId(userId);
+    const objectMessageId = new Types.ObjectId(messageId);
+    const objectConversationId = new Types.ObjectId(conversationId);
+
+    const member = await this.memberModel.exists({
+      userId: objectUserId,
+      conversationId: objectConversationId,
+      leftAt: null,
+    });
+
+    if (!member) {
+      throw new NotFoundException(
+        'User is not a participant in this conversation',
+      );
+    }
+
+    const message = await this.messageModel.findOne({
+      _id: objectMessageId,
+      conversationId: objectConversationId,
+    });
+
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+
+    if (message.deletedFor?.some((id) => id.equals(objectUserId))) {
+      return {
+        success: true,
+        message: 'Message already deleted for this user',
+      };
+    }
+
+    await this.messageModel.updateOne(
+      { _id: objectMessageId },
+      {
+        $addToSet: { deletedFor: objectUserId },
+      },
+    );
+
+    return {
+      success: true,
+      messageId,
+    };
   }
 
   async reactionMessage(reactionDto: ReactionDto) {
