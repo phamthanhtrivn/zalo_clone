@@ -3,7 +3,7 @@ import { IsDateString, IsEnum, IsNotEmpty, Matches } from 'class-validator';
 import { IsAtLeast14 } from 'src/common/decorator/check-valid-old.decorator';
 
 export class SignUpDto {
-  @IsNotEmpty({ message: 'Vui lòng nhập tên của bạn !' })
+  @IsNotEmpty({ message: 'Vui lòng nhập tên của bạn' })
   @Matches(/^[A-ZÀ-Ỹ][a-zà-ỹ]*(\s[A-ZÀ-Ỹ][a-zà-ỹ]*)*$/, {
     message: 'Mỗi chữ cái đầu phải viết hoa',
   })
@@ -13,7 +13,7 @@ export class SignUpDto {
   @IsAtLeast14({ message: 'Người dùng phải đủ 14 tuổi' })
   birthDay: Date;
 
-  @IsEnum(Gender)
+  @IsEnum(Gender, { message: 'Vui lòng chọn giới tính' })
   gender: Gender;
 
   @IsNotEmpty()
@@ -23,6 +23,6 @@ export class SignUpDto {
   })
   password: string;
 
-  @IsNotEmpty({ message: 'Vui lòng xác nhận lại mật khẩu!' })
+  @IsNotEmpty({ message: 'Vui lòng xác nhận lại mật khẩu' })
   repassword: string;
 }
