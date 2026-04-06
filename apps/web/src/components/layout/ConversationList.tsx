@@ -10,6 +10,9 @@ const ConversationList = () => {
     (state) => state.conversation.conversations,
   );
 
+  console.log(conversations);
+  
+
   return (
     <div className="flex flex-col h-full">
       {/* Tabs/Filters */}

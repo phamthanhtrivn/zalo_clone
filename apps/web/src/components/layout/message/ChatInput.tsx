@@ -7,14 +7,29 @@ import {
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
+import { RiShareForward2Fill } from "react-icons/ri";
 
 type Props = {
   chatName: string;
   onSendMessage: (text: string) => void;
   onSendFiles: (files: FileList) => void;
+  isSelected: boolean;
+  setIsSelected: (isSelected: boolean) => void;
+  selectedMessages: string[];
+  setSelectedMessages: (messageIds: string[]) => void;
+  onOpenForwardModal: () => void;
 };
 
-const ChatInput = ({ chatName, onSendMessage, onSendFiles }: Props) => {
+const ChatInput = ({
+  chatName,
+  onSendMessage,
+  onSendFiles,
+  isSelected,
+  setIsSelected,
+  selectedMessages,
+  setSelectedMessages,
+  onOpenForwardModal,
+}: Props) => {
   const [text, setText] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,6 +107,37 @@ const ChatInput = ({ chatName, onSendMessage, onSendFiles }: Props) => {
 
   return (
     <div className="bg-white border-t">
+      {isSelected && (
+        <div className="px-3 py-2 border-b flex justify-between items-center bg-white">
+          <div className="text-sm">
+            <span className="px-2 py-1 bg-[#E5F1FF] rounded font-medium text-[#104EAD] mr-1">
+              {selectedMessages.length}
+            </span>{" "}
+            Đã chọn
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={onOpenForwardModal}
+              className="bg-blue-500 text-white px-4 py-2 rounded-full cursor-pointer hover:bg-blue-600 transition flex justify-between items-center gap-1 text-sm"
+            >
+              <RiShareForward2Fill />
+              Chuyển tiếp
+            </button>
+
+            <button
+              onClick={() => {
+                setIsSelected(false);
+                setSelectedMessages([]);
+              }}
+              className="text-gray-500 cursor-pointer px-4 py-1 rounded-full border border-gray-300 hover:bg-gray-100 transition text-sm "
+            >
+              Hủy
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-1 px-2 border-b py-1 ">
         <Button
           variant="ghost"

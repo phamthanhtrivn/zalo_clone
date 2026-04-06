@@ -36,6 +36,7 @@ import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
 import { ChatGateway } from '../chat/chat.gateway';
 import { ConversationsService } from '../conversations/conversations.service';
 import { DeleteMessageForMeDto } from './dto/delete-message-for-me.dto';
+import { ForwardMessageDto } from './dto/forward-message.dto';
 
 @Injectable()
 export class MessagesService {
@@ -625,8 +626,6 @@ export class MessagesService {
       const room =
         this.chatGateway.server.sockets.adapter.rooms.get(conversationIdStr);
 
-      console.log(room);
-
       if (room) {
         for (const socketId of room) {
           console.log(socketId);
@@ -1186,6 +1185,132 @@ export class MessagesService {
       success: true,
       messageId,
     };
+  }
+
+  async forwardMessages(dto: ForwardMessageDto) {
+    const objectMessageIds = dto.messageIds.map((id) => new Types.ObjectId(id));
+
+    // lấy message gốc
+    const messages = await this.messageModel
+      .find({ _id: { $in: objectMessageIds } })
+      .sort({ createdAt: 1 }); // giữ thứ tự
+
+    if (!messages.length) {
+      throw new NotFoundException('Messages not found');
+    }
+
+    const results: any = [];
+
+    await Promise.all(
+      dto.targetConversationIds.map(async (convId) => {
+        const objectConvId = new Types.ObjectId(convId);
+
+        const member = await this.memberModel.findOne({
+          userId: new Types.ObjectId(dto.userId),
+          conversationId: objectConvId,
+          leftAt: null,
+        });
+
+        if (!member) return;
+
+        for (const msg of messages) {
+          if (msg.recalled) continue;
+
+          const newMessage = await this.messageModel.create({
+            senderId: new Types.ObjectId(dto.userId),
+            conversationId: objectConvId,
+
+            content: msg.content,
+            call: null,
+            pinned: false,
+            recalled: false,
+            reactions: [],
+
+            readReceipts: [
+              {
+                userId: new Types.ObjectId(dto.userId),
+              },
+            ],
+
+            repliedId: null,
+
+            forwardFrom: {
+              messageId: msg._id,
+              senderId: msg.senderId,
+              conversationId: msg.conversationId,
+            },
+          });
+
+          await this.conversationModel.findByIdAndUpdate(objectConvId, {
+            lastMessageId: newMessage._id,
+            lastMessageAt: (newMessage as any).createdAt,
+          });
+
+          const populatedMessage = await this.messageModel
+            .findById(newMessage._id)
+            .populate('senderId', 'profile.name profile.avatarUrl')
+            .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
+            .populate('reactions.userId', 'profile.name profile.avatarUrl')
+            .lean();
+
+          const transformed = this.transformMessage(populatedMessage);
+
+          const conversationIdStr = convId.toString();
+
+          // emit message realtime
+          this.chatGateway.server
+            .to(conversationIdStr)
+            .emit('new_message', transformed);
+
+          // auto read receipt cho user khác đang online
+          const room =
+            this.chatGateway.server.sockets.adapter.rooms.get(
+              conversationIdStr,
+            );
+
+          if (room) {
+            for (const socketId of room) {
+              const socket: any =
+                this.chatGateway.server.sockets.sockets.get(socketId);
+
+              if (socket?.data?.userId !== dto.userId) {
+                await this.readReceiptMessage({
+                  userId: socket.data.userId,
+                  conversationId: convId,
+                });
+              }
+            }
+          }
+
+          results.push(newMessage);
+        }
+
+        // update sidebar cho từng member
+        const members = await this.memberModel.find({
+          conversationId: objectConvId,
+          leftAt: null,
+        });
+
+        for (const m of members) {
+          const conversations =
+            await this.conversationService.getConversationsFromUser(
+              m.userId.toString(),
+            );
+
+          const conversation = conversations.find(
+            (c) => c.conversationId.toString() === convId,
+          );
+
+          if (conversation) {
+            this.chatGateway.server
+              .to(m.userId.toString())
+              .emit('new_message_sidebar', conversation);
+          }
+        }
+      }),
+    );
+
+    return results;
   }
 
   async reactionMessage(reactionDto: ReactionDto) {

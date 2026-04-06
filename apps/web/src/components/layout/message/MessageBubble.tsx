@@ -8,6 +8,9 @@ interface Props {
   message: MessagesType;
   isMe: boolean;
   showTime: boolean;
+  isSelected: boolean;
+  selectedMessages: string[];
+  toggleSelectMessage: (messageId: string) => void;
 }
 
 const renderTextWithLinks = (text: string) => {
@@ -32,7 +35,14 @@ const renderTextWithLinks = (text: string) => {
   });
 };
 
-export const MessageBubble = ({ message, isMe, showTime }: Props) => {
+export const MessageBubble = ({
+  message,
+  isMe,
+  showTime,
+  isSelected,
+  selectedMessages,
+  toggleSelectMessage,
+}: Props) => {
   const content = message.content;
   const file = content?.file;
 
@@ -78,8 +88,17 @@ export const MessageBubble = ({ message, isMe, showTime }: Props) => {
 
   return (
     <div
-      className={`rounded-lg px-3 py-2 max-w-md border shadow-sm ${
-        isMe ? "bg-[#E5F1FF]" : "bg-white"
+      onClick={() => {
+        if (isSelected) toggleSelectMessage(message._id);
+      }}
+      className={`rounded-lg px-3 py-2 max-w-md border shadow-sm ${isSelected ? "cursor-pointer": ""}  ${
+        isMe
+          ? selectedMessages.includes(message._id)
+            ? "bg-[#B4CBE7]"
+            : "bg-[#E5F1FF]"
+          : selectedMessages.includes(message._id)
+            ? "bg-[#B4CBE7]"
+            : "bg-white"
       }`}
     >
       <div className="space-y-2 wrap-break-word">

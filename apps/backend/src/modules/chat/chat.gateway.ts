@@ -31,7 +31,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     socket.join(userId); // Join a room of userId update online event for sidebar
 
-    console.log(`\n User ${userId} connected with socket ${socket.id}`);
+    console.log(`\nUser ${userId} connected with socket ${socket.id}`);
   }
 
   handleDisconnect(socket: Socket) {

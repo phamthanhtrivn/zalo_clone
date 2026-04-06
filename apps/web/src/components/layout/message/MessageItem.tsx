@@ -12,6 +12,7 @@ import { CgUndo } from "react-icons/cg";
 import { RiUnpinLine } from "react-icons/ri";
 import { FaRegTrashAlt } from "react-icons/fa";
 import ViewDetailMessageModal from "./ViewDetailMessageModal";
+import { FaListCheck } from "react-icons/fa6";
 
 interface Props {
   message: MessagesType;
@@ -24,6 +25,14 @@ interface Props {
   handleRecalledMessage: (messageId: string) => void;
   handlePinnedMessage: (messageId: string) => void;
   handleDeleteMessageForMe: (messageId: string) => void;
+  isSelected: boolean;
+  setIsSelected: (isSelected: boolean) => void;
+  selectedMessages: string[];
+  toggleSelectMessage: (messageId: string) => void;
+  onForwardMessages: (
+    messageIds: string[],
+    targetConversationIds: string[],
+  ) => void;
 }
 
 export const MessageItem = ({
@@ -37,6 +46,11 @@ export const MessageItem = ({
   handleRecalledMessage,
   handlePinnedMessage,
   handleDeleteMessageForMe,
+  isSelected,
+  setIsSelected,
+  selectedMessages,
+  toggleSelectMessage,
+  onForwardMessages,
 }: Props) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -68,7 +82,14 @@ export const MessageItem = ({
         }`}
       >
         <div className="relative flex group/bubble">
-          <MessageBubble message={message} isMe={isMe} showTime={showTime} />
+          <MessageBubble
+            message={message}
+            isMe={isMe}
+            showTime={showTime}
+            isSelected={isSelected}
+            selectedMessages={selectedMessages}
+            toggleSelectMessage={toggleSelectMessage}
+          />
 
           {!message.recalled && (
             <>
@@ -146,6 +167,19 @@ export const MessageItem = ({
                       <span>Bỏ ghim tin nhắn</span>
                     </>
                   )}
+                </button>
+
+                {/* Chọn nhiều tin nhắn */}
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                  onClick={() => {
+                    setIsSelected(true);
+                    toggleSelectMessage(message._id);
+                    setOpenMenuId(null);
+                  }}
+                >
+                  <FaListCheck className="text-base text-gray-500" />
+                  <span>Chọn nhiều tin nhắn</span>
                 </button>
 
                 {/* Chi tiết */}

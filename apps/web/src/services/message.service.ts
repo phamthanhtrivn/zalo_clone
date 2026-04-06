@@ -156,10 +156,7 @@ export const messageService = {
     });
     return response.data;
   },
-  readReceipt: async (
-    userId: string,
-    conversationId: string,
-  ) => {
+  readReceipt: async (userId: string, conversationId: string) => {
     const response = await apiClient.patch(`/api/messages/read-receipt`, {
       userId,
       conversationId,
@@ -186,6 +183,18 @@ export const messageService = {
         params: { userId, type },
       },
     );
+    return response.data;
+  },
+  forwardMessagesToConversations: async (
+    userId: string,
+    messageIds: string[],
+    targetConversationIds: string[],
+  ) => {
+    const response = await apiClient.post(`/api/messages/forward`, {
+      userId,
+      messageIds,
+      targetConversationIds,
+    });
     return response.data;
   },
 };
