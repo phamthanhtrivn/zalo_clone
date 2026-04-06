@@ -8,12 +8,25 @@ import {
 } from '@nestjs/common';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port');
+  const clientUrl = configService.get<string>('client_url');
+
+  app.use(cookieParser());
+  app.enableCors({
+    origin: clientUrl,
+
+    credentials: true,
+
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+
+    allowedHeaders: 'Content-Type,Accept,Authorization',
+  });
 
   app.setGlobalPrefix('/api');
   app.enableVersioning({
