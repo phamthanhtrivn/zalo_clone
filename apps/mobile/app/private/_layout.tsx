@@ -8,6 +8,7 @@ export default function PrivateLayout() {
       <Stack.Screen name="profile" />
       <Stack.Screen name="setting" />
       <Stack.Screen name="search" />
+      <Stack.Screen name="change-password" />
     </Stack>
   );
 }

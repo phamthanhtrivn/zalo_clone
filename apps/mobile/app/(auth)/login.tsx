@@ -19,7 +19,9 @@ import { useSelector } from "react-redux";
 export default function Login() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, error, message, loading } = useSelector((state: any) => state.auth);
+  const { user, error, message, loading } = useSelector(
+    (state: any) => state.auth,
+  );
   const [phone, setPhone] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [isHiddenPass, setHiddenPass] = useState<boolean>(true);
@@ -50,11 +52,8 @@ export default function Login() {
       await dispatch(signIn({ phone, password })).unwrap();
       ToastAndroid.show("Đăng nhập thành công", ToastAndroid.SHORT);
     } catch (err: any) {
-      console.log(err)
-      ToastAndroid.show(
-        err.message || "Đăng nhập thất bại",
-        ToastAndroid.SHORT,
-      );
+      console.log(err);
+      ToastAndroid.show("Đăng nhập thất bại", ToastAndroid.SHORT);
     }
   };
 

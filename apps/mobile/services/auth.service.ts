@@ -1,4 +1,5 @@
 import {
+  ChangePassword,
   CompleteSignUp,
   OtpVerify,
   ResetPassword,
@@ -41,6 +42,10 @@ export const authService = {
     const res = await api.post("/auth/reset-password", payload, {
       headers: { Authorization: `Bearer ${tempToken}` },
     });
+    return res.data;
+  },
+  changePassword: async (payload: ChangePassword) => {
+    const res = await api.post("/auth/change-password", payload);
     return res.data;
   },
 };

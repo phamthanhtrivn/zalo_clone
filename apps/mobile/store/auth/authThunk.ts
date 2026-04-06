@@ -1,4 +1,5 @@
 import {
+  ChangePassword,
   CompleteSignUp,
   OtpVerify,
   ResetPassword,
@@ -137,6 +138,18 @@ export const verifyOtp = createAsyncThunk(
   async (payload: OtpVerify, thunkAPI) => {
     try {
       const res = await authService.verifyOtp(payload);
+      return res;
+    } catch (err: any) {
+      return thunkAPI.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const changePassword = createAsyncThunk(
+  "auth/change-password",
+  async (payload: ChangePassword, thunkAPI) => {
+    try {
+      const res = await authService.changePassword(payload);
       return res;
     } catch (err: any) {
       return thunkAPI.rejectWithValue(err.response?.data);
