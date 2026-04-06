@@ -4,6 +4,8 @@ const API_URL = import.meta.env.VITE_API_URL;
 import { store } from "@/store";
 import { clearAuth, updateToken } from "@/store/auth/authSlice";
 
+console.log(API_URL);
+
 export const apiClient = axios.create({
   baseURL: API_URL,
   headers: {
@@ -32,6 +34,14 @@ apiClient.interceptors.response.use(
   (res) => res,
   async (error) => {
     const originalRequest = error.config;
+
+    // những api không cần check
+    if (
+      originalRequest.url.includes("/auth/sign-in") ||
+      originalRequest.url.includes("/auth/sign-up")
+    ) {
+      return Promise.reject(error);
+    }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;

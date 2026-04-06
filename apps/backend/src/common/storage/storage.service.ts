@@ -42,9 +42,24 @@ export class StorageService {
     }
   }
 
+  private sanitizeFileName(filename: string): string {
+    const ext = filename.substring(filename.lastIndexOf('.'));
+    const name = filename.substring(0, filename.lastIndexOf('.'));
+
+    const safeName = name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9-_]/g, '')
+      .toLowerCase();
+
+    return `${safeName}${ext}`;
+  }
+
   async uploadFile(file: Express.Multer.File) {
     const bucket = this.configService.get<string>('aws.s3Bucket') || '';
-    const key = `messages/${randomUUID()}-${file.originalname}`;
+    const safeName = this.sanitizeFileName(file.originalname);
+    const key = `messages/${randomUUID()}-${safeName}`;
     const fileType = this.resolveFileType(file.mimetype);
 
     await this.s3Client.send(
