@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schemas/user.schema';
 import { Model } from 'mongoose';
@@ -38,18 +42,33 @@ export class UsersService {
     });
   }
 
+  async checkMatchPassword(
+    phone: string,
+    oldPassword: string,
+  ): Promise<boolean> {
+    const user = await this.userModel.findOne({ phone });
+    if (!user) {
+      throw new BadRequestException('User không tồn tại');
+    }
+
+    // So sánh mật khẩu
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+
+    if (!isMatch) {
+      throw new BadRequestException([
+        { field: 'oldPassword', error: 'Mật khẩu cũ không chính xác!' },
+      ]);
+    }
+    return true;
+  }
+
   async updatePassword(phone: string, password: string) {
     const hashedPass = await bcrypt.hash(password, 10);
 
-    try {
-      return await this.userModel.findOneAndUpdate(
-        { phone },
-        { $set: { password: hashedPass } },
-      );
-    } catch (err) {
-      console.log(err);
-      throw err;
-    }
+    return await this.userModel.updateOne(
+      { phone },
+      { $set: { password: hashedPass } },
+    );
   }
 
   createTestUser(body: any) {

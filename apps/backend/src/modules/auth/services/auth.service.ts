@@ -6,6 +6,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -207,6 +208,21 @@ export class AuthService {
     );
 
     return { accessToken, refreshToken, user };
+  }
+
+  async changePassword(
+    oldPassword: string,
+    newPassword: string,
+    confirmPassword: string,
+    phone: string,
+  ) {
+    if (newPassword !== confirmPassword) {
+      throw new BadRequestException('Mật khẩu xác nhận không khớp !');
+    }
+    await this.userService.checkMatchPassword(phone, oldPassword);
+    await this.userService.updatePassword(phone, newPassword);
+
+    return { message: 'Đổi mật khẩu thành công' };
   }
 
   async signOut(userId: string, refreshToken: string) {

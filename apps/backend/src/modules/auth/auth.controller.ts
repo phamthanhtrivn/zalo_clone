@@ -19,6 +19,7 @@ import { JwtAuthGuard } from './passport/jwt-auth.guard';
 import { LocalAuthGuard } from './passport/local-auth.guard';
 import { RequireTempPurpose } from 'src/common/decorator/temp_purpose.decorator';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDTO } from './dto/change-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -119,6 +120,20 @@ export class AuthController {
     @Body('refreshToken') token: string,
   ) {
     return this.authService.signOut(req.user.userId, token);
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  changePassword(
+    @Request() req: { user: AuthUser },
+    @Body() changePasswordDTO: ChangePasswordDTO,
+  ) {
+    return this.authService.changePassword(
+      changePasswordDTO.oldPassword,
+      changePasswordDTO.newPassword,
+      changePasswordDTO.confirmPassword,
+      req.user.phone,
+    );
   }
 
   @Post('token/refresh')
