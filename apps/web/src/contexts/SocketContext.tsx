@@ -12,8 +12,6 @@ import {
   updateRecallMessageInConversation,
 } from "@/store/slices/conversationSlice";
 
-const CURRENT_USER_ID = "699d2b94f9075fe800282901";
-
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
@@ -33,7 +31,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const dispatch = useAppDispatch();
-  const user = useAppSelector((state) => state.auth.user);
+  // const user = useAppSelector((state) => state.auth.user);
+  const currentUserId = "699d2b94f9075fe800282901";
   const socketRef = useRef<Socket | null>(null);
 
   const handleNewMessageSidebar = (data: any) => {
@@ -48,29 +47,34 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   useEffect(() => {
+    // 🔥 chỉ connect khi có user
+    // if (!user?._id) return;
+    if (!currentUserId) return;
+
     if (!socketRef.current) {
-      socketRef.current = io(apiUrl);
+      socketRef.current = io(apiUrl, {
+        auth: {
+          // userId: user._id,
+          userId: currentUserId,
+        },
+      });
     }
 
     const socketInstance = socketRef.current;
     setSocket(socketInstance);
 
     socketInstance.on("connect", () => {
-      console.log("Connected to WebSocket server");
+      console.log("Connected:", socketInstance.id);
       setIsConnected(true);
     });
 
     socketInstance.on("disconnect", () => {
-      console.log("Disconnected from WebSocket server");
+      console.log("Disconnected");
       setIsConnected(false);
     });
 
-    // Global listener for sidebar updates
     socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
-
     socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
-
-    setSocket(socketInstance);
 
     return () => {
       socketInstance.off("new_message_sidebar", handleNewMessageSidebar);
@@ -79,15 +83,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         handleRecallMessageSidebar,
       );
     };
-  }, [apiUrl, dispatch]);
-
-  useEffect(() => {
-    // if (socket && user?._id) {
-    if (socket && CURRENT_USER_ID) {
-      // socket.emit("join_user_room", user._id);
-      socket.emit("join_user_room", CURRENT_USER_ID);
-    }
-  }, [socket, user?._id]);
+  }, [
+    apiUrl, 
+    dispatch, 
+    // user?._id,
+    currentUserId
+  ]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected }}>

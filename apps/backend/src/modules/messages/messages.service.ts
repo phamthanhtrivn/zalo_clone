@@ -621,6 +621,28 @@ export class MessagesService {
       this.chatGateway.server
         .to(conversationIdStr)
         .emit('new_message', transformedMessage);
+
+      const room =
+        this.chatGateway.server.sockets.adapter.rooms.get(conversationIdStr);
+
+      console.log(room);
+
+      if (room) {
+        for (const socketId of room) {
+          console.log(socketId);
+
+          const socket: any =
+            this.chatGateway.server.sockets.sockets.get(socketId);
+          console.log(socket?.data.userId);
+
+          if (socket?.data?.userId !== senderId) {
+            await this.readReceiptMessage({
+              userId: socket.data.userId,
+              conversationId,
+            });
+          }
+        }
+      }
     }
 
     const members = await this.memberModel.find({
@@ -1404,16 +1426,16 @@ export class MessagesService {
       return { message: 'Already read' };
     }
 
-    const filter: any = {
+    const updateFilter: any = {
       conversationId: objectConversationId,
       'readReceipts.userId': { $ne: objectUserId },
     };
 
     if (member.lastReadMessageId) {
-      filter._id = { $gt: member.lastReadMessageId };
+      updateFilter._id = { $gt: member.lastReadMessageId };
     }
 
-    await this.messageModel.updateMany(filter, {
+    await this.messageModel.updateMany(updateFilter, {
       $addToSet: {
         readReceipts: {
           userId: objectUserId,
@@ -1421,8 +1443,16 @@ export class MessagesService {
       },
     });
 
+    const findFilter: any = {
+      conversationId: objectConversationId,
+    };
+
+    if (member.lastReadMessageId) {
+      findFilter._id = { $gt: member.lastReadMessageId };
+    }
+
     const updatedMessages = await this.messageModel
-      .find(filter)
+      .find(findFilter)
       .populate({
         path: 'readReceipts.userId',
         select: '_id profile.name profile.avatarUrl',
@@ -1431,14 +1461,31 @@ export class MessagesService {
 
     const transformedMessages = updatedMessages.map((msg) => {
       if (msg.readReceipts?.length) {
-        msg.readReceipts = msg.readReceipts.map((r) => {
-          const user = r.userId as any;
-          if (user?.profile?.avatarUrl) {
-            user.profile.avatarUrl = this.signAvatar(user.profile.avatarUrl);
-          }
-          return r;
-        });
+        return {
+          ...msg,
+          readReceipts: msg.readReceipts.map((r) => {
+            const user = r.userId as any;
+
+            let avatarUrl = user?.profile?.avatarUrl;
+
+            if (avatarUrl && !avatarUrl.startsWith('http')) {
+              avatarUrl = this.signAvatar(avatarUrl);
+            }
+
+            return {
+              ...r,
+              userId: {
+                ...user,
+                profile: {
+                  ...user.profile,
+                  avatarUrl,
+                },
+              },
+            };
+          }),
+        };
       }
+
       return msg;
     });
 

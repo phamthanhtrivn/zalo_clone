@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -18,31 +19,33 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  handleConnection(client: Socket) {
-    console.log(`Client connected: ${client.id}`);
+  handleConnection(socket: Socket) {
+    const userId = socket.handshake.auth?.userId;
+
+    if (!userId) {
+      console.log(`No userId -> disconnect ${socket.id}`);
+      return socket.disconnect();
+    }
+
+    socket.data.userId = userId;
+
+    socket.join(userId); // Join a room of userId update online event for sidebar
+
+    console.log(`\n User ${userId} connected with socket ${socket.id}`);
   }
 
-  handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
+  handleDisconnect(socket: Socket) {
+    console.log(`User ${socket.data?.userId} disconnected (${socket.id})`);
   }
 
-  // ConversationId
+  // Conversation room
   @SubscribeMessage('join_room')
   handleJoinRoom(
     @MessageBody() conversationId: string,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() socket: Socket,
   ) {
-    client.join(conversationId);
-    console.log(`Client ${client.id} joined room: ${conversationId}`);
-  }
+    socket.join(conversationId);
 
-  // UserId
-  @SubscribeMessage('join_user_room')
-  handleJoinUserRoom(
-    @MessageBody() userId: string,
-    @ConnectedSocket() client: Socket,
-  ) {
-    client.join(userId);
-    console.log(`Client ${client.id} joined user room: ${userId}`);
+    console.log(`User ${socket.data.userId} joined room: ${conversationId}`);
   }
 }

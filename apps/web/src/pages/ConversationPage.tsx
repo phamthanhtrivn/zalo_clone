@@ -360,9 +360,8 @@ const ConversationPage = () => {
     if (res.success) {
       setMessages((prev) => prev.filter((m) => m._id !== messageId));
 
-      const res = await conversationService.getConversationsFromUserId(
-        CURRENT_USER_ID,
-      );
+      const res =
+        await conversationService.getConversationsFromUserId(CURRENT_USER_ID);
 
       if (res.success) {
         dispatch(setConversations(res.data));
@@ -378,7 +377,7 @@ const ConversationPage = () => {
     } catch (error) {
       console.error(error);
     }
-  }
+  };
 
   useEffect(() => {
     setMessages([]);
@@ -485,14 +484,28 @@ const ConversationPage = () => {
       setPinnedMessages(data.pinnedMessages);
     };
 
-    const handleReadReceipt = (data: { conversationId: string; messages: MessagesType[] }) => {
+    const handleReadReceipt = (data: {
+      conversationId: string;
+      messages: MessagesType[];
+    }) => {
       if (data.conversationId === id) {
         setMessages((prev) => {
-          const updatedMap = new Map(data.messages.map((m) => [m._id, m]));
-          return prev.map((m) => updatedMap.get(m._id) || m);
-        }
-        );
-      } 
+          const updatedMap = new Map(
+            data.messages.map((m) => [m._id, m.readReceipts]),
+          );
+
+          return prev.map((m) => {
+            const newReadReceipts = updatedMap.get(m._id);
+
+            if (!newReadReceipts) return m;
+
+            return {
+              ...m,
+              readReceipts: newReadReceipts,
+            };
+          });
+        });
+      }
     };
 
     socket.on("new_message", handleNewMessage);
