@@ -7,6 +7,7 @@ export default () => ({
   tmp_expires: process.env.JWT_TEMP_EXPIRES as string,
   refresh_secret: process.env.JWT_REFRESH_SECRET as string,
   refresh_expires: process.env.JWT_REFRESH_EXPIRES as string,
+  client_url: process.env.CLIENT_URL as string,
   redis: {
     host: process.env.REDIS_HOST,
     port: parseInt(process.env.REDIS_PORT!, 10),

@@ -7,6 +7,7 @@ import {
   InternalServerErrorException,
   Post,
   Request,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { Purpose, VerifyOtpDto } from './dto/verify-otp.dto';
@@ -20,6 +21,7 @@ import { LocalAuthGuard } from './passport/local-auth.guard';
 import { RequireTempPurpose } from 'src/common/decorator/temp_purpose.decorator';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDTO } from './dto/change-password.dto';
+import type { Response } from 'express';
 
 @Controller('auth')
 export class AuthController {
@@ -108,18 +110,48 @@ export class AuthController {
   @Post('sign-in')
   @Public()
   @UseGuards(LocalAuthGuard)
-  logIn(@Request() req) {
+  async logIn(@Request() req, @Res({ passthrough: true }) res: Response) {
     const device = req.headers['user-agent'] as string;
-    return this.authService.signIn(req.user, device);
+
+    const result = await this.authService.signIn(req.user, device);
+
+    // Set Cookie cho Web (Mobile sẽ lờ đi cái này)
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+
+    return result;
   }
 
   @Post('sign-out')
   @UseGuards(JwtAuthGuard)
-  logOut(
-    @Request() req: { user: AuthUser },
-    @Body('refreshToken') token: string,
+  async logOut(
+    @Request() req: { user: AuthUser; cookies: any },
+    @Body('refreshToken') bodyToken: string,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.authService.signOut(req.user.userId, token);
+    try {
+      console.log(req.user, req.cookies?.refreshToken);
+      const token = (req.cookies?.refreshToken as string) || bodyToken;
+
+      const result = await this.authService.signOut(req.user.userId, token);
+
+      res.clearCookie('refreshToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+      });
+
+      return result;
+    } catch (err: any) {
+      console.log(err);
+      throw new InternalServerErrorException(err);
+    }
   }
 
   @Post('change-password')
@@ -138,7 +170,8 @@ export class AuthController {
 
   @Post('token/refresh')
   @Public()
-  refreshToken(@Body('refreshToken') token: string) {
+  refreshToken(@Request() req, @Body('refreshToken') bodyToken: string) {
+    const token = (req.cookies?.refreshToken as string) || bodyToken;
     if (!token) {
       throw new BadRequestException('Refresh token không tồn tại !');
     }
