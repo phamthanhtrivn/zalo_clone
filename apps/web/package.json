@@ -10,9 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@floating-ui/react-dom": "^2.1.8",
     "@radix-ui/react-avatar": "^1.1.11",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@radix-ui/react-use-size": "^1.1.1",
     "@reduxjs/toolkit": "^2.11.2",
     "axios": "^1.13.6",
     "class-variance-authority": "^0.7.1",
@@ -23,6 +26,7 @@
     "react-dom": "19.2.0",
     "react-redux": "^9.2.0",
     "react-router-dom": "^7.13.1",
+    "react-toastify": "^11.0.5",
     "shadcn-ui": "^0.9.5",
     "shared-types": "*",
     "tailwind-merge": "^3.5.0"
