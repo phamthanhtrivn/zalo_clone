@@ -56,9 +56,6 @@ export class User {
   settings?: Setting;
 
   @Prop()
-  refreshToken?: string;
-
-  @Prop()
   lastSeenAt?: Date;
 
   @Prop({ type: [Friend], default: [] })

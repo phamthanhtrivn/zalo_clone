@@ -7,6 +7,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "../ui/tooltip"
+import { useEffect, useState } from 'react';
+import {userService} from "../../services/user.service";
+import ProfileModal from "./ProfileModal";
 
 interface NavItem {
   icon: any
@@ -20,7 +23,27 @@ const navItems: NavItem[] = [
 ]
 
 export const SidebarPrimary = () => {
-  const location = useLocation()
+  const location = useLocation();
+  const [user,setUser] = useState<any>();
+  const [open,setOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try{
+        const data = await userService.getProfile();
+        console.log(data);
+        if(data.success){
+          setUser(data.data);
+        }
+      }
+      catch(err){
+        console.log(err);
+      }
+    }
+    fetchUser();
+  },[]);
+
+  console.log(user);
 
   return (
     <aside className="w-[64px] bg-[#005AE0] flex flex-col items-center py-4 flex-shrink-0 z-20">
@@ -29,8 +52,8 @@ export const SidebarPrimary = () => {
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="relative cursor-pointer">
-              <Avatar className="w-12 h-12 border border-white/10 hover:opacity-90 transition-opacity">
-                <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" />
+              <Avatar onClick={() => setOpen(true)} className="w-12 h-12 border border-white/10 hover:opacity-90 transition-opacity">
+                <AvatarImage src={user?.profile?.avatarUrl} alt="User" />
                 <AvatarFallback>FT</AvatarFallback>
               </Avatar>
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#005AE0] rounded-full"></div>
@@ -41,6 +64,10 @@ export const SidebarPrimary = () => {
           </TooltipContent>
         </Tooltip>
       </div>
+
+      <ProfileModal setUser={setUser} user={user} open={open} onClose={() => setOpen(false)} />
+
+
 
       {/* Navigation Items */}
       <nav className="flex-1 w-full flex flex-col items-center space-y-1">
@@ -88,5 +115,7 @@ export const SidebarPrimary = () => {
         </Tooltip>
       </div>
     </aside>
+
+    
   )
 }

@@ -92,10 +92,6 @@ export class StorageService {
       return null;
     }
 
-    console.log(
-      this.configService.getOrThrow<string>('aws.cloudFrontDomain') + fileKey,
-    );
-
     return getSignedUrl({
       url:
         this.configService.getOrThrow<string>('aws.cloudFrontDomain') + fileKey,

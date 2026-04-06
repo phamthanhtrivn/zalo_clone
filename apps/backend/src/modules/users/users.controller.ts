@@ -17,6 +17,11 @@ import { FileInterceptor } from '@nestjs/platform-express';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @Get()
+  async findByPhone(phone: string) {
+    return this.usersService.findByPhone(phone);
+  }
+
   @Post('test')
   createTest(@Body() body: any) {
     return this.usersService.createTestUser(body);

@@ -1,5 +1,5 @@
-import Config from 'react-native-config';
+// import Config from 'react-native-config';
 
 export const config = {
-  apiUrl: Config.API_URL,
+  apiUrl: process.env.EXPO_PUBLIC_API_URL,
 };

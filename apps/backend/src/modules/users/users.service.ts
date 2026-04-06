@@ -1,4 +1,9 @@
-import { Injectable, Body, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Body,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schemas/user.schema';
 import { Model } from 'mongoose';
@@ -13,12 +18,73 @@ import { flattenObject } from './helper/flattenObject.helper';
 import { StorageService } from '../../common/storage/storage.service';
 import { getListUserForStatus } from './helper/getListUserForStatus.helper';
 import { format } from './helper/format.helper';
+import { Gender } from '@zalo-clone/shared-types';
+import * as bcrypt from 'bcrypt';
+
 @Injectable()
 export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     private readonly storageService: StorageService,
   ) {}
+
+  async findByPhone(phone: string) {
+    return this.userModel.findOne({ phone: phone }).exec();
+  }
+
+  async findById(userId: string) {
+    return this.userModel.findById(userId);
+  }
+
+  async createRegister(
+    phone: string,
+    name: string,
+    gender: Gender,
+    birthday: Date,
+    pass: string,
+  ) {
+    const password = await bcrypt.hash(pass, 10);
+    const profile = {
+      name,
+      gender,
+      birthday,
+    };
+
+    return this.userModel.create({
+      phone,
+      profile,
+      password,
+    });
+  }
+
+  async checkMatchPassword(
+    phone: string,
+    oldPassword: string,
+  ): Promise<boolean> {
+    const user = await this.userModel.findOne({ phone });
+    if (!user) {
+      throw new BadRequestException('User không tồn tại');
+    }
+
+    // So sánh mật khẩu
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+
+    if (!isMatch) {
+      throw new BadRequestException([
+        { field: 'oldPassword', error: 'Mật khẩu cũ không chính xác!' },
+      ]);
+    }
+    return true;
+  }
+
+  async updatePassword(phone: string, password: string) {
+    const hashedPass = await bcrypt.hash(password, 10);
+
+    return await this.userModel.updateOne(
+      { phone },
+      { $set: { password: hashedPass } },
+    );
+  }
 
   createTestUser(body: any) {
     return this.userModel.create(body);
@@ -281,19 +347,32 @@ export class UsersService {
         await this.storageService.deleteFile(user.profile.avatarUrl);
       }
       const uploadResult = await this.storageService.uploadFile(file);
-      console.log('uploadResult : ', uploadResult);
+
       data.profile = {
         ...data.profile,
         avatarUrl: uploadResult.fileKey,
       };
     }
     const newData = flattenObject(data);
-    return await this.userModel.findByIdAndUpdate(
-      id,
-      { $set: newData },
-      { new: true },
+    let record = await this.userModel
+      .findByIdAndUpdate(id, { $set: newData }, { new: true })
+      .lean();
+    const imageUrl = this.storageService.signFileUrl(
+      record?.profile?.avatarUrl ? record?.profile?.avatarUrl : '',
     );
+
+    record = {
+      ...record!,
+      profile: {
+        ...record!.profile,
+        name: record!.profile?.name || '',
+        avatarUrl: imageUrl || '',
+      },
+    };
+
+    return record;
   }
+
   async getListFriends(userId: string) {
     const users = await getListUserForStatus(
       this.userModel,
@@ -325,18 +404,15 @@ export class UsersService {
   async getUserInformation(userId: string) {
     const user = await this.userModel
       .findById(userId)
-      .select({ profile: 1 })
+      .select({ phone: 1, profile: 1, email: 1 })
       .lean();
-
     if (!user) {
       return null;
     }
 
     const avatarKey = user.profile?.avatarUrl;
 
-    console.log(this.storageService.signFileUrl(avatarKey || ''));
-
-    const newUser = {
+    const data = {
       ...user,
       profile: {
         ...user.profile,
@@ -344,6 +420,8 @@ export class UsersService {
       },
     };
 
-    return { newUser };
+    console.log(data);
+
+    return data;
   }
 }
