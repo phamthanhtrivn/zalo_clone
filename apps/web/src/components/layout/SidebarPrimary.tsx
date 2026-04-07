@@ -24,7 +24,7 @@ export const SidebarPrimary = () => {
 
 
   return (
-    <aside className="w-[64px] bg-[#005AE0] flex flex-col items-center py-4 flex-shrink-0 z-20">
+    <aside className="w-16 bg-[#005AE0] flex flex-col items-center py-4 shrink-0 z-20">
       {/* User Avatar */}
       <div className="relative mb-6">
         <Tooltip>
@@ -67,7 +67,7 @@ export const SidebarPrimary = () => {
                       : "text-white/70 hover:bg-white/10 hover:text-white",
                   )}
                 >
-                  <item.icon className="w-[30px] h-[30px] stroke-[1.5]" />
+                  <item.icon className="w-7.5 h-7.5 stroke-[1.5]" />
                   <span className="sr-only">{item.label}</span>
                   {isActive && (
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-white" />

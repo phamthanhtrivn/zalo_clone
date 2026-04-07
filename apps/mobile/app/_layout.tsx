@@ -9,6 +9,8 @@ import { restoreSession } from "@/store/auth/authThunk";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 
 
+const isLoggedIn = false;
+
 export default function RootLayout() {
   return (
     <Provider store={store}>

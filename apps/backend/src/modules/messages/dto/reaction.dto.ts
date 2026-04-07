@@ -1,5 +1,5 @@
-import { EmojiType } from '@zalo-clone/shared-types/dist/enums/emoji-type';
 import { IsEnum, IsMongoId } from 'class-validator';
+import { EmojiType } from 'src/common/types/enums/emoji-type';
 
 export class ReactionDto {
   @IsMongoId()

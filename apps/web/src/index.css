@@ -134,3 +134,16 @@ body,
   margin: 0;
   padding: 0;
 }
+
+.highlight {
+  animation: highlightFade 5s ease forwards;
+}
+
+@keyframes highlightFade {
+  0% {
+    background-color: rgba(59, 130, 246, 0.6); /* blue-500 */
+  }
+  100% {
+    background-color: transparent;
+  }
+}

@@ -6,8 +6,8 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schemas/user.schema';
 import { Model } from 'mongoose';
-import { Gender } from '@zalo-clone/shared-types';
 import * as bcrypt from 'bcrypt';
+import { Gender } from 'src/common/types/enums/gender';
 
 @Injectable()
 export class UsersService {
