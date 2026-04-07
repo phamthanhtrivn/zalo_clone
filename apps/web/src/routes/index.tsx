@@ -1,14 +1,13 @@
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
-import MainLayout from '../layouts/MainLayout'
-import LoginPage from '../pages/LoginPage'
-import ContactPage from '../pages/ContactPage'
-import ContactGroup from '../pages/ContactGroup'
-import ContactRequest from '../pages/ContactRequest'
-import ContactGroupRequest from '../pages/ContactGroupRequest'
-import HomePage from '../pages/HomePage'
-import ConversationPage from '../pages/ConversationPage'
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import MainLayout from "../layouts/MainLayout";
+import LoginPage from "../pages/LoginPage";
+import ContactPage from "../pages/ContactPage";
+import ContactGroup from "../pages/ContactGroup";
+import ContactRequest from "../pages/ContactRequest";
+import ContactGroupRequest from "../pages/ContactGroupRequest";
+import HomePage from "../pages/HomePage";
+import ConversationPage from "../pages/ConversationPage";
 import ProtectedRoute from "./ProtectedRoute";
-
 
 const router = createBrowserRouter([
   {
@@ -24,7 +23,7 @@ const router = createBrowserRouter([
         element: <HomePage />,
       },
       {
-        path: '/conversation/:id',
+        path: "/conversation/:id",
         element: <ConversationPage />,
       },
       {

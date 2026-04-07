@@ -19,30 +19,33 @@ export default function ForgotPassword() {
   const [phone, setPhone] = useState<string>("");
 
   const handleOnChangePhone = (phone: string) => {
-      setPhone(phone);
-      setValidPhone(isVietnamPhone(phone));
-    };
-
+    setPhone(phone);
+    setValidPhone(isVietnamPhone(phone));
+  };
 
   const clearPhone = () => {
     setPhone("");
   };
 
   const handleOnContinue = async () => {
-      try {
-        const data = await dispatch(forgotPassword(phone)).unwrap();
-  
-        ToastAndroid.show(data.message, ToastAndroid.SHORT);
-  
-        router.push({
-          params: { phone, expiresIn: data.expiresIn, purpose: Purpose.ForgotPassword },
-          pathname: "/(auth)/verify-otp",
-        });
-      } catch (err: any) {
-        ToastAndroid.show(err.message, ToastAndroid.LONG);
-      }
-    };
-  
+    try {
+      const data = await dispatch(forgotPassword(phone)).unwrap();
+
+      ToastAndroid.show(data.message, ToastAndroid.SHORT);
+
+      router.push({
+        params: {
+          phone,
+          expiresIn: data.expiresIn,
+          purpose: Purpose.ForgotPassword,
+        },
+        pathname: "/(auth)/verify-otp",
+      });
+    } catch (err: any) {
+      ToastAndroid.show(err.message, ToastAndroid.LONG);
+    }
+  };
+
   return (
     <Container>
       <Header gradient back />

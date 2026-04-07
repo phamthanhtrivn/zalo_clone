@@ -10,8 +10,9 @@ import type { EmojiType } from "@/constants/emoji.constant";
 import { toast, Zoom } from "react-toastify";
 import { useSocket } from "@/contexts/SocketContext";
 import { conversationService } from "@/services/conversation.service";
-import { useAppDispatch } from "@/store";
+import { useAppDispatch, useAppSelector } from "@/store";
 import { setConversations } from "@/store/slices/conversationSlice";
+import ForwardModal from "@/components/layout/message/ForwardModal";
 
 const CURRENT_USER_ID = "699d2b94f9075fe800282901";
 
@@ -20,6 +21,9 @@ const ConversationPage = () => {
   const location = useLocation();
   const { conversation } = location.state || {};
   const dispatch = useAppDispatch();
+  const conversations = useAppSelector(
+    (state) => state.conversation.conversations,
+  );
 
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
@@ -32,6 +36,10 @@ const ConversationPage = () => {
   const isJumpingRef = useRef(false);
   const isFetchingRef = useRef(false); // flag để tránh gọi API old messages nhiều lần khi scroll nhanh
   const isFetchingNewerRef = useRef(false); // flag để tránh gọi API newer messages nhiều lần khi scroll nhanh
+
+  const [isSelected, setIsSelected] = useState(false);
+  const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
+  const [showForwardModal, setShowForwardModal] = useState(false);
 
   const { socket } = useSocket();
 
@@ -360,13 +368,45 @@ const ConversationPage = () => {
     if (res.success) {
       setMessages((prev) => prev.filter((m) => m._id !== messageId));
 
-      const res = await conversationService.getConversationsFromUserId(
-        CURRENT_USER_ID,
-      );
+      const res =
+        await conversationService.getConversationsFromUserId(CURRENT_USER_ID);
 
       if (res.success) {
         dispatch(setConversations(res.data));
       }
+    }
+  };
+
+  const handleOpenConversation = async () => {
+    try {
+      if (!id) return;
+
+      await messageService.readReceipt(CURRENT_USER_ID, id);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleForwardMessages = async (targetConversationIds: string[]) => {
+    try {
+      await messageService.forwardMessagesToConversations(
+        CURRENT_USER_ID,
+        selectedMessages,
+        targetConversationIds,
+      );
+
+      setShowForwardModal(false);
+      setSelectedMessages([]);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const toggleSelectMessage = (messageId: string) => {
+    if (selectedMessages.includes(messageId)) {
+      setSelectedMessages(selectedMessages.filter((id) => id !== messageId));
+    } else {
+      setSelectedMessages([...selectedMessages, messageId]);
     }
   };
 
@@ -380,6 +420,7 @@ const ConversationPage = () => {
 
     handleLoadMessagesFromConversation();
     handleLoadPinnedMessages();
+    handleOpenConversation();
   }, [id]);
 
   useEffect(() => {
@@ -411,6 +452,12 @@ const ConversationPage = () => {
       window.removeEventListener("message-media-loaded", handleMediaLoaded);
     };
   }, []);
+
+  useEffect(() => {
+    if (selectedMessages.length === 0 && isSelected) {
+      setIsSelected(false);
+    }
+  }, [selectedMessages, isSelected]);
 
   useEffect(() => {
     if (!socket || !id) return;
@@ -474,16 +521,42 @@ const ConversationPage = () => {
       setPinnedMessages(data.pinnedMessages);
     };
 
+    const handleReadReceipt = (data: {
+      conversationId: string;
+      messages: MessagesType[];
+    }) => {
+      if (data.conversationId === id) {
+        setMessages((prev) => {
+          const updatedMap = new Map(
+            data.messages.map((m) => [m._id, m.readReceipts]),
+          );
+
+          return prev.map((m) => {
+            const newReadReceipts = updatedMap.get(m._id);
+
+            if (!newReadReceipts) return m;
+
+            return {
+              ...m,
+              readReceipts: newReadReceipts,
+            };
+          });
+        });
+      }
+    };
+
     socket.on("new_message", handleNewMessage);
     socket.on("message_reacted", handleMessageReacted);
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
+    socket.on("read_receipt", handleReadReceipt);
 
     return () => {
       socket.off("new_message", handleNewMessage);
       socket.off("message_reacted", handleMessageReacted);
       socket.off("message_recalled", handleMessageRecalled);
       socket.off("message_pinned", handleMessagePinned);
+      socket.off("read_receipt", handleReadReceipt);
       socket.emit("leave_room", id);
     };
   }, [socket, id]);
@@ -512,14 +585,34 @@ const ConversationPage = () => {
             handleRecalledMessage={handleRecalledMessage}
             handlePinnedMessage={handlePinnedMessage}
             handleDeleteMessageForMe={handleDeleteMessageForMe}
+            isSelected={isSelected}
+            setIsSelected={setIsSelected}
+            selectedMessages={selectedMessages}
+            toggleSelectMessage={toggleSelectMessage}
+            onForwardMessages={handleForwardMessages}
           />
 
           <ChatInput
             chatName={conversation.name}
             onSendMessage={onSendMessage}
             onSendFiles={onSendFiles}
+            isSelected={isSelected}
+            setIsSelected={setIsSelected}
+            selectedMessages={selectedMessages}
+            setSelectedMessages={setSelectedMessages}
+            onOpenForwardModal={() => setShowForwardModal(true)}
           />
         </div>
+      )}
+
+      {showForwardModal && (
+        <ForwardModal
+          open={showForwardModal}
+          onClose={() => setShowForwardModal(false)}
+          conversations={conversations}
+          selectedMessageIds={selectedMessages}
+          onSubmit={handleForwardMessages}
+        />
       )}
 
       <ConversationInfoPanel

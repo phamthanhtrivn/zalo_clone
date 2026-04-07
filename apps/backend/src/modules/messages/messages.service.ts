@@ -34,6 +34,7 @@ import { ConversationType } from 'src/common/types/enums/conversation-type';
 import { MemberRole } from 'src/common/types/enums/member-role';
 import { CallStatus } from 'src/common/types/enums/call-status';
 import { FileType } from 'src/common/types/enums/file-type';
+import { ForwardMessageDto } from './dto/forward-message.dto';
 
 @Injectable()
 export class MessagesService {
@@ -619,6 +620,26 @@ export class MessagesService {
       this.chatGateway.server
         .to(conversationIdStr)
         .emit('new_message', transformedMessage);
+
+      const room =
+        this.chatGateway.server.sockets.adapter.rooms.get(conversationIdStr);
+
+      if (room) {
+        for (const socketId of room) {
+          console.log(socketId);
+
+          const socket: any =
+            this.chatGateway.server.sockets.sockets.get(socketId);
+          console.log(socket?.data.userId);
+
+          if (socket?.data?.userId !== senderId) {
+            await this.readReceiptMessage({
+              userId: socket.data.userId,
+              conversationId,
+            });
+          }
+        }
+      }
     }
 
     const members = await this.memberModel.find({
@@ -1164,6 +1185,132 @@ export class MessagesService {
     };
   }
 
+  async forwardMessages(dto: ForwardMessageDto) {
+    const objectMessageIds = dto.messageIds.map((id) => new Types.ObjectId(id));
+
+    // lấy message gốc
+    const messages = await this.messageModel
+      .find({ _id: { $in: objectMessageIds } })
+      .sort({ createdAt: 1 }); // giữ thứ tự
+
+    if (!messages.length) {
+      throw new NotFoundException('Messages not found');
+    }
+
+    const results: any = [];
+
+    await Promise.all(
+      dto.targetConversationIds.map(async (convId) => {
+        const objectConvId = new Types.ObjectId(convId);
+
+        const member = await this.memberModel.findOne({
+          userId: new Types.ObjectId(dto.userId),
+          conversationId: objectConvId,
+          leftAt: null,
+        });
+
+        if (!member) return;
+
+        for (const msg of messages) {
+          if (msg.recalled) continue;
+
+          const newMessage = await this.messageModel.create({
+            senderId: new Types.ObjectId(dto.userId),
+            conversationId: objectConvId,
+
+            content: msg.content,
+            call: null,
+            pinned: false,
+            recalled: false,
+            reactions: [],
+
+            readReceipts: [
+              {
+                userId: new Types.ObjectId(dto.userId),
+              },
+            ],
+
+            repliedId: null,
+
+            forwardFrom: {
+              messageId: msg._id,
+              senderId: msg.senderId,
+              conversationId: msg.conversationId,
+            },
+          });
+
+          await this.conversationModel.findByIdAndUpdate(objectConvId, {
+            lastMessageId: newMessage._id,
+            lastMessageAt: (newMessage as any).createdAt,
+          });
+
+          const populatedMessage = await this.messageModel
+            .findById(newMessage._id)
+            .populate('senderId', 'profile.name profile.avatarUrl')
+            .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
+            .populate('reactions.userId', 'profile.name profile.avatarUrl')
+            .lean();
+
+          const transformed = this.transformMessage(populatedMessage);
+
+          const conversationIdStr = convId.toString();
+
+          // emit message realtime
+          this.chatGateway.server
+            .to(conversationIdStr)
+            .emit('new_message', transformed);
+
+          // auto read receipt cho user khác đang online
+          const room =
+            this.chatGateway.server.sockets.adapter.rooms.get(
+              conversationIdStr,
+            );
+
+          if (room) {
+            for (const socketId of room) {
+              const socket: any =
+                this.chatGateway.server.sockets.sockets.get(socketId);
+
+              if (socket?.data?.userId !== dto.userId) {
+                await this.readReceiptMessage({
+                  userId: socket.data.userId,
+                  conversationId: convId,
+                });
+              }
+            }
+          }
+
+          results.push(newMessage);
+        }
+
+        // update sidebar cho từng member
+        const members = await this.memberModel.find({
+          conversationId: objectConvId,
+          leftAt: null,
+        });
+
+        for (const m of members) {
+          const conversations =
+            await this.conversationService.getConversationsFromUser(
+              m.userId.toString(),
+            );
+
+          const conversation = conversations.find(
+            (c) => c.conversationId.toString() === convId,
+          );
+
+          if (conversation) {
+            this.chatGateway.server
+              .to(m.userId.toString())
+              .emit('new_message_sidebar', conversation);
+          }
+        }
+      }),
+    );
+
+    return results;
+  }
+
   async reactionMessage(reactionDto: ReactionDto) {
     const { userId, messageId, conversationId, emojiType } = reactionDto;
 
@@ -1370,13 +1517,12 @@ export class MessagesService {
   }
 
   async readReceiptMessage(readReceiptDto: ReadReceiptDto) {
-    const { userId, messageId, conversationId } = readReceiptDto;
+    const { userId, conversationId } = readReceiptDto;
 
     const objectUserId = new Types.ObjectId(userId);
-    const objectMessageId = new Types.ObjectId(messageId);
     const objectConversationId = new Types.ObjectId(conversationId);
 
-    const member = await this.memberModel.exists({
+    const member = await this.memberModel.findOne({
       userId: objectUserId,
       conversationId: objectConversationId,
       leftAt: null,
@@ -1388,26 +1534,99 @@ export class MessagesService {
       );
     }
 
-    const updated = await this.messageModel.updateOne(
-      {
-        _id: objectMessageId,
-        conversationId: objectConversationId,
-        'readReceipts.userId': { $ne: objectUserId },
-      },
-      {
-        $push: {
-          readReceipts: {
-            userId: objectUserId,
-          },
-        },
-      },
+    const conversation = await this.conversationModel.findById(
+      objectConversationId,
+      { lastMessageId: 1 },
     );
 
-    if (updated.modifiedCount === 0) {
-      throw new BadRequestException('Message already read by this user');
+    if (!conversation?.lastMessageId) {
+      return { message: 'No messages' };
     }
 
-    return updated;
+    const lastMessageId = conversation.lastMessageId;
+
+    if (member.lastReadMessageId?.equals(lastMessageId)) {
+      return { message: 'Already read' };
+    }
+
+    const updateFilter: any = {
+      conversationId: objectConversationId,
+      'readReceipts.userId': { $ne: objectUserId },
+    };
+
+    if (member.lastReadMessageId) {
+      updateFilter._id = { $gt: member.lastReadMessageId };
+    }
+
+    await this.messageModel.updateMany(updateFilter, {
+      $addToSet: {
+        readReceipts: {
+          userId: objectUserId,
+        },
+      },
+    });
+
+    const findFilter: any = {
+      conversationId: objectConversationId,
+    };
+
+    if (member.lastReadMessageId) {
+      findFilter._id = { $gt: member.lastReadMessageId };
+    }
+
+    const updatedMessages = await this.messageModel
+      .find(findFilter)
+      .populate({
+        path: 'readReceipts.userId',
+        select: '_id profile.name profile.avatarUrl',
+      })
+      .lean();
+
+    const transformedMessages = updatedMessages.map((msg) => {
+      if (msg.readReceipts?.length) {
+        return {
+          ...msg,
+          readReceipts: msg.readReceipts.map((r) => {
+            const user = r.userId as any;
+
+            let avatarUrl = user?.profile?.avatarUrl;
+
+            if (avatarUrl && !avatarUrl.startsWith('http')) {
+              avatarUrl = this.signAvatar(avatarUrl);
+            }
+
+            return {
+              ...r,
+              userId: {
+                ...user,
+                profile: {
+                  ...user.profile,
+                  avatarUrl,
+                },
+              },
+            };
+          }),
+        };
+      }
+
+      return msg;
+    });
+
+    this.chatGateway.server.to(conversationId.toString()).emit('read_receipt', {
+      conversationId,
+      messages: transformedMessages,
+    });
+
+    await this.memberModel.updateOne(
+      { _id: member._id },
+      { $set: { lastReadMessageId: lastMessageId } },
+    );
+
+    return {
+      conversationId,
+      userId,
+      lastReadMessageId: lastMessageId,
+    };
   }
 
   private signAvatar = (avatar?: string) =>

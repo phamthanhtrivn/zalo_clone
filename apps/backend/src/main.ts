@@ -13,7 +13,6 @@ import cookieParser from 'cookie-parser';
 import * as dns from 'node:dns';
 dns.setServers(['1.1.1.1']);
 
-dns.setServers(['1.1.1.1']);
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 

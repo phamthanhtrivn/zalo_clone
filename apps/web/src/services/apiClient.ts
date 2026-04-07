@@ -37,7 +37,7 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
       try {
         const res = await refreshApi.post(
-          "/auth/token/refresh",
+          "/api/auth/token/refresh",
           {},
           { withCredentials: true },
         );

@@ -20,6 +20,14 @@ type Props = {
   handleRecalledMessage: (messageId: string) => void;
   handlePinnedMessage: (messageId: string) => void;
   handleDeleteMessageForMe: (messageId: string) => void;
+  isSelected: boolean;
+  setIsSelected: (isSelected: boolean) => void;
+  selectedMessages: string[];
+  toggleSelectMessage: (messageId: string) => void;
+  onForwardMessages: (
+    messageIds: string[],
+    targetConversationIds: string[],
+  ) => void;
 };
 
 const MessageList = ({
@@ -33,6 +41,11 @@ const MessageList = ({
   handleRecalledMessage,
   handlePinnedMessage,
   handleDeleteMessageForMe,
+  isSelected,
+  setIsSelected,
+  selectedMessages,
+  toggleSelectMessage,
+  onForwardMessages,
 }: Props) => {
   const [selectedMessageReactions, setSelectedMessageReactions] = useState<
     ReactionType[] | null
@@ -111,6 +124,11 @@ const MessageList = ({
               handleRecalledMessage={handleRecalledMessage}
               handlePinnedMessage={handlePinnedMessage}
               handleDeleteMessageForMe={handleDeleteMessageForMe}
+              isSelected={isSelected}
+              setIsSelected={setIsSelected}
+              selectedMessages={selectedMessages}
+              toggleSelectMessage={toggleSelectMessage}
+              onForwardMessages={onForwardMessages}
             />
           </div>
         );

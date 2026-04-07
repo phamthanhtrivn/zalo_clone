@@ -48,9 +48,9 @@ const ConversationList = () => {
           </div>
         )}
 
-        {conversations.map((c) => (
+        {conversations.map((c, index) => (
           <ConversationListItem
-            key={c.conversationId}
+            key={index}
             conversation={c}
             isActive={id === c.conversationId}
           />

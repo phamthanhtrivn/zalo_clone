@@ -22,7 +22,6 @@ export const SidebarPrimary = () => {
   const location = useLocation();
   const [showSettingDropdown, setSettingDropdown] = useState<boolean>(false);
 
-
   return (
     <aside className="w-16 bg-[#005AE0] flex flex-col items-center py-4 shrink-0 z-20">
       {/* User Avatar */}
