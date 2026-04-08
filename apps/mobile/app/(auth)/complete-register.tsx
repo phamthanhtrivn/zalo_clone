@@ -44,7 +44,6 @@ export default function CompleteRegister() {
   }, []);
 
   const signUp = async () => {
-    console.log(tmp_token);
     try {
       await dispatch(
         completeSignUp({

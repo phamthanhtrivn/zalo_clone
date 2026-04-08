@@ -1,7 +1,8 @@
 import { api } from "./api";
+
 export const conversationService = {
-  // getConversations: async () => {
-  //   const response = await api.get("/conversations");
-  //   return response.data;
-  // },
+  getConversationsFromUserId: async (userId: string) => {
+    const response = await api.get(`/conversations/user/${userId}`);
+    return response.data;
+  },
 };
