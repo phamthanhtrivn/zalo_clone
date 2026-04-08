@@ -29,10 +29,6 @@ interface Props {
   setIsSelected: (isSelected: boolean) => void;
   selectedMessages: string[];
   toggleSelectMessage: (messageId: string) => void;
-  onForwardMessages: (
-    messageIds: string[],
-    targetConversationIds: string[],
-  ) => void;
 }
 
 export const MessageItem = ({
@@ -49,8 +45,7 @@ export const MessageItem = ({
   isSelected,
   setIsSelected,
   selectedMessages,
-  toggleSelectMessage,
-  onForwardMessages,
+  toggleSelectMessage
 }: Props) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);

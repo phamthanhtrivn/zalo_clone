@@ -24,10 +24,6 @@ type Props = {
   setIsSelected: (isSelected: boolean) => void;
   selectedMessages: string[];
   toggleSelectMessage: (messageId: string) => void;
-  onForwardMessages: (
-    messageIds: string[],
-    targetConversationIds: string[],
-  ) => void;
 };
 
 const MessageList = ({
@@ -45,7 +41,6 @@ const MessageList = ({
   setIsSelected,
   selectedMessages,
   toggleSelectMessage,
-  onForwardMessages,
 }: Props) => {
   const [selectedMessageReactions, setSelectedMessageReactions] = useState<
     ReactionType[] | null
@@ -128,7 +123,6 @@ const MessageList = ({
               setIsSelected={setIsSelected}
               selectedMessages={selectedMessages}
               toggleSelectMessage={toggleSelectMessage}
-              onForwardMessages={onForwardMessages}
             />
           </div>
         );

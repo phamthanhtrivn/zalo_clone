@@ -40,6 +40,7 @@ const ConversationPage = () => {
   const [isSelected, setIsSelected] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [showForwardModal, setShowForwardModal] = useState(false);
+  const [loadingForward, setLoadingForward] = useState(false);
 
   const { socket } = useSocket();
 
@@ -389,6 +390,7 @@ const ConversationPage = () => {
 
   const handleForwardMessages = async (targetConversationIds: string[]) => {
     try {
+      setLoadingForward(true);
       await messageService.forwardMessagesToConversations(
         CURRENT_USER_ID,
         selectedMessages,
@@ -399,6 +401,8 @@ const ConversationPage = () => {
       setSelectedMessages([]);
     } catch (error) {
       console.log(error);
+    } finally {
+      setLoadingForward(false);
     }
   };
 
@@ -589,7 +593,6 @@ const ConversationPage = () => {
             setIsSelected={setIsSelected}
             selectedMessages={selectedMessages}
             toggleSelectMessage={toggleSelectMessage}
-            onForwardMessages={handleForwardMessages}
           />
 
           <ChatInput
@@ -611,6 +614,7 @@ const ConversationPage = () => {
           onClose={() => setShowForwardModal(false)}
           conversations={conversations}
           selectedMessageIds={selectedMessages}
+          loadingForward={loadingForward}
           onSubmit={handleForwardMessages}
         />
       )}
