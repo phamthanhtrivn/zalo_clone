@@ -1,13 +1,7 @@
-<<<<<<< HEAD
 import Button from "@/components/common/Button";
 import Container from "@/components/common/Container";
 import { useRouter } from "expo-router";
 import { Image, Text, Touchable, TouchableOpacity, View } from "react-native";
-=======
-import Button from "@/components/Button";
-import { Image, Text, Touchable, TouchableOpacity, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
->>>>>>> PhamThanhTri
 
 export default function Index() {
   const router = useRouter();

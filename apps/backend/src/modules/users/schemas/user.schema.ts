@@ -62,5 +62,6 @@ export class User {
   @Prop({ type: [Friend], default: [] })
   friends?: Friend[];
 }
-
 export const UserSchema = SchemaFactory.createForClass(User);
+UserSchema.index({ phone: 1 });
+UserSchema.index({ 'profile.name': 1 });

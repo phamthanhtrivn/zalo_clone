@@ -1,7 +1,4 @@
-<<<<<<< HEAD
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-=======
->>>>>>> PhamThanhTri
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import "../global.css";
 import { Stack } from "expo-router";
@@ -11,16 +8,11 @@ import { useEffect } from "react";
 import { restoreSession } from "@/store/auth/authThunk";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 
-
-const isLoggedIn = false;
-
-const isLoggedIn = false;
-
 export default function RootLayout() {
   return (
     <Provider store={store}>
-      <SafeAreaProvider >
-        <GestureHandlerRootView >
+      <SafeAreaProvider>
+        <GestureHandlerRootView>
           <BottomSheetModalProvider>
             <AppNavigation />
           </BottomSheetModalProvider>

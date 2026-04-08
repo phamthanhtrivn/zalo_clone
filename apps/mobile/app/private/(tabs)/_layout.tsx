@@ -1,8 +1,18 @@
 import { Tabs } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
+import { useAppDispatch, useAppSelector } from "@/store/store";
+import { fetchUserById } from "@/store/auth/userInfoSlice";
+import { useEffect } from "react";
 
 export default function TabLayout() {
+  const dispatch = useAppDispatch();
+  const { user } = useAppSelector((state) => state.auth);
+  
+  useEffect(() => {
+    dispatch(fetchUserById(user?.userId ? user?.userId : ""));
+  }, [dispatch, user]);
+
   return (
     <Tabs screenOptions={{ tabBarActiveTintColor: "blue", headerShown: false }}>
       <Tabs.Screen
