@@ -18,4 +18,5 @@ export * from "./models/reaction.js"
 export * from "./models/read-receipt.js"
 export * from "./models/setting.js"
 export * from "./models/user.js"
+export * from "./models/friend.js"
 
