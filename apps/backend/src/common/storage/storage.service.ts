@@ -6,10 +6,10 @@ import {
 import { getSignedUrl } from '@aws-sdk/cloudfront-signer';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { FileType } from '@zalo-clone/shared-types';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { FileType } from '../types/enums/file-type';
 
 @Injectable()
 export class StorageService {
@@ -42,9 +42,24 @@ export class StorageService {
     }
   }
 
+  private sanitizeFileName(filename: string): string {
+    const ext = filename.substring(filename.lastIndexOf('.'));
+    const name = filename.substring(0, filename.lastIndexOf('.'));
+
+    const safeName = name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9-_]/g, '')
+      .toLowerCase();
+
+    return `${safeName}${ext}`;
+  }
+
   async uploadFile(file: Express.Multer.File) {
     const bucket = this.configService.get<string>('aws.s3Bucket') || '';
-    const key = `messages/${randomUUID()}-${file.originalname}`;
+    const safeName = this.sanitizeFileName(file.originalname);
+    const key = `messages/${randomUUID()}-${safeName}`;
     const fileType = this.resolveFileType(file.mimetype);
 
     await this.s3Client.send(
@@ -58,6 +73,7 @@ export class StorageService {
 
     return {
       fileKey: key,
+      fileName: file.originalname,
       fileSize: file.size,
       type: fileType,
     };
@@ -77,9 +93,12 @@ export class StorageService {
       return null;
     }
 
+    const encodedKey = encodeURI(fileKey);
+
     return getSignedUrl({
       url:
-        this.configService.getOrThrow<string>('aws.cloudFrontDomain') + fileKey,
+        this.configService.getOrThrow<string>('aws.cloudFrontDomain') +
+        encodedKey,
       dateLessThan: new Date(Date.now() + 1000 * 60 * 60 * 24),
       privateKey: this.privateKey,
       keyPairId: this.configService.getOrThrow<string>(

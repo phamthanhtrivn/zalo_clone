@@ -1,13 +1,24 @@
 import { api } from "./api";
 
+
+
+
 export const userService = {
   getProfile: async () => {
-    const response = await api.get("/users/profile");
+    const response = await api.get(`/users/user-information`);
     return response.data;
   },
 
   updateProfile: async (data: any) => {
-    const response = await api.patch("/users/profile", data);
+    const response = await api.patch(
+      `/users/update-information-user`,
+      data,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      },
+    );
     return response.data;
   },
 

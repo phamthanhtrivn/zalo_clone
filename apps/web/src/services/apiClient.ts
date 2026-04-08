@@ -1,19 +1,68 @@
 import axios from "axios";
 
 const API_URL = import.meta.env.VITE_API_URL;
+import { store } from "@/store";
+import { clearAuth, updateToken } from "@/store/auth/authSlice";
+
+console.log(API_URL);
 
 export const apiClient = axios.create({
   baseURL: API_URL,
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true,
 });
 
-// Add interceptors for token handling if needed later
-// apiClient.interceptors.request.use((config) => {
-//   const token = localStorage.getItem("token");
-//   if (token) {
-//     config.headers.Authorization = `Bearer ${token}`;
-//   }
-//   return config;
-// });
+// Dùng riêng cho refresh token
+const refreshApi = axios.create({
+  baseURL: `${API_URL}`,
+  timeout: 10000,
+  withCredentials: true,
+});
+
+apiClient.interceptors.request.use((config) => {
+  const state = store.getState();
+  const token = state.auth.accessToken;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+apiClient.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // những api không cần check
+    if (
+      originalRequest.url.includes("/auth/sign-in") ||
+      originalRequest.url.includes("/auth/sign-up")
+    ) {
+      return Promise.reject(error);
+    }
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        const res = await refreshApi.post(
+          "/api/auth/token/refresh",
+          {},
+          { withCredentials: true },
+        );
+
+        const newAccessToken = res.data.data.accessToken;
+
+        store.dispatch(updateToken(newAccessToken));
+
+        originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
+
+        return apiClient(originalRequest);
+      } catch (err) {
+        store.dispatch(clearAuth()); // Refresh lỗi thì xóa sạch data
+        return Promise.reject(err);
+      }
+    }
+  },
+);
