@@ -29,7 +29,7 @@ import { ForwardMessageDto } from './dto/forward-message.dto';
 
 @Controller('messages')
 export class MessagesController {
-  constructor(private readonly messagesService: MessagesService) {}
+  constructor(private readonly messagesService: MessagesService) { }
 
   @Get('conversation/:conversationId')
   async getMessagesFromConversation(

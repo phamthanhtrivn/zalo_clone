@@ -72,9 +72,8 @@ export const MessageItem = ({
 
       {/* BUBBLE WRAPPER */}
       <div
-        className={`flex group items-center gap-2 ${
-          isMe ? "flex-row-reverse" : "flex-row"
-        }`}
+        className={`flex group items-center gap-2 ${isMe ? "flex-row-reverse" : "flex-row"
+          }`}
       >
         <div className="relative flex group/bubble">
           <MessageBubble

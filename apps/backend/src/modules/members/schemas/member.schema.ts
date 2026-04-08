@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { MemberRole } from '@zalo-clone/shared-types';
 import { Types } from 'mongoose';
+import { MemberRole } from 'src/common/types/enums/member-role';
 
 @Schema({ timestamps: true })
 export class Member {

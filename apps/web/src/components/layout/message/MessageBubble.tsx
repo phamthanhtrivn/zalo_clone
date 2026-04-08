@@ -71,9 +71,8 @@ export const MessageBubble = ({
   if (message.recalled) {
     return (
       <div
-        className={`rounded-lg px-3 py-2 max-w-md border shadow-sm text-gray-500 ${
-          isMe ? "bg-[#E5F1FF]" : "bg-white"
-        }`}
+        className={`rounded-lg px-3 py-2 max-w-md border shadow-sm text-gray-500 ${isMe ? "bg-[#E5F1FF]" : "bg-white"
+          }`}
       >
         <p>Tin nhắn đã được thu hồi</p>
 
@@ -91,15 +90,14 @@ export const MessageBubble = ({
       onClick={() => {
         if (isSelected) toggleSelectMessage(message._id);
       }}
-      className={`rounded-lg px-3 py-2 max-w-md border shadow-sm ${isSelected ? "cursor-pointer": ""}  ${
-        isMe
+      className={`rounded-lg px-3 py-2 max-w-md border shadow-sm ${isSelected ? "cursor-pointer" : ""}  ${isMe
           ? selectedMessages.includes(message._id)
             ? "bg-[#B4CBE7]"
             : "bg-[#E5F1FF]"
           : selectedMessages.includes(message._id)
             ? "bg-[#B4CBE7]"
             : "bg-white"
-      }`}
+        }`}
     >
       <div className="space-y-2 wrap-break-word">
         {content?.text && <p>{renderTextWithLinks(content.text)}</p>}

@@ -12,12 +12,6 @@ import { Message } from './schemas/message.schema';
 import { SendMessageDto } from './dto/send-message.dto';
 import { Member } from '../members/schemas/member.schema';
 import { Conversation } from '../conversations/schemas/conversation.schema';
-import {
-  CallStatus,
-  ConversationType,
-  FileType,
-  MemberRole,
-} from '@zalo-clone/shared-types';
 import { PinnedMessageDto } from './dto/pinned-message.dto';
 import { RecalledMessageDto } from './dto/recalled-message.dto';
 import { ReactionDto } from './dto/reaction.dto';
@@ -36,6 +30,10 @@ import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
 import { ChatGateway } from '../chat/chat.gateway';
 import { ConversationsService } from '../conversations/conversations.service';
 import { DeleteMessageForMeDto } from './dto/delete-message-for-me.dto';
+import { ConversationType } from 'src/common/types/enums/conversation-type';
+import { MemberRole } from 'src/common/types/enums/member-role';
+import { CallStatus } from 'src/common/types/enums/call-status';
+import { FileType } from 'src/common/types/enums/file-type';
 import { ForwardMessageDto } from './dto/forward-message.dto';
 
 @Injectable()
@@ -50,7 +48,7 @@ export class MessagesService {
     private readonly storageService: StorageService,
     private readonly conversationService: ConversationsService,
     private readonly chatGateway: ChatGateway,
-  ) {}
+  ) { }
 
   async getMessagesFromConversation(
     conversationId: string,
@@ -1637,24 +1635,24 @@ export class MessagesService {
   private signUser = (user?: any) =>
     user
       ? {
-          ...user,
-          profile: user.profile
-            ? {
-                ...user.profile,
-                avatarUrl: this.signAvatar(user.profile.avatarUrl),
-              }
-            : user.profile,
-        }
+        ...user,
+        profile: user.profile
+          ? {
+            ...user.profile,
+            avatarUrl: this.signAvatar(user.profile.avatarUrl),
+          }
+          : user.profile,
+      }
       : user;
 
   private signFile = (file?: any) =>
     file
       ? {
-          ...file,
-          fileKey: file.fileKey
-            ? this.storageService.signFileUrl(file.fileKey)
-            : file.fileKey,
-        }
+        ...file,
+        fileKey: file.fileKey
+          ? this.storageService.signFileUrl(file.fileKey)
+          : file.fileKey,
+      }
       : file;
 
   private transformMessage(message: any) {
@@ -1680,9 +1678,9 @@ export class MessagesService {
 
       repliedId: message.repliedId
         ? {
-            ...message.repliedId,
-            senderId: this.signUser(message.repliedId.senderId),
-          }
+          ...message.repliedId,
+          senderId: this.signUser(message.repliedId.senderId),
+        }
         : null,
     };
   }

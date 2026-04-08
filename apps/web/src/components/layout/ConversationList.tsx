@@ -11,7 +11,7 @@ const ConversationList = () => {
   );
 
   console.log(conversations);
-  
+
 
   return (
     <div className="flex flex-col h-full">
@@ -51,15 +51,17 @@ const ConversationList = () => {
           </div>
         )}
 
-        {conversations.map((c) => (
-          <ConversationListItem
-            key={c.conversationId}
-            conversation={c}
-            isActive={id === c.conversationId}
-          />
-        ))}
-      </div>
-    </div>
+        {
+          conversations.map((c) => (
+            <ConversationListItem
+              key={c.conversationId}
+              conversation={c}
+              isActive={id === c.conversationId}
+            />
+          ))
+        }
+      </div >
+    </div >
   );
 };
 

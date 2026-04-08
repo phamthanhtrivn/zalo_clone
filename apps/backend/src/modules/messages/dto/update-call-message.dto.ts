@@ -1,5 +1,5 @@
-import { CallStatus } from '@zalo-clone/shared-types';
 import { IsEnum, IsMongoId } from 'class-validator';
+import { CallStatus } from 'src/common/types/enums/call-status';
 
 export class UpdateCallMessageDto {
   @IsMongoId()

@@ -1,4 +1,5 @@
 export const COLORS = {
+<<<<<<< HEAD
   primary: "#005bda",
   // secondary: ,
   accent: "#f5f7fa",
@@ -10,3 +11,13 @@ export const COLORS = {
   chatBubbleMe: "#0068FF",
   chatBubbleOther: "#F3F4F6",
 };
+=======
+  primary: "#0055ff",
+  secondary: "#f2f3f7",
+  background: "#ffffff",
+  graient: "#02b4fa",
+
+  chatBubbleMe: "#0068FF",
+  chatBubbleOther: "#F3F4F6",
+};
+>>>>>>> origin/main

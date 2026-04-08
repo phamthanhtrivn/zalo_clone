@@ -5,16 +5,20 @@ import ConversationList from "./ConversationList";
 import { useEffect } from "react";
 import { conversationService } from "@/services/conversation.service";
 import { setConversations } from "@/store/slices/conversationSlice";
-import { useAppDispatch } from "@/store";
+import { useAppDispatch, useAppSelector } from "@/store";
 
 export const SidebarSecondary = () => {
   const location = useLocation();
   const isContactsRoute = location.pathname.startsWith("/contacts");
+  const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
 
   useEffect(() => {
+    if (!user?.userId) return;
     const fetch = async () => {
-      const res = await conversationService.getConversationsFromUserId("699d2b94f9075fe800282901");
+      const res = await conversationService.getConversationsFromUserId(
+        user?.userId,
+      );
 
       if (res.success) {
         dispatch(setConversations(res.data));
@@ -22,7 +26,7 @@ export const SidebarSecondary = () => {
     };
 
     fetch();
-  }, [dispatch]);
+  }, [dispatch, user?.userId]);
 
   return (
     <aside className="w-86 bg-white border-r border-[#e5e7eb] flex flex-col shrink-0 z-10 transition-all duration-300">

@@ -31,8 +31,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const dispatch = useAppDispatch();
-  // const user = useAppSelector((state) => state.auth.user);
-  const currentUserId = "699d2b94f9075fe800282901";
+  const user = useAppSelector((state) => state.auth.user);
   const socketRef = useRef<Socket | null>(null);
 
   const handleNewMessageSidebar = (data: any) => {
@@ -48,14 +47,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     // 🔥 chỉ connect khi có user
-    // if (!user?._id) return;
-    if (!currentUserId) return;
+    if (!user?.userId) return;
 
     if (!socketRef.current) {
       socketRef.current = io(apiUrl, {
         auth: {
-          // userId: user._id,
-          userId: currentUserId,
+          userId: user.userId,
         },
       });
     }
@@ -84,10 +81,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       );
     };
   }, [
-    apiUrl, 
-    dispatch, 
-    // user?._id,
-    currentUserId
+    apiUrl,
+    dispatch,
+    user?.userId
   ]);
 
   return (

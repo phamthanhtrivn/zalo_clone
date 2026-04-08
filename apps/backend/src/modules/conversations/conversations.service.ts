@@ -10,7 +10,10 @@ import { Conversation } from './schemas/conversation.schema';
 import { Connection, Model, Types } from 'mongoose';
 import { Member } from '../members/schemas/member.schema';
 import { CreateGroupDto } from './dto/create-group.dto';
+<<<<<<< HEAD
 import { ConversationType, MemberRole } from '@zalo-clone/shared-types';
+=======
+>>>>>>> origin/main
 import { Message } from '../messages/schemas/message.schema';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { TransferOwnerDto } from './dto/transfer-owenr.dto';
@@ -18,6 +21,11 @@ import { RemoveMemberDto } from './dto/remove-member.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { ConversationItemDto } from './dto/conversation-item.dto';
 import { StorageService } from 'src/common/storage/storage.service';
+<<<<<<< HEAD
+=======
+import { ConversationType } from 'src/common/types/enums/conversation-type';
+import { MemberRole } from 'src/common/types/enums/member-role';
+>>>>>>> origin/main
 
 @Injectable()
 export class ConversationsService {
