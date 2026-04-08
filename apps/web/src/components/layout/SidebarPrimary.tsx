@@ -6,7 +6,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useEffect, useState } from "react";
 import { userService } from "../../services/user.service";
 import ProfileModal from "./ProfileModal";
-import SettingDropdownSidebar from "../common/sidebar/SettingDropdown";
 
 interface NavItem {
   icon: any;
@@ -37,8 +36,6 @@ export const SidebarPrimary = () => {
     };
     fetchUser();
   }, []);
-
-  console.log(user);
 
   return (
     <aside className="w-16 bg-[#005AE0] flex flex-col items-center py-4 shrink-0 z-20">

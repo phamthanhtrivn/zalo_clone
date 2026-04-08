@@ -1,12 +1,3 @@
-<<<<<<< HEAD
-import { Text, View } from "react-native";
-
-export default function ForgotPassword() {
-  return (
-    <View className="mx-auto my-auto">
-      <Text>Forgot password Screen</Text>
-    </View>
-=======
 import Tips from "@/components/auth/Tips";
 import Button from "@/components/common/Button";
 import Container from "@/components/common/Container";
@@ -72,6 +63,5 @@ export default function ForgotPassword() {
         </Button>
       </View>
     </Container>
->>>>>>> origin/main
   );
 }

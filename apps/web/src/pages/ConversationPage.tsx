@@ -14,8 +14,6 @@ import { useAppDispatch, useAppSelector } from "@/store";
 import { setConversations } from "@/store/slices/conversationSlice";
 import ForwardModal from "@/components/layout/message/ForwardModal";
 
-const CURRENT_USER_ID = "699d2b94f9075fe800282901";
-
 const ConversationPage = () => {
   const { id } = useParams();
   const location = useLocation();
@@ -24,6 +22,7 @@ const ConversationPage = () => {
   const conversations = useAppSelector(
     (state) => state.conversation.conversations,
   );
+  const user = useAppSelector((state) => state.auth.user);
 
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
@@ -62,7 +61,7 @@ const ConversationPage = () => {
       try {
         const res = await messageService.getMessagesFromConversation(
           id,
-          CURRENT_USER_ID,
+          user?.userId || "",
           nextCursor,
           20,
         );
@@ -112,7 +111,7 @@ const ConversationPage = () => {
       try {
         const res = await messageService.getNewerMessages(
           id,
-          CURRENT_USER_ID,
+          user?.userId || "",
           prevCursor,
           20,
         );
@@ -180,7 +179,7 @@ const ConversationPage = () => {
 
     const res = await messageService.getMessagesAroundPinnedMessage(
       id,
-      CURRENT_USER_ID,
+      user?.userId || "",
       messageId,
       15,
     );
@@ -210,7 +209,7 @@ const ConversationPage = () => {
     try {
       const res = await messageService.getMessagesFromConversation(
         id,
-        CURRENT_USER_ID,
+        user?.userId || "",
         null,
         20,
       );
@@ -231,7 +230,7 @@ const ConversationPage = () => {
     if (!id) return;
 
     try {
-      const res = await messageService.getPinnedMessages(id, CURRENT_USER_ID);
+      const res = await messageService.getPinnedMessages(id, user?.userId || "");
 
       if (res.success) {
         setPinnedMessages(res.data.messages);
@@ -247,7 +246,7 @@ const ConversationPage = () => {
     try {
       const res = await messageService.reactionMessage(
         id,
-        CURRENT_USER_ID,
+        user?.userId || "",
         emojiType,
         messageId,
       );
@@ -264,7 +263,7 @@ const ConversationPage = () => {
 
     try {
       const res = await messageService.removeReaction(
-        CURRENT_USER_ID,
+        user?.userId || "",
         messageId,
         id,
       );
@@ -301,7 +300,7 @@ const ConversationPage = () => {
     if (!id) return;
 
     try {
-      await messageService.recalledMessage(CURRENT_USER_ID, messageId, id);
+      await messageService.recalledMessage(user?.userId || "", messageId, id);
     } catch (error) {
       toastAlert("Bạn chỉ có thể thu hồi tin nhắn trong vòng 24 giờ");
       console.error(error);
@@ -312,7 +311,7 @@ const ConversationPage = () => {
     if (!id) return;
 
     try {
-      await messageService.pinnedMessage(CURRENT_USER_ID, messageId, id);
+      await messageService.pinnedMessage(user?.userId || "", messageId, id);
     } catch (error) {
       toastAlert("Bạn chỉ có thể ghim tối đa 3 tin nhắn");
       console.error(error);
@@ -323,7 +322,7 @@ const ConversationPage = () => {
     if (!id || !text.trim()) return;
 
     try {
-      await messageService.sendMessage(id, CURRENT_USER_ID, {
+      await messageService.sendMessage(id, user?.userId || "", {
         text,
       });
     } catch (error) {
@@ -336,7 +335,7 @@ const ConversationPage = () => {
 
     try {
       const promises = Array.from(files).map((file) =>
-        messageService.sendMessage(id, CURRENT_USER_ID, undefined, file),
+        messageService.sendMessage(id, user?.userId || "", undefined, file),
       );
 
       const results = await Promise.all(promises);
@@ -361,7 +360,7 @@ const ConversationPage = () => {
     if (!id) return;
 
     const res = await messageService.deleteMessageForMe(
-      CURRENT_USER_ID,
+      user?.userId || "",
       messageId,
       id,
     );
@@ -370,7 +369,7 @@ const ConversationPage = () => {
       setMessages((prev) => prev.filter((m) => m._id !== messageId));
 
       const res =
-        await conversationService.getConversationsFromUserId(CURRENT_USER_ID);
+        await conversationService.getConversationsFromUserId(user?.userId || "");
 
       if (res.success) {
         dispatch(setConversations(res.data));
@@ -382,7 +381,7 @@ const ConversationPage = () => {
     try {
       if (!id) return;
 
-      await messageService.readReceipt(CURRENT_USER_ID, id);
+      await messageService.readReceipt(user?.userId || "", id);
     } catch (error) {
       console.error(error);
     }
@@ -390,12 +389,9 @@ const ConversationPage = () => {
 
   const handleForwardMessages = async (targetConversationIds: string[]) => {
     try {
-<<<<<<< HEAD
       setLoadingForward(true);
-=======
->>>>>>> origin/main
       await messageService.forwardMessagesToConversations(
-        CURRENT_USER_ID,
+        user?.userId || "",
         selectedMessages,
         targetConversationIds,
       );
@@ -404,11 +400,8 @@ const ConversationPage = () => {
       setSelectedMessages([]);
     } catch (error) {
       console.log(error);
-<<<<<<< HEAD
     } finally {
       setLoadingForward(false);
-=======
->>>>>>> origin/main
     }
   };
 
@@ -586,7 +579,7 @@ const ConversationPage = () => {
 
           <MessageList
             messages={messages}
-            currentUserId={CURRENT_USER_ID}
+            currentUserId={user?.userId || ""}
             containerRef={containerRef}
             handleScrollToTop={handleScrollToTop}
             handleScrollToBottom={handleScrollToBottom}
@@ -599,10 +592,6 @@ const ConversationPage = () => {
             setIsSelected={setIsSelected}
             selectedMessages={selectedMessages}
             toggleSelectMessage={toggleSelectMessage}
-<<<<<<< HEAD
-=======
-            onForwardMessages={handleForwardMessages}
->>>>>>> origin/main
           />
 
           <ChatInput
@@ -624,10 +613,7 @@ const ConversationPage = () => {
           onClose={() => setShowForwardModal(false)}
           conversations={conversations}
           selectedMessageIds={selectedMessages}
-<<<<<<< HEAD
           loadingForward={loadingForward}
-=======
->>>>>>> origin/main
           onSubmit={handleForwardMessages}
         />
       )}
@@ -635,7 +621,7 @@ const ConversationPage = () => {
       <ConversationInfoPanel
         isOpen={isInfoOpen}
         conversation={conversation}
-        currentUser={{ _id: CURRENT_USER_ID }}
+        currentUser={{ _id: user?.userId || "" }}
       />
     </div>
   );

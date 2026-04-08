@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-import { api } from "./api";
-
-export const authService = {};
-=======
 import {
   ChangePassword,
   CompleteSignUp,
@@ -54,4 +49,3 @@ export const authService = {
     return res.data;
   },
 };
->>>>>>> origin/main

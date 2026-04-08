@@ -5,16 +5,6 @@ export default {
   theme: {
     extend: {
       colors: {
-<<<<<<< HEAD
-        primary: "#0068FF",
-        accent: "#ebecf0",
-        chatMe: "#0068FF",
-        chatOther: "#F3F4F6",
-      },
-      textColor: {
-        
-      }
-=======
         primary: "#0055ff",
         secondary: "#edeff2",
         background: "#ffffff",
@@ -35,7 +25,6 @@ export default {
       spacing: {
         "screen-edge": "16px",
       },
->>>>>>> origin/main
     },
   },
   plugins: [],

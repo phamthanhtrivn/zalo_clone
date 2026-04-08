@@ -1,12 +1,3 @@
-<<<<<<< HEAD
-import { Text, View } from "react-native";
-
-export default function Register() {
-  return (
-    <View className="mx-auto my-auto">
-      <Text>Register screen.</Text>
-    </View>
-=======
 import Tips from "@/components/auth/Tips";
 import AgreementCheckBox from "@/components/common/AgreementCheckBox";
 import Button from "@/components/common/Button";
@@ -84,6 +75,5 @@ export default function Register() {
         </Button>
       </View>
     </Container>
->>>>>>> origin/main
   );
 }

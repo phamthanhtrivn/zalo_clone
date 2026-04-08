@@ -10,10 +10,6 @@ import { Conversation } from './schemas/conversation.schema';
 import { Connection, Model, Types } from 'mongoose';
 import { Member } from '../members/schemas/member.schema';
 import { CreateGroupDto } from './dto/create-group.dto';
-<<<<<<< HEAD
-import { ConversationType, MemberRole } from '@zalo-clone/shared-types';
-=======
->>>>>>> origin/main
 import { Message } from '../messages/schemas/message.schema';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { TransferOwnerDto } from './dto/transfer-owenr.dto';
@@ -21,11 +17,8 @@ import { RemoveMemberDto } from './dto/remove-member.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { ConversationItemDto } from './dto/conversation-item.dto';
 import { StorageService } from 'src/common/storage/storage.service';
-<<<<<<< HEAD
-=======
 import { ConversationType } from 'src/common/types/enums/conversation-type';
 import { MemberRole } from 'src/common/types/enums/member-role';
->>>>>>> origin/main
 
 @Injectable()
 export class ConversationsService {
@@ -36,7 +29,7 @@ export class ConversationsService {
     @InjectModel(Message.name) private messageModel: Model<Message>,
     @InjectConnection() private connection: Connection,
     private readonly storageService: StorageService,
-  ) {}
+  ) { }
 
   async createGroup(creatorId: string, dto: CreateGroupDto) {
     const uniqueMemberIds = [...new Set(dto.memberIds)];
@@ -448,7 +441,6 @@ export class ConversationsService {
                   $expr: {
                     $and: [
                       { $eq: ['$conversationId', '$$conversationId'] },
-
                       {
                         $not: {
                           $in: [
@@ -461,7 +453,6 @@ export class ConversationsService {
                   },
                 },
               },
-
               {
                 $addFields: {
                   isLastMessage: {
@@ -469,14 +460,12 @@ export class ConversationsService {
                   },
                 },
               },
-
               {
                 $sort: {
                   isLastMessage: -1,
                   createdAt: -1,
                 },
               },
-
               { $limit: 1 },
             ],
             as: 'lastMessage',
@@ -506,7 +495,7 @@ export class ConversationsService {
           },
         },
 
-        // lấy toàn bộ member của conversation
+        // giữ nguyên logic cũ của bạn
         {
           $lookup: {
             from: 'members',
@@ -516,7 +505,6 @@ export class ConversationsService {
           },
         },
 
-        // tìm user còn lại trong PRIVATE chat
         {
           $lookup: {
             from: 'users',
@@ -567,9 +555,7 @@ export class ConversationsService {
         {
           $project: {
             _id: 0,
-
             conversationId: '$conversation._id',
-
             type: '$conversation.type',
 
             name: {
@@ -597,7 +583,6 @@ export class ConversationsService {
                   '$sender.profile.name',
                 ],
               },
-
               content: '$lastMessage.content',
               recalled: '$lastMessage.recalled',
             },
@@ -610,6 +595,17 @@ export class ConversationsService {
           $sort: {
             lastMessageAt: -1,
           },
+        },
+
+        // ✅ FIX DUPLICATE Ở ĐÂY (QUAN TRỌNG)
+        {
+          $group: {
+            _id: '$conversationId',
+            data: { $first: '$$ROOT' },
+          },
+        },
+        {
+          $replaceRoot: { newRoot: '$data' },
         },
       ]);
 

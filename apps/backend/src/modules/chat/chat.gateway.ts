@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-=======
->>>>>>> origin/main
 import {
   WebSocketGateway,
   WebSocketServer,

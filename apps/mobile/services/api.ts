@@ -1,12 +1,4 @@
 import axios from "axios";
-<<<<<<< HEAD
-import { config } from "@/constants/config";
-
-export const api = axios.create({
-  baseURL: config.apiUrl,
-  timeout: 10000,
-});
-=======
 import * as SecureStore from "expo-secure-store";
 import { config } from "@/constants/config";
 
@@ -62,4 +54,3 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
->>>>>>> origin/main
