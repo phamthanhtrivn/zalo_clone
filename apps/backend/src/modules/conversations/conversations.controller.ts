@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  Get,
   Param,
   Patch,
   Post,
@@ -81,5 +82,10 @@ export class ConversationsController {
     // const actorId = req.user?._id;
     const actorId = this.MOCK_USER_ID;
     return this.conversationsService.addMember(id, actorId, dto);
+  }
+
+  @Get('/user/:userId')
+  async getConversationsFromUserId(@Param('userId') userId: string) {
+    return this.conversationsService.getConversationsFromUser(userId);
   }
 }

@@ -10,14 +10,20 @@ import { Conversation } from './schemas/conversation.schema';
 import { Connection, Model, Types } from 'mongoose';
 import { Member } from '../members/schemas/member.schema';
 import { CreateGroupDto } from './dto/create-group.dto';
-import { ConversationType, MemberRole } from '@zalo-clone/shared-types';
 import { Message } from '../messages/schemas/message.schema';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { TransferOwnerDto } from './dto/transfer-owner.dto';
 import { RemoveMemberDto } from './dto/remove-member.dto';
 import { AddMemberDto } from './dto/add-member.dto';
+
 import e from 'express';
 import { User } from '../users/schemas/user.schema';
+
+import { ConversationItemDto } from './dto/conversation-item.dto';
+import { StorageService } from 'src/common/storage/storage.service';
+import { ConversationType } from 'src/common/types/enums/conversation-type';
+import { MemberRole } from 'src/common/types/enums/member-role';
+
 
 @Injectable()
 export class ConversationsService {
@@ -27,7 +33,10 @@ export class ConversationsService {
     @InjectModel(Member.name) private memberModel: Model<Member>,
     @InjectModel(Message.name) private messageModel: Model<Message>,
     @InjectModel('User') private userModel: Model<User>,
+
+
     @InjectConnection() private connection: Connection,
+    private readonly storageService: StorageService,
   ) {}
 
   async createGroup(creatorId: string, dto: CreateGroupDto) {
@@ -549,5 +558,213 @@ export class ConversationsService {
     );
 
     return savedMessage;
+  }
+
+  async getConversationsFromUser(userId: string) {
+    const userObjectId = new Types.ObjectId(userId);
+
+    const conversations: ConversationItemDto[] =
+      await this.memberModel.aggregate([
+        {
+          $match: {
+            userId: userObjectId,
+            leftAt: null,
+          },
+        },
+
+        {
+          $lookup: {
+            from: 'conversations',
+            localField: 'conversationId',
+            foreignField: '_id',
+            as: 'conversation',
+          },
+        },
+
+        { $unwind: '$conversation' },
+
+        {
+          $lookup: {
+            from: 'messages',
+            let: {
+              conversationId: '$conversation._id',
+              lastMessageId: '$conversation.lastMessageId',
+              currentUser: '$userId',
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$conversationId', '$$conversationId'] },
+
+                      {
+                        $not: {
+                          $in: [
+                            '$$currentUser',
+                            { $ifNull: ['$deletedFor', []] },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+
+              {
+                $addFields: {
+                  isLastMessage: {
+                    $eq: ['$_id', '$$lastMessageId'],
+                  },
+                },
+              },
+
+              {
+                $sort: {
+                  isLastMessage: -1,
+                  createdAt: -1,
+                },
+              },
+
+              { $limit: 1 },
+            ],
+            as: 'lastMessage',
+          },
+        },
+
+        {
+          $unwind: {
+            path: '$lastMessage',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'lastMessage.senderId',
+            foreignField: '_id',
+            as: 'sender',
+          },
+        },
+
+        {
+          $unwind: {
+            path: '$sender',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        // lấy toàn bộ member của conversation
+        {
+          $lookup: {
+            from: 'members',
+            localField: 'conversationId',
+            foreignField: 'conversationId',
+            as: 'members',
+          },
+        },
+
+        // tìm user còn lại trong PRIVATE chat
+        {
+          $lookup: {
+            from: 'users',
+            let: {
+              members: '$members',
+              currentUser: '$userId',
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $in: [
+                      '$_id',
+                      {
+                        $map: {
+                          input: {
+                            $filter: {
+                              input: '$$members',
+                              as: 'm',
+                              cond: {
+                                $and: [
+                                  { $ne: ['$$m.userId', '$$currentUser'] },
+                                  { $eq: ['$$m.leftAt', null] },
+                                ],
+                              },
+                            },
+                          },
+                          as: 'm',
+                          in: '$$m.userId',
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: 'otherUser',
+          },
+        },
+
+        {
+          $unwind: {
+            path: '$otherUser',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        {
+          $project: {
+            _id: 0,
+
+            conversationId: '$conversation._id',
+
+            type: '$conversation.type',
+
+            name: {
+              $cond: [
+                { $eq: ['$conversation.type', 'GROUP'] },
+                '$conversation.group.name',
+                '$otherUser.profile.name',
+              ],
+            },
+
+            avatar: {
+              $cond: [
+                { $eq: ['$conversation.type', 'GROUP'] },
+                '$conversation.group.avatarUrl',
+                '$otherUser.profile.avatarUrl',
+              ],
+            },
+
+            lastMessage: {
+              _id: '$lastMessage._id',
+              senderName: {
+                $cond: [
+                  { $eq: ['$lastMessage.senderId', '$userId'] },
+                  'Bạn',
+                  '$sender.profile.name',
+                ],
+              },
+
+              content: '$lastMessage.content',
+              recalled: '$lastMessage.recalled',
+            },
+
+            lastMessageAt: '$conversation.lastMessageAt',
+          },
+        },
+
+        {
+          $sort: {
+            lastMessageAt: -1,
+          },
+        },
+      ]);
+
+    return conversations.map((c) => ({
+      ...c,
+      avatar: c.avatar ? this.storageService.signFileUrl(c.avatar) : null,
+    }));
   }
 }

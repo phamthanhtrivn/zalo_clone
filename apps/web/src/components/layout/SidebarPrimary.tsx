@@ -1,36 +1,57 @@
-import { Link, useLocation } from 'react-router-dom'
-import { MessageSquare, Contact, Settings } from 'lucide-react'
-import { cn } from '../../lib/utils'
-import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../ui/tooltip"
+import { Link, useLocation } from "react-router-dom";
+import { MessageSquare, Contact, Settings } from "lucide-react";
+import { cn } from "../../lib/utils";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { useEffect, useState } from "react";
+import { userService } from "../../services/user.service";
+import ProfileModal from "./ProfileModal";
+import SettingDropdownSidebar from "../common/sidebar/SettingDropdown";
 
 interface NavItem {
-  icon: any
-  label: string
-  path: string
+  icon: any;
+  label: string;
+  path: string;
 }
 
 const navItems: NavItem[] = [
-  { icon: MessageSquare, label: 'Tin nhắn', path: '/' },
-  { icon: Contact, label: 'Danh bạ', path: '/contacts' },
-]
+  { icon: MessageSquare, label: "Tin nhắn", path: "/" },
+  { icon: Contact, label: "Danh bạ", path: "/contacts" },
+];
 
 export const SidebarPrimary = () => {
-  const location = useLocation()
+  const location = useLocation();
+  const [user, setUser] = useState<any>();
+  const [open, setOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const data = await userService.getProfile();
+        if (data.success) {
+          setUser(data.data);
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    };
+    fetchUser();
+  }, []);
+
+  console.log(user);
 
   return (
-    <aside className="w-[64px] bg-[#005AE0] flex flex-col items-center py-4 flex-shrink-0 z-20">
+    <aside className="w-16 bg-[#005AE0] flex flex-col items-center py-4 shrink-0 z-20">
       {/* User Avatar */}
       <div className="relative mb-6">
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="relative cursor-pointer">
-              <Avatar className="w-12 h-12 border border-white/10 hover:opacity-90 transition-opacity">
-                <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" />
+              <Avatar
+                onClick={() => setOpen(true)}
+                className="w-12 h-12 border border-white/10 hover:opacity-90 transition-opacity"
+              >
+                <AvatarImage src={user?.profile?.avatarUrl} alt="User" />
                 <AvatarFallback>FT</AvatarFallback>
               </Avatar>
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#005AE0] rounded-full"></div>
@@ -42,12 +63,21 @@ export const SidebarPrimary = () => {
         </Tooltip>
       </div>
 
+      <ProfileModal
+        setUser={setUser}
+        user={user}
+        open={open}
+        onClose={() => setOpen(false)}
+      />
+
       {/* Navigation Items */}
       <nav className="flex-1 w-full flex flex-col items-center space-y-1">
         {navItems.map((item) => {
-          const isActive = item.path === '/'
-            ? location.pathname === '/' || location.pathname.startsWith('/chat')
-            : location.pathname.startsWith(item.path)
+          const isActive =
+            item.path === "/"
+              ? location.pathname === "/" ||
+                location.pathname.startsWith("/chat")
+              : location.pathname.startsWith(item.path);
 
           return (
             <Tooltip key={item.label}>
@@ -56,10 +86,12 @@ export const SidebarPrimary = () => {
                   to={item.path}
                   className={cn(
                     "w-full aspect-square flex items-center justify-center transition-colors relative group",
-                    isActive ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
+                    isActive
+                      ? "bg-white/20 text-white"
+                      : "text-white/70 hover:bg-white/10 hover:text-white",
                   )}
                 >
-                  <item.icon className="w-[30px] h-[30px] stroke-[1.5]" />
+                  <item.icon className="w-7.5 h-7.5 stroke-[1.5]" />
                   <span className="sr-only">{item.label}</span>
                   {isActive && (
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-white" />
@@ -70,23 +102,14 @@ export const SidebarPrimary = () => {
                 <p>{item.label}</p>
               </TooltipContent>
             </Tooltip>
-          )
+          );
         })}
       </nav>
 
       {/* Bottom Actions */}
       <div className="mt-auto flex flex-col items-center">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button className="w-full aspect-square flex items-center justify-center text-white/70 hover:bg-white/10 hover:text-white transition-colors group relative cursor-pointer">
-              <Settings className="w-[26px] h-[26px] stroke-[1.5]" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            <p>Cài đặt</p>
-          </TooltipContent>
-        </Tooltip>
+        <SettingDropdownSidebar />
       </div>
     </aside>
-  )
-}
+  );
+};

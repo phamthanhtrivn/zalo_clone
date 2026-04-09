@@ -1,0 +1,5 @@
+import Redis from 'ioredis';
+export declare const redisHealthIndicatorProvider: {
+    provide: string;
+    useFactory: () => Redis;
+};

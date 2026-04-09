@@ -8,7 +8,11 @@ import {
 } from './schemas/conversation.schema';
 import { Member, MemberSchema } from '../members/schemas/member.schema';
 import { Message, MessageSchema } from '../messages/schemas/message.schema';
+
 import { User, UserSchema } from '../users/schemas/user.schema';
+
+import { StorageModule } from 'src/common/storage/storage.module';
+
 
 @Module({
   imports: [
@@ -18,8 +22,10 @@ import { User, UserSchema } from '../users/schemas/user.schema';
       { name: Message.name, schema: MessageSchema },
       { name: 'User', schema: UserSchema },
     ]),
+    StorageModule,
   ],
   providers: [ConversationsService],
   controllers: [ConversationsController],
+  exports: [ConversationsService],
 })
 export class ConversationsModule {}

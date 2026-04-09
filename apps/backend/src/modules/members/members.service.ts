@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Member } from './schemas/member.schema';
-import { MemberRole } from '@zalo-clone/shared-types';
+import { MemberRole } from 'src/common/types/enums/member-role';
 @Injectable()
 export class MembersService {
     constructor(
