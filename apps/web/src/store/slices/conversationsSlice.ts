@@ -143,6 +143,13 @@ const conversationsSlice = createSlice({
         conversation.lastMessage.recalled = true;
       }
     },
+    removeConversation(state, action: PayloadAction<{ conversationId: string }>) {
+      const id = String(action.payload?.conversationId ?? "").trim();
+      if (!id) return;
+      state.conversations = state.conversations.filter(
+        (c) => String(c.conversationId) !== id,
+      );
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -169,6 +176,7 @@ export const {
   updateLastMessage,
   resetUnreadCount,
   updateRecallMessageInConversation,
+  removeConversation,
 } = conversationsSlice.actions;
 
 export default conversationsSlice.reducer;

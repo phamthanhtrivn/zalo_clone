@@ -1,6 +1,7 @@
 export {
   addConversationToTop,
   fetchConversations,
+  removeConversation,
   resetUnreadCount,
   setConversations,
   updateConversation,

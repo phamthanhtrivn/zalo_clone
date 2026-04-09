@@ -47,7 +47,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
-import { setConversations } from "@/store/slices/conversationSlice";
+import { removeConversation } from "@/store/slices/conversationSlice";
 
 type ConversationMemberRow = {
   userId: string;
@@ -81,7 +81,6 @@ const ConversationInfoPanel = ({
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const currentUserFromStore = useAppSelector((state) => state.auth.user);
-  const conversations = useAppSelector((state) => state.conversation.conversations);
   const { socket } = useSocket();
   const currentUserId =
     currentUserFromStore?.userId ||
@@ -112,6 +111,8 @@ const ConversationInfoPanel = ({
   const [isLeavingGroup, setIsLeavingGroup] = useState(false);
   const [leaveGroupErrorDialogOpen, setLeaveGroupErrorDialogOpen] = useState(false);
   const [leaveGroupErrorMessage, setLeaveGroupErrorMessage] = useState("");
+  const [deleteGroupDialogOpen, setDeleteGroupDialogOpen] = useState(false);
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
 
   const isGroup = conversation?.type === "GROUP";
 
@@ -309,13 +310,7 @@ const ConversationInfoPanel = ({
         return;
       }
 
-      dispatch(
-        setConversations(
-          conversations.filter(
-            (item) => item.conversationId !== conversation.conversationId,
-          ),
-        ),
-      );
+      dispatch(removeConversation({ conversationId: conversation.conversationId }));
       setLeaveGroupDialogOpen(false);
       navigate("/");
     } catch (error: any) {
@@ -330,6 +325,28 @@ const ConversationInfoPanel = ({
       setLeaveGroupErrorDialogOpen(true);
     } finally {
       setIsLeavingGroup(false);
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    if (!conversation?.conversationId || isDeletingGroup) return;
+    if (currentMember?.role !== "OWNER") return;
+
+    try {
+      setIsDeletingGroup(true);
+      const res = await conversationService.deleteGroup(conversation.conversationId);
+
+      if (!res?.success) {
+        return;
+      }
+
+      dispatch(removeConversation({ conversationId: conversation.conversationId }));
+      setDeleteGroupDialogOpen(false);
+      navigate("/");
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsDeletingGroup(false);
     }
   };
 
@@ -839,6 +856,16 @@ const ConversationInfoPanel = ({
 
         {/* DANGER */}
         <div className="bg-white mt-2">
+          {isGroup && currentMember?.role === "OWNER" && (
+            <button
+              type="button"
+              onClick={() => setDeleteGroupDialogOpen(true)}
+              className="h-12 w-full flex items-center px-4 gap-3 text-red-500 cursor-pointer border-t"
+            >
+              <Trash2 size={18} />
+              <span className="text-[14px]">Giải tán nhóm</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -855,6 +882,30 @@ const ConversationInfoPanel = ({
           </button>
         </div>
       </div>
+
+      <AlertDialog open={deleteGroupDialogOpen} onOpenChange={setDeleteGroupDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Giải tán nhóm?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Mọi tin nhắn sẽ bị ẩn và tất cả thành viên sẽ bị mời ra khỏi nhóm.
+              Hành động này không thể hoàn tác.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingGroup}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeletingGroup}
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteGroup();
+              }}
+            >
+              Giải tán nhóm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {preview.isOpen && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">

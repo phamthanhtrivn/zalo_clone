@@ -73,11 +73,16 @@ export const conversationService = {
     newRole: MemberRole,
   ) => {
     const id = String(conversationId ?? "").trim();
-    const ids = [...new Set(memberIds.map((u) => String(u).trim()).filter(Boolean))];
-    const response = await apiClient.patch(`/api/conversations/${id}/members/role`, {
-      memberIds: ids,
-      newRole,
-    });
+    const ids = [
+      ...new Set(memberIds.map((u) => String(u).trim()).filter(Boolean)),
+    ];
+    const response = await apiClient.patch(
+      `/api/conversations/${id}/members/role`,
+      {
+        memberIds: ids,
+        newRole,
+      },
+    );
     return response?.data ?? null;
   },
   transferOwner: async (conversationId: string, targetUserId: string) => {
@@ -92,6 +97,11 @@ export const conversationService = {
   leaveGroup: async (conversationId: string) => {
     const id = String(conversationId ?? "").trim();
     const response = await apiClient.post(`/api/conversations/${id}/leave`);
+    return response?.data ?? null;
+  },
+  deleteGroup: async (conversationId: string) => {
+    const id = String(conversationId ?? "").trim();
+    const response = await apiClient.delete(`/api/conversations/${id}`);
     return response?.data ?? null;
   },
 };

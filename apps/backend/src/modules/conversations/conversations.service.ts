@@ -139,8 +139,10 @@ export class ConversationsService {
   }
 
   async deleteGroup(conversationId: string, userId: string) {
-    const conversation = await this.conversationModel.findById(conversationId);
+    const convObjectId = new Types.ObjectId(conversationId.trim());
+    const userObjectId = new Types.ObjectId(userId.trim());
 
+    const conversation = await this.conversationModel.findById(convObjectId);
     if (!conversation) {
       throw new NotFoundException('Nhóm trò chuyện không tồn tại');
     }
@@ -150,8 +152,8 @@ export class ConversationsService {
     }
 
     const owner = await this.memberModel.findOne({
-      conversationId: conversation._id,
-      userId: userId,
+      conversationId: convObjectId,
+      userId: userObjectId,
       leftAt: null,
     });
 
@@ -166,11 +168,13 @@ export class ConversationsService {
 
     try {
       const now = new Date();
+
       await this.memberModel.updateMany(
-        { conversationId: conversation._id, leftAt: null },
+        { conversationId: convObjectId, leftAt: null },
         { $set: { leftAt: now } },
         { session },
       );
+
       await this.createSystemMessage(
         conversationId,
         'Trưởng nhóm đã giải tán nhóm này',
@@ -179,9 +183,11 @@ export class ConversationsService {
 
       await session.commitTransaction();
 
-      this.chatGateway.server
-        .to(conversationId)
-        .emit('group_disbanded', { conversationId });
+      const convIdStr = convObjectId.toString();
+
+      this.chatGateway.server.to(convIdStr).emit('group_disbanded', {
+        conversationId: convIdStr,
+      });
 
       return {
         success: true,
@@ -189,7 +195,8 @@ export class ConversationsService {
       };
     } catch (error) {
       await session.abortTransaction();
-      throw new InternalServerErrorException('Lỗi khi giải tán nhóm');
+      console.error('Lỗi giải tán nhóm:', error);
+      throw error;
     } finally {
       await session.endSession();
     }
@@ -1025,7 +1032,6 @@ export class ConversationsService {
     const convObjectId = new Types.ObjectId(conversationId.trim());
     const userObjectId = new Types.ObjectId(userId.trim());
 
-
     const member = await this.memberModel.findOne({
       conversationId: convObjectId,
       userId: userObjectId,
@@ -1038,14 +1044,12 @@ export class ConversationsService {
       );
     }
 
-
     if (member.role === MemberRole.OWNER) {
       const activeMembersCount = await this.memberModel.countDocuments({
         conversationId: convObjectId,
         leftAt: null,
       });
 
-   
       if (activeMembersCount > 1) {
         throw new BadRequestException(
           'Bạn phải chuyển quyền Trưởng nhóm cho người khác trước khi rời nhóm',
@@ -1057,12 +1061,10 @@ export class ConversationsService {
     session.startTransaction();
 
     try {
-      
       await this.memberModel
         .updateOne({ _id: member._id }, { $set: { leftAt: new Date() } })
         .session(session);
 
-    
       const userName = await this.getUserName(userId);
       const systemMsg = await this.createSystemMessage(
         conversationId,
@@ -1072,15 +1074,12 @@ export class ConversationsService {
 
       await session.commitTransaction();
 
-     
       const convIdStr = convObjectId.toString();
 
-      
       this.chatGateway.server
         .to(userId)
         .emit('removed_from_conversation', { conversationId: convIdStr });
 
-    
       this.chatGateway.server.to(convIdStr).emit('new_message', {
         ...systemMsg.toObject(),
         conversationId: convIdStr,

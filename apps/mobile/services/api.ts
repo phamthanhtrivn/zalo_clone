@@ -42,7 +42,10 @@ api.interceptors.response.use(
         refreshToken,
       });
 
-      const newAccessToken = res.data.accessToken;
+      const newAccessToken = res.data?.data?.accessToken;
+      if (!newAccessToken) {
+        return Promise.reject(error);
+      }
 
       await SecureStore.setItemAsync("access_token", newAccessToken);
 
