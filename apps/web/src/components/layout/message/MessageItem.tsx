@@ -61,10 +61,20 @@ export const MessageItem = ({
     return () => window.removeEventListener("click", handleClickOutside);
   }, []);
 
+  if (message.type === "SYSTEM") {
+    return (
+      <div className="flex justify-center w-full my-4 px-10">
+        <div className="bg-gray-100/70 text-gray-500 text-[12px] px-4 py-1 rounded-full backdrop-blur-sm border border-gray-50 text-center">
+          {message.content?.text}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex items-end gap-2 ${isMe ? "justify-end" : ""}`}>
       {!isMe &&
-        (showAvatar ? (
+        (showAvatar && message.senderId ? (
           <Avatar className="w-8 h-8">
             <AvatarImage src={message.senderId.profile?.avatarUrl} />
             <AvatarFallback>

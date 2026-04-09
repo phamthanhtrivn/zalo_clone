@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Bell,
   BellOff,
+  MoreHorizontal,
   UserPlus,
   Pin,
   PinOff,
@@ -21,10 +22,50 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import { messageService } from "@/services/message.service";
+import { conversationService } from "@/services/conversation.service";
 import type { ConversationItemType } from "@/types/conversation-item.type";
 import { getFileIcon } from "@/utils/file-icon.util";
 import { getDateLabel } from "@/utils/format-message-time..util";
 import { saveAs } from "file-saver";
+import CreateGroupModal from "@/components/layout/CreateGroupModal";
+import { useAppDispatch, useAppSelector } from "@/store";
+import { useSocket } from "@/contexts/SocketContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useNavigate } from "react-router-dom";
+import { setConversations } from "@/store/slices/conversationSlice";
+
+type ConversationMemberRow = {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+  role: "OWNER" | "ADMIN" | "MEMBER";
+};
+
+function memberRoleLabel(role: ConversationMemberRow["role"]): string {
+  switch (role) {
+    case "OWNER":
+      return "Trưởng nhóm";
+    case "ADMIN":
+      return "Phó nhóm";
+    default:
+      return "Thành viên";
+  }
+}
 
 interface ConversationInfoPanelProps {
   isOpen: boolean;
@@ -37,6 +78,16 @@ const ConversationInfoPanel = ({
   conversation,
   currentUser,
 }: ConversationInfoPanelProps) => {
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const currentUserFromStore = useAppSelector((state) => state.auth.user);
+  const conversations = useAppSelector((state) => state.conversation.conversations);
+  const { socket } = useSocket();
+  const currentUserId =
+    currentUserFromStore?.userId ||
+    (currentUserFromStore as { _id?: string } | null | undefined)?._id ||
+    currentUser?._id ||
+    "";
   const [isMuted, setIsMuted] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [medias, setMedias] = useState<any[]>([]);
@@ -46,7 +97,21 @@ const ConversationInfoPanel = ({
     media: true,
     file: false,
     link: false,
+    members: true,
   });
+  const [members, setMembers] = useState<ConversationMemberRow[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [memberPendingRemove, setMemberPendingRemove] =
+    useState<ConversationMemberRow | null>(null);
+  const [memberPendingTransfer, setMemberPendingTransfer] =
+    useState<ConversationMemberRow | null>(null);
+  const [membersRefreshKey, setMembersRefreshKey] = useState(0);
+  const [addMemberModalOpen, setAddMemberModalOpen] = useState(false);
+  const [leaveGroupDialogOpen, setLeaveGroupDialogOpen] = useState(false);
+  const [isLeavingGroup, setIsLeavingGroup] = useState(false);
+  const [leaveGroupErrorDialogOpen, setLeaveGroupErrorDialogOpen] = useState(false);
+  const [leaveGroupErrorMessage, setLeaveGroupErrorMessage] = useState("");
 
   const isGroup = conversation?.type === "GROUP";
 
@@ -69,10 +134,44 @@ const ConversationInfoPanel = ({
     if (!isOpen || !conversation?.conversationId) return;
   }, [expandedSections, isOpen, conversation?.conversationId]);
 
+  useEffect(() => {
+    if (!isOpen || !isGroup || !conversation?.conversationId) {
+      setMembers([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadMembers = async () => {
+      setMembersLoading(true);
+      try {
+        const res = await conversationService.getListMembers(
+          conversation.conversationId,
+        );
+        if (cancelled) return;
+        if (res?.success && Array.isArray(res.data)) {
+          setMembers(res.data as ConversationMemberRow[]);
+        } else {
+          setMembers([]);
+        }
+      } catch {
+        if (!cancelled) setMembers([]);
+      } finally {
+        if (!cancelled) setMembersLoading(false);
+      }
+    };
+
+    loadMembers();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, isGroup, conversation?.conversationId, membersRefreshKey]);
+
   const fetchMediaPreview = async () => {
+    if (!currentUserId) return;
     try {
       const res = await messageService.getMediasPreview(
-        currentUser._id,
+        currentUserId,
         conversation.conversationId,
       );
       if (res.success) {
@@ -85,11 +184,153 @@ const ConversationInfoPanel = ({
     }
   };
 
-  const toggleSection = (section: "media" | "file" | "link") => {
+  const toggleSection = (
+    section: "media" | "file" | "link" | "members",
+  ) => {
     setExpandedSections((prev) => ({
       ...prev,
       [section]: !prev[section],
     }));
+  };
+
+  const currentMember = members.find(
+    (m) => String(m.userId) === String(currentUserId),
+  );
+  const canManageMembers =
+    currentMember?.role === "OWNER" || currentMember?.role === "ADMIN";
+
+  const canRemoveMember = (target: ConversationMemberRow) => {
+    if (!canManageMembers) return false;
+    if (String(target.userId) === String(currentUserId)) return false;
+    if (currentMember?.role === "ADMIN" && target.role === "OWNER") return false;
+    return true;
+  };
+
+  const canShowRoleMenu = (target: ConversationMemberRow) => {
+    if (currentMember?.role !== "OWNER") return false;
+    if (String(target.userId) === String(currentUserId)) return false;
+    return true;
+  };
+
+  const handleUpdateMemberRole = async (
+    target: ConversationMemberRow,
+    newRole: "ADMIN" | "MEMBER",
+  ) => {
+    if (!conversation?.conversationId) return;
+    if (currentMember?.role !== "OWNER") return;
+    if (String(target.userId) === String(currentUserId)) return;
+
+    try {
+      const res = await conversationService.updateMembersRole(
+        conversation.conversationId,
+        [target.userId],
+        newRole,
+      );
+
+      if (!res?.success) {
+        return;
+      }
+
+      setMembers((prev) =>
+        prev.map((member) =>
+          member.userId === target.userId ? { ...member, role: newRole } : member,
+        ),
+      );
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleTransferOwner = async (target: ConversationMemberRow) => {
+    if (!conversation?.conversationId) return;
+    if (currentMember?.role !== "OWNER") return;
+    if (String(target.userId) === String(currentUserId)) return;
+
+    try {
+      const res = await conversationService.transferOwner(
+        conversation.conversationId,
+        target.userId,
+      );
+      if (!res?.success) return;
+
+      setMembers((prev) =>
+        prev.map((member) => {
+          if (member.userId === target.userId) {
+            return { ...member, role: "OWNER" };
+          }
+          if (member.userId === currentUserId) {
+            return { ...member, role: "MEMBER" };
+          }
+          return member;
+        }),
+      );
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleRemoveMember = async (target: ConversationMemberRow) => {
+    if (!conversation?.conversationId || !canRemoveMember(target)) return;
+
+    try {
+      setRemovingMemberId(target.userId);
+      const res = await conversationService.removeMember(
+        conversation.conversationId,
+        target.userId,
+      );
+
+      if (!res?.success) return;
+
+      setMembers((prev) =>
+        prev.filter((member) => member.userId !== target.userId),
+      );
+      setMembersRefreshKey((k) => k + 1);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setRemovingMemberId(null);
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!conversation?.conversationId || isLeavingGroup) return;
+
+    try {
+      setIsLeavingGroup(true);
+      const res = await conversationService.leaveGroup(conversation.conversationId);
+
+      if (!res?.success) {
+        const message =
+          typeof res?.message === "string"
+            ? res.message
+            : "Bạn cần chuyển quyền Trưởng nhóm cho thành viên khác trước khi rời nhóm.";
+        setLeaveGroupErrorMessage(message);
+        setLeaveGroupErrorDialogOpen(true);
+        return;
+      }
+
+      dispatch(
+        setConversations(
+          conversations.filter(
+            (item) => item.conversationId !== conversation.conversationId,
+          ),
+        ),
+      );
+      setLeaveGroupDialogOpen(false);
+      navigate("/");
+    } catch (error: any) {
+      const rawMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message;
+      const message = Array.isArray(rawMessage)
+        ? rawMessage[0]
+        : rawMessage || "Bạn cần chuyển quyền Trưởng nhóm cho thành viên khác trước khi rời nhóm.";
+      setLeaveGroupErrorMessage(message);
+      setLeaveGroupErrorDialogOpen(true);
+    } finally {
+      setIsLeavingGroup(false);
+    }
   };
 
   const handleDownload = async (file: any) => {
@@ -134,6 +375,52 @@ const ConversationInfoPanel = ({
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [preview.isOpen, medias.length]);
+
+  useEffect(() => {
+    if (!socket || !conversation?.conversationId) return;
+
+    const handleRoleUpdated = (payload: any) => {
+      const isTargetConversation =
+        payload?.conversationId === conversation.conversationId;
+      if (!isTargetConversation) return;
+
+      const updateData =
+        payload?.type === "ROLE_UPDATE" ? payload?.data : payload?.data || payload;
+
+      const memberIds = (updateData?.memberIds || []) as string[];
+      const newRole = updateData?.newRole as ConversationMemberRow["role"] | undefined;
+      const newRoles = updateData?.newRoles as
+        | Record<string, ConversationMemberRow["role"]>
+        | undefined;
+
+      if (newRoles && typeof newRoles === "object") {
+        setMembers((prev) =>
+          prev.map((member) =>
+            newRoles[member.userId]
+              ? { ...member, role: newRoles[member.userId] }
+              : member,
+          ),
+        );
+        return;
+      }
+
+      if (!Array.isArray(memberIds) || !newRole) return;
+
+      setMembers((prev) =>
+        prev.map((member) =>
+          memberIds.includes(member.userId) ? { ...member, role: newRole } : member,
+        ),
+      );
+    };
+
+    socket.on("conversation_updated", handleRoleUpdated);
+    socket.on("role_updated", handleRoleUpdated);
+
+    return () => {
+      socket.off("conversation_updated", handleRoleUpdated);
+      socket.off("role_updated", handleRoleUpdated);
+    };
+  }, [socket, conversation?.conversationId]);
 
   if (!isOpen) return <div className="w-0 overflow-hidden" />;
 
@@ -197,7 +484,13 @@ const ConversationInfoPanel = ({
             </span>
           </button>
 
-          <button className="flex-1 flex flex-col items-center gap-1 cursor-pointer">
+          <button
+            type="button"
+            onClick={() => {
+              if (isGroup) setAddMemberModalOpen(true);
+            }}
+            className="flex-1 flex flex-col items-center gap-1 cursor-pointer"
+          >
             <div className="w-9 h-9 bg-gray-100 rounded-full flex items-center justify-center">
               {isGroup ? <UserPlus size={18} /> : <Users size={18} />}
             </div>
@@ -428,10 +721,114 @@ const ConversationInfoPanel = ({
         {/* GROUP */}
         {isGroup && (
           <div className="bg-white mt-2">
-            <button className="h-12 w-full flex items-center px-4 gap-3">
-              <Users size={18} />
-              <span className="text-[14px]">Thành viên</span>
+            <button
+              type="button"
+              onClick={() => toggleSection("members")}
+              className="h-12 w-full flex items-center justify-between px-4 gap-3 cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <Users size={18} />
+                <span className="text-[14px] font-medium">Thành viên</span>
+                <span className="text-[12px] text-gray-400">
+                  ({membersLoading ? "…" : members.length})
+                </span>
+              </div>
+              {expandedSections.members ? (
+                <ChevronDown size={16} />
+              ) : (
+                <ChevronRight size={16} />
+              )}
             </button>
+
+            {expandedSections.members && (
+              <div className="px-2 pb-3 max-h-72 overflow-y-auto border-t border-gray-100">
+                {membersLoading ? (
+                  <p className="text-xs text-gray-400 text-center py-4">
+                    Đang tải danh sách...
+                  </p>
+                ) : members.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-4">
+                    Không có thành viên
+                  </p>
+                ) : (
+                  <ul className="flex flex-col gap-1 pt-1">
+                    {members.map((m) => (
+                      <li
+                        key={m.userId}
+                        className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50"
+                      >
+                        <Avatar className="w-10 h-10 shrink-0">
+                          <AvatarImage src={m.avatarUrl ?? undefined} alt="" />
+                          <AvatarFallback>
+                            {m.name.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-medium text-gray-900 truncate flex items-center gap-1.5">
+                            {m.name}
+                            {m.role === "OWNER" && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-600 leading-none align-middle">
+                                Trưởng nhóm
+                              </span>
+                            )}
+                            {m.role === "ADMIN" && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-50 text-gray-600 leading-none align-middle">
+                                Phó nhóm
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        {canShowRoleMenu(m) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 cursor-pointer"
+                                title="Tùy chọn thành viên"
+                              >
+                                <MoreHorizontal size={16} />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {m.role === "MEMBER" && (
+                                <DropdownMenuItem
+                                  onClick={() => handleUpdateMemberRole(m, "ADMIN")}
+                                >
+                                  Bổ nhiệm Phó nhóm
+                                </DropdownMenuItem>
+                              )}
+                              {m.role === "ADMIN" && (
+                                <DropdownMenuItem
+                                  onClick={() => handleUpdateMemberRole(m, "MEMBER")}
+                                >
+                                  Gỡ chức Phó nhóm
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                onClick={() => setMemberPendingTransfer(m)}
+                              >
+                                Chuyển trưởng nhóm
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                        {canRemoveMember(m) && (
+                          <button
+                            type="button"
+                            onClick={() => setMemberPendingRemove(m)}
+                            disabled={removingMemberId === m.userId}
+                            className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 cursor-pointer"
+                            title="Xoá thành viên"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
             <button className="h-12 w-full flex items-center px-4 gap-3 border-t">
               <Link2 size={18} />
@@ -442,7 +839,15 @@ const ConversationInfoPanel = ({
 
         {/* DANGER */}
         <div className="bg-white mt-2">
-          <button className="h-12 w-full flex items-center px-4 gap-3 text-red-500 cursor-pointer border-t">
+          <button
+            type="button"
+            onClick={() => {
+              if (isGroup) {
+                setLeaveGroupDialogOpen(true);
+              }
+            }}
+            className="h-12 w-full flex items-center px-4 gap-3 text-red-500 cursor-pointer border-t"
+          >
             {isGroup ? <LogOut size={18} /> : <Trash2 size={18} />}
             <span className="text-[14px]">
               {isGroup ? "Rời nhóm" : "Xóa lịch sử"}
@@ -529,6 +934,133 @@ const ConversationInfoPanel = ({
           </div>
         </div>
       )}
+
+      {isGroup && conversation?.conversationId && (
+        <CreateGroupModal
+          open={addMemberModalOpen}
+          onOpenChange={setAddMemberModalOpen}
+          mode="ADD_MEMBER"
+          conversationId={conversation.conversationId}
+          excludeUserIds={members.map((m) => m.userId)}
+          onMembersAdded={() => setMembersRefreshKey((k) => k + 1)}
+        />
+      )}
+
+      <AlertDialog
+        open={Boolean(memberPendingRemove)}
+        onOpenChange={(open) => {
+          if (!open) setMemberPendingRemove(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận xóa thành viên</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`Bạn có chắc chắn muốn mời ${
+                memberPendingRemove?.name || "thành viên này"
+              } rời khỏi nhóm không?`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (!memberPendingRemove) return;
+                handleRemoveMember(memberPendingRemove);
+                setMemberPendingRemove(null);
+              }}
+            >
+              Xác nhận
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(memberPendingTransfer)}
+        onOpenChange={(open) => {
+          if (!open) setMemberPendingTransfer(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Chuyển nhượng Trưởng nhóm</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`Bạn sẽ mất quyền điều hành nhóm. Xác nhận chuyển Trưởng nhóm cho ${
+                memberPendingTransfer?.name || "thành viên này"
+              }?`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (!memberPendingTransfer) return;
+                handleTransferOwner(memberPendingTransfer);
+                setMemberPendingTransfer(null);
+              }}
+            >
+              Xác nhận
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={leaveGroupDialogOpen}
+        onOpenChange={setLeaveGroupDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận rời nhóm</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn rời nhóm này? Bạn sẽ không thể xem lại tin
+              nhắn mới sau khi rời đi.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLeavingGroup}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600 text-white rounded-md"
+              onClick={(e) => {
+                e.preventDefault();
+                handleLeaveGroup();
+              }}
+              disabled={isLeavingGroup}
+            >
+              {isLeavingGroup ? "Đang xử lý..." : "Xác nhận"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={leaveGroupErrorDialogOpen}
+        onOpenChange={setLeaveGroupErrorDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Thông báo</AlertDialogTitle>
+            <AlertDialogDescription>
+              {leaveGroupErrorMessage ||
+                "Bạn cần chuyển quyền Trưởng nhóm cho thành viên khác trước khi rời nhóm."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              className="bg-[#0068ff] hover:bg-[#0052cc] text-white rounded-md"
+              onClick={(e) => {
+                e.preventDefault();
+                setLeaveGroupErrorDialogOpen(false);
+              }}
+            >
+              Đã hiểu
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

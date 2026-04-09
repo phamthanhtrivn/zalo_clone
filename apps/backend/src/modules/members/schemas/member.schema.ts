@@ -21,9 +21,12 @@ export class Member {
 
   @Prop({ type: String, enum: MemberRole, required: true })
   role: MemberRole;
-  
+
   @Prop({ type: Types.ObjectId, ref: 'Message', default: null })
   lastReadMessageId?: Types.ObjectId | null;
+
+  @Prop({ default: 0 })
+  unreadCount: number;
 }
 
 export const MemberSchema = SchemaFactory.createForClass(Member);

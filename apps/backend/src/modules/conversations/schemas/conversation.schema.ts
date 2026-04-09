@@ -28,8 +28,20 @@ export class Conversation {
   @Prop({ type: Types.ObjectId, ref: 'Message', required: false })
   lastMessageId?: Types.ObjectId;
 
+  @Prop({ type: Object })
+  lastMessage?: {
+    _id: Types.ObjectId;
+    senderId: Types.ObjectId;
+    senderName: string;
+    text: string;
+    createdAt: Date;
+  };
+
   @Prop({ required: true })
   lastMessageAt: Date;
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }] })
+  participants: Types.ObjectId[];
 }
 
 export const ConversationSchema = SchemaFactory.createForClass(Conversation);

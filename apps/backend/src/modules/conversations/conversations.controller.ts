@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -15,26 +16,43 @@ import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { TransferOwnerDto } from './dto/transfer-owner.dto';
 import { RemoveMemberDto } from './dto/remove-member.dto';
 import { AddMemberDto } from './dto/add-member.dto';
+import { JwtAuthGuard } from '../auth/passport/jwt-auth.guard';
 
 @Controller('conversations')
+@UseGuards(JwtAuthGuard)
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
 
-  private readonly MOCK_USER_ID = '69a2a639ac30e2a1231fb454';
+  @Get()
+  async getMyConversations(@Req() req) {
+    const userId = req.user.userId;
+    return this.conversationsService.getConversationsFromUser(userId);
+  }
+
+  // API 2: Tạo hoặc Lấy chat 1-1 (Zalo: Click vào bạn bè là mở chat)
+  @Post('direct')
+  async getOrCreateDirect(
+    @Req() req,
+    @Body('targetUserId') targetUserId: string,
+  ) {
+    const userId = req.user.userId;
+    return this.conversationsService.getOrCreateDirectConversation(
+      userId,
+      targetUserId,
+    );
+  }
 
   @Post('group')
   //   @UseGuards()
   async createGroup(@Req() req, @Body() createGroupDto: CreateGroupDto) {
-    // const userId = req.user?._id;
-    const userId = this.MOCK_USER_ID;
+    const userId = req.user.userId;
 
     return this.conversationsService.createGroup(userId, createGroupDto);
   }
 
   @Delete(':id')
   async deleteGroup(@Param('id') id: string, @Req() req) {
-    // const userId = req.user?._id;
-    const userId = this.MOCK_USER_ID;
+    const userId = req.user.userId;
 
     return this.conversationsService.deleteGroup(id, userId);
   }
@@ -45,8 +63,8 @@ export class ConversationsController {
     @Req() req,
     @Body() dto: UpdateMemberRoleDto,
   ) {
-    // const userId = req.user?._id;
-    const userId = this.MOCK_USER_ID;
+    const userId = req.user.userId;
+
     return this.conversationsService.updateMembersRole(id, userId, dto);
   }
 
@@ -56,8 +74,8 @@ export class ConversationsController {
     @Req() req,
     @Body() dto: TransferOwnerDto,
   ) {
-    // const currentOwnerId = req.user?._id;
-    const currentOwnerId = this.MOCK_USER_ID;
+    const currentOwnerId = req.user.userId;
+
     return this.conversationsService.transferOwner(id, currentOwnerId, dto);
   }
 
@@ -67,8 +85,7 @@ export class ConversationsController {
     @Req() req,
     @Body() dto: RemoveMemberDto,
   ) {
-    // const actorId = req.user?._id;
-    const actorId = this.MOCK_USER_ID;
+    const actorId = req.user.userId;
 
     return this.conversationsService.removeMember(id, actorId, dto);
   }
@@ -79,13 +96,33 @@ export class ConversationsController {
     @Req() req,
     @Body() dto: AddMemberDto,
   ) {
-    // const actorId = req.user?._id;
-    const actorId = this.MOCK_USER_ID;
+    const actorId = String(req.user?.userId ?? '');
+    if (!actorId) {
+      throw new ForbiddenException('Không xác định được người dùng');
+    }
     return this.conversationsService.addMember(id, actorId, dto);
   }
 
   @Get('/user/:userId')
   async getConversationsFromUserId(@Param('userId') userId: string) {
     return this.conversationsService.getConversationsFromUser(userId);
+  }
+
+  @Get(':id/members')
+  async getConversationMembers(@Param('id') id: string, @Req() req) {
+    const userId = req.user.userId;
+    return this.conversationsService.getConversationMembers(id, userId);
+  }
+
+  @Patch(':id/read')
+  async markAsRead(@Param('id') id: string, @Req() req) {
+    const userId = req.user.userId;
+    return this.conversationsService.markAsRead(id, userId);
+  }
+
+  @Post(':id/leave')
+  async leaveGroup(@Param('id') id: string, @Req() req) {
+    const userId = req.user.userId;
+    return this.conversationsService.leaveGroup(id, userId);
   }
 }

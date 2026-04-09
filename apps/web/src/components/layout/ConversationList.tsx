@@ -2,16 +2,22 @@ import { useParams } from "react-router-dom";
 import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { Button } from "../ui/button";
 import ConversationListItem from "./ConversationListItem";
-import { useAppSelector } from "@/store";
+import { useAppDispatch, useAppSelector } from "@/store";
+import { useEffect } from "react";
+import { fetchConversations } from "@/store/slices/conversationsSlice";
 
 const ConversationList = () => {
   const { id } = useParams();
+  const dispatch = useAppDispatch();
   const conversations = useAppSelector(
     (state) => state.conversation.conversations,
   );
+  const isLoading = useAppSelector((state) => state.conversation.isLoading);
+  const error = useAppSelector((state) => state.conversation.error);
 
-  console.log(conversations);
-
+  useEffect(() => {
+    dispatch(fetchConversations());
+  }, [dispatch]);
 
   return (
     <div className="flex flex-col h-full">
@@ -45,15 +51,25 @@ const ConversationList = () => {
 
       {/* Conversation List */}
       <div className="flex-1 overflow-y-auto">
-        {conversations.length === 0 && (
+        {isLoading && (
+          <div className="text-center text-sm text-gray-400 py-6">
+            Đang tải hội thoại...
+          </div>
+        )}
+
+        {!isLoading && error && (
+          <div className="text-center text-sm text-red-400 py-6">{error}</div>
+        )}
+
+        {!isLoading && !error && conversations.length === 0 && (
           <div className="text-center text-sm text-gray-400 py-6">
             Không có cuộc trò chuyện nào
           </div>
         )}
 
-        {conversations.map((c, index) => (
+        {conversations.map((c) => (
           <ConversationListItem
-            key={index}
+            key={c.conversationId}
             conversation={c}
             isActive={id === c.conversationId}
           />

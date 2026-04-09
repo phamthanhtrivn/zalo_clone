@@ -12,10 +12,11 @@ import { Message, MessageSchema } from '../messages/schemas/message.schema';
 import { User, UserSchema } from '../users/schemas/user.schema';
 
 import { StorageModule } from 'src/common/storage/storage.module';
-
+import { ChatModule } from '../chat/chat.module';
 
 @Module({
   imports: [
+    ChatModule,
     MongooseModule.forFeature([
       { name: Conversation.name, schema: ConversationSchema },
       { name: Member.name, schema: MemberSchema },

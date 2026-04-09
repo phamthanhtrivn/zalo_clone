@@ -1,4 +1,5 @@
 import type { EmojiType } from "@/constants/emoji.constant";
+import axios from "axios";
 import { apiClient } from "./apiClient";
 
 export const messageService = {
@@ -117,32 +118,49 @@ export const messageService = {
     content?: { text?: string; icon?: string },
     file?: File | null,
   ) => {
-    if (file) {
-      const formData = new FormData();
-      formData.append("conversationId", conversationId);
-      formData.append("senderId", senderId);
-      if (content?.text) {
-        formData.append("content[text]", content.text);
-      }
-      if (content?.icon) {
-        formData.append("content[icon]", content.icon);
-      }
-      formData.append("file", file);
+    try {
+      if (file) {
+        const formData = new FormData();
+        formData.append("conversationId", conversationId);
+        formData.append("senderId", senderId);
+        if (content?.text) {
+          formData.append("content[text]", content.text);
+        }
+        if (content?.icon) {
+          formData.append("content[icon]", content.icon);
+        }
+        formData.append("file", file);
 
-      const response = await apiClient.post(`/api/messages`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        const response = await apiClient.post(`/api/messages`, formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+        return response?.data ?? null;
+      }
+
+      const response = await apiClient.post(`/api/messages`, {
+        conversationId,
+        senderId,
+        content,
       });
-      return response.data;
+      return response?.data ?? null;
+    } catch (error) {
+      console.error("sendMessage:", error);
+      if (axios.isAxiosError(error)) {
+        const data = error.response?.data as
+          | { message?: string | string[] }
+          | undefined;
+        const msg = Array.isArray(data?.message)
+          ? data.message[0]
+          : data?.message;
+        return {
+          success: false,
+          message: msg || error.message || "Gửi tin nhắn thất bại",
+        };
+      }
+      return { success: false, message: "Gửi tin nhắn thất bại" };
     }
-
-    const response = await apiClient.post(`/api/messages`, {
-      conversationId,
-      senderId,
-      content,
-    });
-    return response.data;
   },
   deleteMessageForMe: async (
     userId: string,

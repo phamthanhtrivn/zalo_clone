@@ -70,30 +70,44 @@ const MessageList = ({
         const prev = messages[index - 1];
         const next = messages[index + 1];
 
-        const isMe = message.senderId._id === currentUserId;
+        // --- CẢI TIẾN LOGIC TẠI ĐÂY ---
+        // 1. Kiểm tra isMe (Dùng optional chaining)
+        const isMe =
+          message.type !== "SYSTEM" && message.senderId?._id === currentUserId;
 
-        const showDivider =
-          !prev ||
-          new Date(prev.createdAt).toDateString() !==
-            new Date(message.createdAt).toDateString();
+        // 2. Logic gom nhóm tin nhắn (Chỉ áp dụng cho tin nhắn không phải SYSTEM)
+        const isSystem = message.type === "SYSTEM";
 
         const sameSenderPrev =
-          prev && prev.senderId._id === message.senderId._id;
+          !isSystem &&
+          prev &&
+          prev.type !== "SYSTEM" &&
+          prev.senderId?._id === message.senderId?._id;
 
         const sameSenderNext =
-          next && next.senderId._id === message.senderId._id;
+          !isSystem &&
+          next &&
+          next.type !== "SYSTEM" &&
+          next.senderId?._id === message.senderId?._id;
 
+        // 3. Kiểm tra thời gian
         const sameMinutePrev =
           prev && isSameHourAndMinute(prev.createdAt, message.createdAt);
 
         const sameMinuteNext =
           next && isSameHourAndMinute(next.createdAt, message.createdAt);
 
+        // 4. Quyết định hiển thị Avatar và thời gian
         const isFirstInCluster = !(sameSenderPrev && sameMinutePrev);
         const isLastInCluster = !(sameSenderNext && sameMinuteNext);
 
-        const showAvatar = !isMe && isFirstInCluster;
-        const showTime = isLastInCluster;
+        const showAvatar = !isSystem && !isMe && isFirstInCluster;
+        const showTime = !isSystem && isLastInCluster;
+
+        const showDivider =
+          !prev ||
+          new Date(prev.createdAt).toDateString() !==
+            new Date(message.createdAt).toDateString();
 
         return (
           <div

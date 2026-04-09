@@ -14,16 +14,27 @@ import { useAppDispatch, useAppSelector } from "@/store";
 import { setConversations } from "@/store/slices/conversationSlice";
 import ForwardModal from "@/components/layout/message/ForwardModal";
 
-const CURRENT_USER_ID = "699d2b94f9075fe800282901";
-
 const ConversationPage = () => {
   const { id } = useParams();
   const location = useLocation();
-  const { conversation } = location.state || {};
+  const { conversation: stateConversation } = location.state || {};
   const dispatch = useAppDispatch();
+  const currentUser = useAppSelector((state) => state.auth.user);
+  const currentUserId =
+    currentUser?.userId ||
+    (currentUser as { _id?: string } | null | undefined)?._id ||
+    "";
   const conversations = useAppSelector(
     (state) => state.conversation.conversations,
   );
+  const conversation =
+    stateConversation ||
+    conversations.find(
+      (c) =>
+        c.conversationId === id ||
+        (c as any)._id === id ||
+        (c as any).id === id,
+    );
 
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
@@ -49,6 +60,7 @@ const ConversationPage = () => {
       !container ||
       !nextCursor ||
       !id ||
+      !currentUserId ||
       isJumpingRef.current ||
       isFetchingRef.current
     )
@@ -61,7 +73,7 @@ const ConversationPage = () => {
       try {
         const res = await messageService.getMessagesFromConversation(
           id,
-          CURRENT_USER_ID,
+          currentUserId,
           nextCursor,
           20,
         );
@@ -97,6 +109,7 @@ const ConversationPage = () => {
       !container ||
       !prevCursor ||
       !id ||
+      !currentUserId ||
       isJumpingRef.current ||
       isFetchingNewerRef.current
     )
@@ -111,7 +124,7 @@ const ConversationPage = () => {
       try {
         const res = await messageService.getNewerMessages(
           id,
-          CURRENT_USER_ID,
+          currentUserId,
           prevCursor,
           20,
         );
@@ -173,13 +186,13 @@ const ConversationPage = () => {
   };
 
   const handleJumpToMessage = async (messageId: string) => {
-    if (!id) return;
+    if (!id || !currentUserId) return;
 
     isJumpingRef.current = true;
 
     const res = await messageService.getMessagesAroundPinnedMessage(
       id,
-      CURRENT_USER_ID,
+      currentUserId,
       messageId,
       15,
     );
@@ -204,12 +217,12 @@ const ConversationPage = () => {
   };
 
   const handleLoadMessagesFromConversation = async () => {
-    if (!id) return;
+    if (!id || !currentUserId) return;
 
     try {
       const res = await messageService.getMessagesFromConversation(
         id,
-        CURRENT_USER_ID,
+        currentUserId,
         null,
         20,
       );
@@ -227,10 +240,10 @@ const ConversationPage = () => {
   };
 
   const handleLoadPinnedMessages = async () => {
-    if (!id) return;
+    if (!id || !currentUserId) return;
 
     try {
-      const res = await messageService.getPinnedMessages(id, CURRENT_USER_ID);
+      const res = await messageService.getPinnedMessages(id, currentUserId);
 
       if (res.success) {
         setPinnedMessages(res.data.messages);
@@ -241,12 +254,12 @@ const ConversationPage = () => {
   };
 
   const reactionMessage = async (emojiType: EmojiType, messageId: string) => {
-    if (!id) return;
+    if (!id || !currentUserId) return;
 
     try {
       const res = await messageService.reactionMessage(
         id,
-        CURRENT_USER_ID,
+        currentUserId,
         emojiType,
         messageId,
       );
@@ -259,11 +272,11 @@ const ConversationPage = () => {
   };
 
   const removeReaction = async (messageId: string) => {
-    if (!id) return;
+    if (!id || !currentUserId) return;
 
     try {
       const res = await messageService.removeReaction(
-        CURRENT_USER_ID,
+        currentUserId,
         messageId,
         id,
       );
@@ -297,10 +310,10 @@ const ConversationPage = () => {
   }, []);
 
   const handleRecalledMessage = async (messageId: string) => {
-    if (!id) return;
+    if (!id || !currentUserId) return;
 
     try {
-      await messageService.recalledMessage(CURRENT_USER_ID, messageId, id);
+      await messageService.recalledMessage(currentUserId, messageId, id);
     } catch (error) {
       toastAlert("Bạn chỉ có thể thu hồi tin nhắn trong vòng 24 giờ");
       console.error(error);
@@ -308,10 +321,10 @@ const ConversationPage = () => {
   };
 
   const handlePinnedMessage = async (messageId: string) => {
-    if (!id) return;
+    if (!id || !currentUserId) return;
 
     try {
-      await messageService.pinnedMessage(CURRENT_USER_ID, messageId, id);
+      await messageService.pinnedMessage(currentUserId, messageId, id);
     } catch (error) {
       toastAlert("Bạn chỉ có thể ghim tối đa 3 tin nhắn");
       console.error(error);
@@ -319,29 +332,44 @@ const ConversationPage = () => {
   };
 
   const onSendMessage = async (text: string) => {
-    if (!id || !text.trim()) return;
+    if (!id || !currentUserId || !text.trim()) return;
 
     try {
-      await messageService.sendMessage(id, CURRENT_USER_ID, {
+      const res = await messageService.sendMessage(id, currentUserId, {
         text,
       });
+
+      if (res == null) {
+        toastAlert("Không nhận được phản hồi từ máy chủ");
+        return;
+      }
+
+      if (typeof res === "object" && "success" in res && res.success === false) {
+        toastAlert(
+          typeof (res as { message?: string }).message === "string"
+            ? (res as { message: string }).message
+            : "Gửi tin nhắn thất bại",
+        );
+        return;
+      }
     } catch (error) {
       console.error(error);
+      toastAlert("Gửi tin nhắn thất bại");
     }
   };
 
   const onSendFiles = async (files: FileList) => {
-    if (!id || !files.length) return;
+    if (!id || !currentUserId || !files.length) return;
 
     try {
       const promises = Array.from(files).map((file) =>
-        messageService.sendMessage(id, CURRENT_USER_ID, undefined, file),
+        messageService.sendMessage(id, currentUserId, undefined, file),
       );
 
       const results = await Promise.all(promises);
 
       results.forEach((res, index) => {
-        if (!res.success) {
+        if (!res || typeof res !== "object" || !("success" in res) || !res.success) {
           console.error(`Lỗi file ${files[index].name}`);
         }
       });
@@ -357,10 +385,10 @@ const ConversationPage = () => {
   };
 
   const handleDeleteMessageForMe = async (messageId: string) => {
-    if (!id) return;
+    if (!id || !currentUserId) return;
 
     const res = await messageService.deleteMessageForMe(
-      CURRENT_USER_ID,
+      currentUserId,
       messageId,
       id,
     );
@@ -368,29 +396,30 @@ const ConversationPage = () => {
     if (res.success) {
       setMessages((prev) => prev.filter((m) => m._id !== messageId));
 
-      const res =
-        await conversationService.getConversationsFromUserId(CURRENT_USER_ID);
+      const refreshList =
+        await conversationService.getConversationsFromUserId(currentUserId);
 
-      if (res.success) {
-        dispatch(setConversations(res.data));
+      if (refreshList.success) {
+        dispatch(setConversations(refreshList.data));
       }
     }
   };
 
   const handleOpenConversation = async () => {
     try {
-      if (!id) return;
+      if (!id || !currentUserId) return;
 
-      await messageService.readReceipt(CURRENT_USER_ID, id);
+      await messageService.readReceipt(currentUserId, id);
     } catch (error) {
       console.error(error);
     }
   };
 
   const handleForwardMessages = async (targetConversationIds: string[]) => {
+    if (!currentUserId) return;
     try {
       await messageService.forwardMessagesToConversations(
-        CURRENT_USER_ID,
+        currentUserId,
         selectedMessages,
         targetConversationIds,
       );
@@ -411,6 +440,8 @@ const ConversationPage = () => {
   };
 
   useEffect(() => {
+    if (!id || !currentUserId) return;
+
     setMessages([]);
     setPinnedMessages([]);
     setNextCursor(null);
@@ -421,7 +452,7 @@ const ConversationPage = () => {
     handleLoadMessagesFromConversation();
     handleLoadPinnedMessages();
     handleOpenConversation();
-  }, [id]);
+  }, [id, currentUserId]);
 
   useEffect(() => {
     if (containerRef.current && isFirstLoad.current && messages.length) {
@@ -563,7 +594,8 @@ const ConversationPage = () => {
 
   return (
     <div className="flex flex-1 h-full">
-      {conversation && (
+      {conversation ? (
+        currentUserId ? (
         <div className="flex-1 flex flex-col h-full bg-[#EBECF0] min-w-0">
           <ChatHeader
             conversation={conversation}
@@ -576,7 +608,7 @@ const ConversationPage = () => {
 
           <MessageList
             messages={messages}
-            currentUserId={CURRENT_USER_ID}
+            currentUserId={currentUserId}
             containerRef={containerRef}
             handleScrollToTop={handleScrollToTop}
             handleScrollToBottom={handleScrollToBottom}
@@ -603,6 +635,15 @@ const ConversationPage = () => {
             onOpenForwardModal={() => setShowForwardModal(true)}
           />
         </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-gray-500">
+            Đang tải thông tin tài khoản...
+          </div>
+        )
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-gray-500">
+          Không tìm thấy hội thoại
+        </div>
       )}
 
       {showForwardModal && (
@@ -615,11 +656,13 @@ const ConversationPage = () => {
         />
       )}
 
-      <ConversationInfoPanel
-        isOpen={isInfoOpen}
-        conversation={conversation}
-        currentUser={{ _id: CURRENT_USER_ID }}
-      />
+      {conversation && currentUserId && (
+        <ConversationInfoPanel
+          isOpen={isInfoOpen}
+          conversation={conversation}
+          currentUser={{ _id: currentUserId }}
+        />
+      )}
     </div>
   );
 };

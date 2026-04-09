@@ -8,7 +8,9 @@ import React, {
 import { io, Socket } from "socket.io-client";
 import { useAppDispatch, useAppSelector } from "@/store";
 import {
-  updateConversation,
+  addConversationToTop,
+  fetchConversations,
+  updateConversationFromSocket,
   updateRecallMessageInConversation,
 } from "@/store/slices/conversationSlice";
 
@@ -34,8 +36,37 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const user = useAppSelector((state) => state.auth.user);
   const socketRef = useRef<Socket | null>(null);
 
+  const handleNewConversation = (data: any) => {
+    dispatch(addConversationToTop(data));
+  };
+
   const handleNewMessageSidebar = (data: any) => {
-    dispatch(updateConversation(data));
+    if (!data?.conversationId) return;
+
+    // Backend thường emit object conversation đầy đủ cho sidebar,
+    // nhưng một số flow call-message có thể emit payload message.
+    const senderName =
+      data?.lastMessage?.senderName ??
+      (data?.senderId?._id === user?.userId ? "Bạn" : data?.senderId?.profile?.name || "");
+
+    const lastMessage = data?.lastMessage
+      ? data.lastMessage
+      : {
+          _id: data?._id,
+          senderName,
+          content: data?.content ?? {},
+          recalled: Boolean(data?.recalled),
+        };
+
+    dispatch(
+      updateConversationFromSocket({
+        conversationId: data.conversationId,
+        lastMessage,
+        unreadCount: data.unreadCount,
+        lastMessageAt:
+          data.lastMessageAt || data.createdAt || new Date().toISOString(),
+      }),
+    );
   };
 
   const handleRecallMessageSidebar = (data: {
@@ -43,6 +74,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     messageId: string;
   }) => {
     dispatch(updateRecallMessageInConversation(data));
+  };
+
+  const handleRoleUpdated = () => {
+    dispatch(fetchConversations());
   };
 
   useEffect(() => {
@@ -72,15 +107,19 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsConnected(false);
     });
 
+    socketInstance.on("new_conversation", handleNewConversation);
     socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
     socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
+    socketInstance.on("role_updated", handleRoleUpdated);
 
     return () => {
+      socketInstance.off("new_conversation", handleNewConversation);
       socketInstance.off("new_message_sidebar", handleNewMessageSidebar);
       socketInstance.off(
         "message_recalled_sidebar",
         handleRecallMessageSidebar,
       );
+      socketInstance.off("role_updated", handleRoleUpdated);
     };
   }, [
     apiUrl,

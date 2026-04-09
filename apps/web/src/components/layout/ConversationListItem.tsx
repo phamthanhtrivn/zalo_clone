@@ -1,16 +1,11 @@
 import type { ConversationItemType } from "@/types/conversation-item.type";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { cn } from "@/lib/utils";
 import { formatMessageTime } from "@/utils/format-message-time..util";
 import { MoreHorizontal } from "lucide-react";
 import { MdGroups } from "react-icons/md";
-import React, { useMemo } from "react";
-import { CiImageOn } from "react-icons/ci";
-import { RiVideoLine } from "react-icons/ri";
-import { LuSticker } from "react-icons/lu";
-import { HiMiniLink } from "react-icons/hi2";
-import { GoFileSymlinkFile } from "react-icons/go";
+import React from "react";
 
 type Props = {
   conversation: ConversationItemType;
@@ -18,56 +13,18 @@ type Props = {
 };
 
 const ConversationListItem = ({ conversation, isActive }: Props) => {
-  const getPreviewContent = useMemo(() => {
-    const content = conversation.lastMessage?.content;
-    const recalled = conversation.lastMessage?.recalled;
-    if (recalled) return "Tin nhắn đã được thu hồi";
-
-    if (!content) return "";
-
-    let icon = null;
-    let text = "";
-
-    if (content.text && /https?:\/\//.test(content.text)) {
-      icon = <HiMiniLink />;
-      text = content.text;
-    } else if (content.icon) {
-      icon = <LuSticker />;
-      text = "Sticker";
-    } else if (content.file) {
-      switch (content.file.type) {
-        case "IMAGE":
-          icon = <CiImageOn />;
-          text = "Hình ảnh";
-          break;
-        case "VIDEO":
-          icon = <RiVideoLine />;
-          text = "Video";
-          break;
-        case "FILE":
-          icon = <GoFileSymlinkFile />;
-          text = content.file.fileName;
-          break;
-        default:
-          text = "";
-      }
-    } else if (content.text) {
-      text = content.text;
-    }
-
-    return (
-      <div className="flex items-center gap-1 truncate">
-        {icon}
-        <span className="truncate">{text}</span>
-      </div>
-    );
-  }, [conversation.lastMessage]);
+  const navigate = useNavigate();
+  const lastMessageText = conversation.lastMessage?.content?.text || "";
+  const conversationId =
+    conversation.conversationId ||
+    (conversation as any)._id ||
+    (conversation as any).id;
 
   return (
-    <Link
-      to={`/conversation/${conversation.conversationId}`}
-      state={{
-        conversation,
+    <div
+      onClick={() => {
+        if (!conversationId) return;
+        navigate(`/conversations/${conversationId}`);
       }}
       className={cn(
         "flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors group mt-2 mx-2 rounded-lg",
@@ -106,15 +63,19 @@ const ConversationListItem = ({ conversation, isActive }: Props) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 text-[13px] text-gray-500 truncate">
-          {conversation.type === "PRIVATE" &&
-            conversation.lastMessage?.senderName !== "Bạn"
-            ? ""
-            : conversation.lastMessage?.senderName + ": "}
-          {getPreviewContent}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1 text-[13px] text-gray-500 truncate min-w-0">
+            <span className="truncate">{lastMessageText}</span>
+          </div>
+
+          {(conversation.unreadCount ?? 0) > 0 && (
+            <span className="min-w-5 h-5 px-1 rounded-full bg-[#e53935] text-white text-[11px] leading-5 text-center font-medium">
+              {conversation.unreadCount}
+            </span>
+          )}
         </div>
       </div>
-    </Link>
+    </div>
   );
 };
 

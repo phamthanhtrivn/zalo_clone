@@ -79,8 +79,8 @@ export class Call {
 
 @Schema({ timestamps: true })
 export class Message {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  senderId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'User', required: false })
+  senderId?: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'Conversation', required: true })
   conversationId: Types.ObjectId;
