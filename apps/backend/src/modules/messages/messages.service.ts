@@ -1361,9 +1361,14 @@ export class MessagesService {
         .populate('reactions.userId', 'profile.name profile.avatarUrl')
         .lean();
 
+      const reactions = (updatedMessage?.reactions || []).map((r) => ({
+        ...r,
+        userId: this.signUser(r.userId),
+      }));
+
       this.chatGateway.server.to(conversationId).emit('message_reacted', {
         messageId,
-        reactions: updatedMessage?.reactions,
+        reactions: reactions,
       });
 
       return updatedMessage;
@@ -1402,9 +1407,14 @@ export class MessagesService {
         .populate('reactions.userId', 'profile.name profile.avatarUrl')
         .lean();
 
+      const reactions = (updatedMessage?.reactions || []).map((r) => ({
+        ...r,
+        userId: this.signUser(r.userId),
+      }));
+
       this.chatGateway.server.to(conversationId).emit('message_reacted', {
         messageId,
-        reactions: updatedMessage?.reactions,
+        reactions: reactions,
       });
 
       return updatedMessage;

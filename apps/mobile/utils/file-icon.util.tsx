@@ -1,36 +1,18 @@
-export const getFileIcon = (fileName: string) => {
+import React from "react";
+import { Ionicons } from "@expo/vector-icons";
+
+export const getFileIcon = (fileName: string, size = 24) => {
   if (fileName.endsWith(".pdf"))
-    return (
-      <img
-        src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/pdf/default.svg"
-        alt="PDF"
-        width="24"
-        height="24"
-      />
-    );
+    return <Ionicons name="document-text" size={size} color="#ef4444" />;
+  
   if (fileName.endsWith(".doc") || fileName.endsWith(".docx"))
-    return (
-      <img
-        src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/microsoft-word/default.svg"
-        alt="word"
-        className="w-6 h-6"
-      />
-    );
+    return <Ionicons name="document" size={size} color="#2563eb" />;
 
   if (fileName.endsWith(".xls") || fileName.endsWith(".xlsx"))
-    return (
-      <img
-        src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/microsoft-excel/default.svg"
-        alt="excel"
-        className="w-6 h-6"
-      />
-    );
-  return (
-    <img
-      src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/files/default.svg"
-      alt="Files"
-      width="24"
-      height="24"
-    />
-  );
+    return <Ionicons name="grid" size={size} color="#16a34a" />;
+    
+  if (fileName.endsWith(".zip") || fileName.endsWith(".rar"))
+    return <Ionicons name="archive" size={size} color="#ca8a04" />;
+
+  return <Ionicons name="document-outline" size={size} color="#6b7280" />;
 };

@@ -1,4 +1,4 @@
-import { EmojiType } from "@/utils/types/enums/emoji-type";
+import { EmojiType } from "@/constants/emoji.constant";
 import { api } from "./api";
 
 export const messageService = {
@@ -18,7 +18,7 @@ export const messageService = {
                 },
             },
         );
-        return response.data;
+        return response;
     },
     getNewerMessages: async (
         conversationId: string,
@@ -36,7 +36,7 @@ export const messageService = {
                 },
             },
         );
-        return response.data;
+        return response;
     },
     getPinnedMessages: async (conversationId: string, userId: string) => {
         const response = await api.get(
@@ -45,7 +45,7 @@ export const messageService = {
                 params: { userId },
             },
         );
-        return response.data;
+        return response;
     },
     getMessagesAroundPinnedMessage: async (
         conversationId: string,
@@ -59,7 +59,7 @@ export const messageService = {
                 params: { userId, messageId, limit },
             },
         );
-        return response.data;
+        return response;
     },
     reactionMessage: async (
         conversationId: string,
@@ -73,7 +73,7 @@ export const messageService = {
             emojiType,
             messageId,
         });
-        return response.data;
+        return response;
     },
     removeReaction: async (
         userId: string,
@@ -85,7 +85,7 @@ export const messageService = {
             messageId,
             conversationId,
         });
-        return response.data;
+        return response;
     },
     recalledMessage: async (
         userId: string,
@@ -97,7 +97,7 @@ export const messageService = {
             messageId,
             conversationId,
         });
-        return response.data;
+        return response;
     },
     pinnedMessage: async (
         userId: string,
@@ -109,7 +109,7 @@ export const messageService = {
             messageId,
             conversationId,
         });
-        return response.data;
+        return response;
     },
     sendMessage: async (
         conversationId: string,
@@ -134,7 +134,7 @@ export const messageService = {
                     "Content-Type": "multipart/form-data",
                 },
             });
-            return response.data;
+            return response;
         }
 
         const response = await api.post(`/messages`, {
@@ -142,7 +142,7 @@ export const messageService = {
             senderId,
             content,
         });
-        return response.data;
+        return response;
     },
     deleteMessageForMe: async (
         userId: string,
@@ -154,14 +154,14 @@ export const messageService = {
             messageId,
             conversationId,
         });
-        return response.data;
+        return response;
     },
     readReceipt: async (userId: string, conversationId: string) => {
         const response = await api.patch(`/messages/read-receipt`, {
             userId,
             conversationId,
         });
-        return response.data;
+        return response;
     },
     getMediasPreview: async (userId: string, conversationId: string) => {
         const response = await api.get(
@@ -170,7 +170,7 @@ export const messageService = {
                 params: { userId },
             },
         );
-        return response.data;
+        return response;
     },
     getMediasFileType: async (
         conversationId: string,
@@ -183,7 +183,7 @@ export const messageService = {
                 params: { userId, type },
             },
         );
-        return response.data;
+        return response;
     },
     forwardMessagesToConversations: async (
         userId: string,
@@ -195,6 +195,6 @@ export const messageService = {
             messageIds,
             targetConversationIds,
         });
-        return response.data;
+        return response;
     },
 };
