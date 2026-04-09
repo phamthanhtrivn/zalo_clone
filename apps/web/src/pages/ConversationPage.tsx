@@ -40,6 +40,7 @@ const ConversationPage = () => {
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [loadingForward, setLoadingForward] = useState(false);
+  const lastMessageId = messages[messages.length - 1]?._id;
 
   const { socket } = useSocket();
 
@@ -592,6 +593,7 @@ const ConversationPage = () => {
             setIsSelected={setIsSelected}
             selectedMessages={selectedMessages}
             toggleSelectMessage={toggleSelectMessage}
+            lastMessageId={lastMessageId}
           />
 
           <ChatInput

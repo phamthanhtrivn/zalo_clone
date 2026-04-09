@@ -45,7 +45,7 @@ export const MessageItem = ({
   isSelected,
   setIsSelected,
   selectedMessages,
-  toggleSelectMessage
+  toggleSelectMessage,
 }: Props) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -219,6 +219,8 @@ export const MessageItem = ({
           </div>
         )}
       </div>
+
+
       {showDetailModal && (
         <ViewDetailMessageModal
           selectedMessage={message}

@@ -77,7 +77,7 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
     const fetch = async () => {
       setLoading(true);
       try {
-        const res = await messageService.getMediasPreview(
+        const res: any = await messageService.getMediasPreview(
           user.userId,
           conversation.conversationId
         );

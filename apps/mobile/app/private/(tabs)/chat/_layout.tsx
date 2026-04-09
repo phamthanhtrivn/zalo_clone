@@ -11,11 +11,11 @@ export default function ChatLayout() {
   useEffect(() => {
     if (!user?.userId) return;
     const handleFet = async () => {
-      const res = await conversationService.getConversationsFromUserId(
+      const res: any = await conversationService.getConversationsFromUserId(
         user?.userId
       );
-      if (res) {
-        dispatch(setConversations(res));
+      if (res.success) {
+        dispatch(setConversations(res.data));
       }
     };
     handleFet();
