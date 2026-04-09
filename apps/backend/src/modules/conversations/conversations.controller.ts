@@ -11,7 +11,7 @@ import {
 import { ConversationsService } from './conversations.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
-import { TransferOwnerDto } from './dto/transfer-owenr.dto';
+import { TransferOwnerDto } from './dto/transfer-owner.dto';
 import { RemoveMemberDto } from './dto/remove-member.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 
@@ -19,17 +19,21 @@ import { AddMemberDto } from './dto/add-member.dto';
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
 
+  private readonly MOCK_USER_ID = '69a2a639ac30e2a1231fb454';
+
   @Post('group')
   //   @UseGuards()
   async createGroup(@Req() req, @Body() createGroupDto: CreateGroupDto) {
-    const userId = req.user?._id;
+    // const userId = req.user?._id;
+    const userId = this.MOCK_USER_ID;
 
     return this.conversationsService.createGroup(userId, createGroupDto);
   }
 
-  @Delete(':id/delete')
+  @Delete(':id')
   async deleteGroup(@Param('id') id: string, @Req() req) {
-    const userId = req.user?.id;
+    // const userId = req.user?._id;
+    const userId = this.MOCK_USER_ID;
 
     return this.conversationsService.deleteGroup(id, userId);
   }
@@ -40,7 +44,8 @@ export class ConversationsController {
     @Req() req,
     @Body() dto: UpdateMemberRoleDto,
   ) {
-    const userId = req.user?.id;
+    // const userId = req.user?._id;
+    const userId = this.MOCK_USER_ID;
     return this.conversationsService.updateMembersRole(id, userId, dto);
   }
 
@@ -50,7 +55,8 @@ export class ConversationsController {
     @Req() req,
     @Body() dto: TransferOwnerDto,
   ) {
-    const currentOwnerId = req.user?.id;
+    // const currentOwnerId = req.user?._id;
+    const currentOwnerId = this.MOCK_USER_ID;
     return this.conversationsService.transferOwner(id, currentOwnerId, dto);
   }
 
@@ -60,7 +66,8 @@ export class ConversationsController {
     @Req() req,
     @Body() dto: RemoveMemberDto,
   ) {
-    const actorId = req.user?.id;
+    // const actorId = req.user?._id;
+    const actorId = this.MOCK_USER_ID;
 
     return this.conversationsService.removeMember(id, actorId, dto);
   }
@@ -71,7 +78,8 @@ export class ConversationsController {
     @Req() req,
     @Body() dto: AddMemberDto,
   ) {
-    const actorId = req.user?.id;
+    // const actorId = req.user?._id;
+    const actorId = this.MOCK_USER_ID;
     return this.conversationsService.addMember(id, actorId, dto);
   }
 }

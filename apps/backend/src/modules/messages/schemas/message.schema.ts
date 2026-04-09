@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { CallStatus, CallType, FileType } from '@zalo-clone/shared-types';
 import { EmojiType } from '@zalo-clone/shared-types/dist/enums/emoji-type';
 import { Types } from 'mongoose';
+import { MessageType } from 'src/common/enums/message-type.enum';
 
 @Schema({ _id: false })
 export class File {
@@ -77,6 +78,9 @@ export class Message {
   @Prop({ type: Types.ObjectId, ref: 'Conversation', required: true })
   conversationId: Types.ObjectId;
 
+  @Prop({ type: String, enum: MessageType, default: MessageType.USER_MESSAGE })
+  type: MessageType;
+
   @Prop({ type: Content })
   content?: Content;
 
@@ -97,6 +101,9 @@ export class Message {
 
   @Prop({ type: Call })
   call?: Call;
+
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);

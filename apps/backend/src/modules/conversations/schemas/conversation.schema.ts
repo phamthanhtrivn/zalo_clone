@@ -25,8 +25,8 @@ export class Conversation {
   @Prop({ type: Group })
   group?: Group;
 
-  @Prop({ type: Types.ObjectId, ref: 'Message', required: true })
-  lastMessageId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Message', required: false })
+  lastMessageId?: Types.ObjectId;
 
   @Prop({ required: true })
   lastMessageAt: Date;

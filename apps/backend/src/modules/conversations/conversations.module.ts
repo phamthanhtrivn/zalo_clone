@@ -8,6 +8,7 @@ import {
 } from './schemas/conversation.schema';
 import { Member, MemberSchema } from '../members/schemas/member.schema';
 import { Message, MessageSchema } from '../messages/schemas/message.schema';
+import { User, UserSchema } from '../users/schemas/user.schema';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { Message, MessageSchema } from '../messages/schemas/message.schema';
       { name: Conversation.name, schema: ConversationSchema },
       { name: Member.name, schema: MemberSchema },
       { name: Message.name, schema: MessageSchema },
+      { name: 'User', schema: UserSchema },
     ]),
   ],
   providers: [ConversationsService],
