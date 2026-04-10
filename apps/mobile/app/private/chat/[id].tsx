@@ -473,7 +473,8 @@ export default function ChatWindow() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 50 : 0}
       >
         <PinnedMessagesBar
           pinnedMessages={pinnedMessages}
@@ -493,7 +494,10 @@ export default function ChatWindow() {
               inverted
               keyExtractor={(item) => item?._id || Math.random().toString()}
               renderItem={renderItem}
-              contentContainerStyle={{ paddingTop: 8, paddingBottom: 8 }}
+              contentContainerStyle={{
+                paddingTop: 8,
+                paddingBottom: 90,
+              }}
               onEndReached={loadMoreMessages}
               onEndReachedThreshold={0.3}
               ListEmptyComponent={() => (

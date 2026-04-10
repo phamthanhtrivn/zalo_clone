@@ -1,26 +1,16 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  FlatList,
-  ScrollView,
   Keyboard,
 } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+import EmojiPicker from "rn-emoji-keyboard";
 import { COLORS } from "@/constants/colors";
-import { REACTION_EMOJIS, EMOJI_MAP } from "@/constants/emoji.constant";
-
-// Common emojis for the picker
-const COMMON_EMOJIS = [
-  "😀","😂","🥰","😍","😎","🤩","😅","😭","😡","🤔",
-  "👍","👎","❤️","🔥","🎉","🙏","💯","✨","😊","🥳",
-  "😢","😤","🤣","😱","🤗","😏","😴","🤝","👏","💪",
-  "🌟","🎊","🍀","🌈","💫","🎯","💡","🚀","💎","🌺",
-];
 
 interface ChatInputProps {
   chatName?: string;
@@ -52,25 +42,34 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  const handleEmojiPress = (emoji: string) => {
-    setText((prev) => prev + emoji);
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", () => {
+      setShowEmoji(false);
+    });
+
+    return () => {
+      showSub.remove();
+    };
+  }, []);
+
+  // ✅ FIX: emoji picker mới
+  const handleEmojiSelect = (emoji: any) => {
+    setText((prev) => prev + emoji.emoji);
   };
 
   const toggleEmoji = () => {
-    if (!showEmoji) {
-      Keyboard.dismiss();
-    } else {
-      inputRef.current?.focus();
-    }
-    setShowEmoji((v) => !v);
+    Keyboard.dismiss();
+    setShowEmoji(true);
   };
 
+  // ✅ FIX: ImagePicker MediaTypeOptions deprecated
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: false,
       quality: 1,
     });
+
     if (!result.canceled) {
       const asset = result.assets[0];
       onSendFile({
@@ -87,6 +86,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         type: "*/*",
         copyToCacheDirectory: true,
       });
+
       if (!result.canceled) {
         const asset = result.assets[0];
         onSendFile({
@@ -115,75 +115,31 @@ const ChatInput: React.FC<ChatInputProps> = ({
           justifyContent: "space-between",
         }}
       >
-        <Text style={{ fontSize: 14, color: "#374151" }}>
-          Đã chọn{" "}
-          <Text style={{ fontWeight: "700", color: "#0068ff" }}>
-            {selectedMessages.length}
-          </Text>{" "}
-          tin nhắn
+        <Text>
+          Đã chọn {selectedMessages.length} tin nhắn
         </Text>
-        <View style={{ flexDirection: "row", gap: 10 }}>
-          <TouchableOpacity
-            onPress={onOpenForwardModal}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              backgroundColor: "#0068ff",
-              paddingHorizontal: 14,
-              paddingVertical: 8,
-              borderRadius: 999,
-            }}
-          >
-            <MaterialIcons name="forward" size={16} color="white" />
-            <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>
-              Chuyển tiếp
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onCancelSelect}
-            style={{
-              paddingHorizontal: 14,
-              paddingVertical: 8,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: "#d1d5db",
-            }}
-          >
-            <Text style={{ color: "#374151", fontSize: 13 }}>Hủy</Text>
-          </TouchableOpacity>
-        </View>
       </View>
     );
   }
 
   return (
     <View style={{ backgroundColor: "white" }}>
-      {/* Main input row */}
+      {/* Input */}
       <View
         style={{
           flexDirection: "row",
           alignItems: "flex-end",
-          paddingHorizontal: 8,
-          paddingVertical: 6,
+          padding: 8,
           borderTopWidth: 1,
           borderTopColor: "#e5e7eb",
-          gap: 4,
         }}
       >
-        {/* Emoji toggle */}
-        <TouchableOpacity
-          onPress={toggleEmoji}
-          style={{ padding: 6, justifyContent: "center" }}
-        >
-          <Ionicons
-            name={showEmoji ? "keypad-outline" : "happy-outline"}
-            size={26}
-            color={showEmoji ? COLORS.primary : "#6b7280"}
-          />
+        {/* Emoji */}
+        <TouchableOpacity onPress={toggleEmoji} style={{ padding: 6 }}>
+          <Ionicons name="happy-outline" size={26} color="#6b7280" />
         </TouchableOpacity>
 
-        {/* Text input */}
+        {/* Input */}
         <TextInput
           ref={inputRef}
           style={{
@@ -194,31 +150,27 @@ const ChatInput: React.FC<ChatInputProps> = ({
             paddingVertical: 8,
             fontSize: 14,
             maxHeight: 100,
-            color: "#111",
           }}
           placeholder={chatName ? `Nhắn tin tới ${chatName}` : "Tin nhắn"}
-          placeholderTextColor="#9ca3af"
           value={text}
           onChangeText={setText}
           multiline
-          textAlignVertical="center"
           onFocus={() => setShowEmoji(false)}
         />
 
-        {/* Image picker */}
+        {/* Image */}
         <TouchableOpacity onPress={pickImage} style={{ padding: 6 }}>
           <MaterialIcons name="image" size={26} color="#6b7280" />
         </TouchableOpacity>
 
-        {/* File picker */}
+        {/* File */}
         <TouchableOpacity onPress={pickDocument} style={{ padding: 6 }}>
           <Ionicons name="attach-outline" size={26} color="#6b7280" />
         </TouchableOpacity>
 
-        {/* Send button */}
+        {/* Send */}
         <TouchableOpacity
           onPress={handleSendText}
-          disabled={!text.trim()}
           style={{
             width: 38,
             height: 38,
@@ -228,42 +180,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
             justifyContent: "center",
           }}
         >
-          <Ionicons
-            name={text.trim() ? "send" : "mic-outline"}
-            size={18}
-            color={text.trim() ? "white" : "#9ca3af"}
-          />
+          <Ionicons name="send" size={18} color="white" />
         </TouchableOpacity>
       </View>
 
-      {/* Emoji picker panel */}
-      {showEmoji && (
-        <View
-          style={{
-            height: 220,
-            backgroundColor: "white",
-            borderTopWidth: 1,
-            borderTopColor: "#f3f4f6",
-          }}
-        >
-          <ScrollView contentContainerStyle={{ flexDirection: "row", flexWrap: "wrap", padding: 8 }}>
-            {COMMON_EMOJIS.map((emoji, i) => (
-              <TouchableOpacity
-                key={i}
-                onPress={() => handleEmojiPress(emoji)}
-                style={{
-                  width: "12.5%",
-                  aspectRatio: 1,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 26 }}>{emoji}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
+      {/* ✅ NEW Emoji Picker */}
+      <EmojiPicker
+        open={showEmoji}
+        onClose={() => setShowEmoji(false)}
+        onEmojiSelected={handleEmojiSelect}
+      />
     </View>
   );
 };

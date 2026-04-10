@@ -49,6 +49,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log(`User ${socket.data.userId} joined room: ${conversationId}`);
   }
 
+  // Conversation room
   @SubscribeMessage('leave_room')
   handleLeaveRoom(
     @MessageBody() coversationId: string,

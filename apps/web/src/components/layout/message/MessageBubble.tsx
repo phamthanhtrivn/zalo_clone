@@ -91,12 +91,12 @@ export const MessageBubble = ({
         if (isSelected) toggleSelectMessage(message._id);
       }}
       className={`rounded-lg px-3 py-2 max-w-md border shadow-sm ${isSelected ? "cursor-pointer" : ""}  ${isMe
-          ? selectedMessages.includes(message._id)
-            ? "bg-[#B4CBE7]"
-            : "bg-[#E5F1FF]"
-          : selectedMessages.includes(message._id)
-            ? "bg-[#B4CBE7]"
-            : "bg-white"
+        ? selectedMessages.includes(message._id)
+          ? "bg-[#B4CBE7]"
+          : "bg-[#E5F1FF]"
+        : selectedMessages.includes(message._id)
+          ? "bg-[#B4CBE7]"
+          : "bg-white"
         }`}
     >
       <div className="space-y-2 wrap-break-word">
