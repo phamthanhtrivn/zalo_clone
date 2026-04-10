@@ -45,6 +45,7 @@ export default function ChatWindow() {
   const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [prevCursor, setPrevCursor] = useState<string | null>(null);
 
   // Reaction picker
   const [reactionPickerMsg, setReactionPickerMsg] = useState<MessagesType | null>(null);
@@ -57,6 +58,8 @@ export default function ChatWindow() {
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [loadingForward, setLoadingForward] = useState(false);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
 
   // Detail modal
   const [detailMessage, setDetailMessage] = useState<MessagesType | null>(null);
@@ -70,6 +73,24 @@ export default function ChatWindow() {
   const flatListRef = useRef<FlatList>(null);
   const isFirstLoad = useRef(true);
   const isFetchingRef = useRef(false);
+  const isJumpingRef = useRef(false);
+  const isFetchingNewerRef = useRef(false);
+
+  const scrollToBottom = (animated = true) => {
+    flatListRef.current?.scrollToEnd({ animated });
+    setShowScrollToBottom(false);
+  };
+
+  const handleGoToNewest = () => {
+    if (prevCursor) {
+      isFirstLoad.current = true;
+      fetchInitialMessages();
+    } else {
+      scrollToBottom();
+    }
+  };
+
+
 
   // ================= FETCH =================
   const fetchInitialMessages = async () => {
@@ -80,9 +101,14 @@ export default function ChatWindow() {
 
       if (res.success) {
         const msgs = res.data.messages || [];
+        // API usually returns newest-first. For normal list we want oldest-first.
         const isOldestFirst = msgs.length >= 2 && new Date(msgs[0].createdAt) < new Date(msgs[msgs.length - 1].createdAt);
-        setMessages(isOldestFirst ? [...msgs].reverse() : msgs);
-        setNextCursor(res.nextCursor);
+        const sorted = isOldestFirst ? msgs : [...msgs].reverse();
+        
+        setMessages(sorted);
+        setNextCursor(res.data.nextCursor);
+        // If we just loaded history, we are at the end of known history
+        setPrevCursor(null); 
       }
       const pinRes: any = await messageService.getPinnedMessages(id, user.userId);
       if (pinRes.success) setPinnedMessages(pinRes.data.messages);
@@ -99,18 +125,49 @@ export default function ChatWindow() {
     try {
       const res: any = await messageService.getMessagesFromConversation(id, user.userId, nextCursor, 20);
       if (res.success && res.data.messages.length > 0) {
+        const newMsgs = res.data.messages;
+        const isOldestFirst = newMsgs.length >= 2 && new Date(newMsgs[0].createdAt) < new Date(newMsgs[newMsgs.length - 1].createdAt);
+        const sortedNew = isOldestFirst ? newMsgs : [...newMsgs].reverse();
+
         setMessages((prev) => {
           const existingIds = new Set(prev.map((m) => m._id));
-          const uniqueNew = res.data.messages.filter((m: MessagesType) => !existingIds.has(m._id));
-          // loadMore fetches OLDER messages, so they should be at the END (at the top of the inverted list)
-          return [...prev, ...uniqueNew];
+          const uniqueNew = sortedNew.filter((m: MessagesType) => !existingIds.has(m._id));
+          return [...uniqueNew, ...prev];
         });
         setNextCursor(res.data.nextCursor);
+      } else {
+        setNextCursor(null);
       }
     } catch (err) {
       console.error(err);
     } finally {
       isFetchingRef.current = false;
+    }
+  };
+
+  const loadNewerMessages = async () => {
+    if (!id || !user?.userId || !prevCursor || isFetchingNewerRef.current) return;
+    isFetchingNewerRef.current = true;
+    try {
+      const res: any = await messageService.getNewerMessages(id, user.userId, prevCursor, 20);
+      if (res.success && res.data.messages.length > 0) {
+        const newMsgs = res.data.messages;
+        const isOldestFirst = newMsgs.length >= 2 && new Date(newMsgs[0].createdAt) < new Date(newMsgs[newMsgs.length - 1].createdAt);
+        const sortedNew = isOldestFirst ? newMsgs : [...newMsgs].reverse();
+
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m._id));
+          const uniqueNew = sortedNew.filter((m: MessagesType) => !existingIds.has(m._id));
+          return [...prev, ...uniqueNew];
+        });
+        setPrevCursor(res.data.prevCursor); // API returns prevCursor for newer
+      } else {
+        setPrevCursor(null);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isFetchingNewerRef.current = false;
     }
   };
 
@@ -120,6 +177,7 @@ export default function ChatWindow() {
     try {
       await messageService.sendMessage(id, user.userId, { text }, null);
       if (replyMessage) setReplyMessage(null);
+      scrollToBottom();
     } catch (err) {
       console.error(err);
     }
@@ -130,6 +188,7 @@ export default function ChatWindow() {
     try {
       await messageService.sendMessage(id, user.userId, undefined, file);
       if (replyMessage) setReplyMessage(null);
+      scrollToBottom();
     } catch (err) {
       console.error(err);
     }
@@ -139,8 +198,6 @@ export default function ChatWindow() {
   const handleTogglePin = async (messageId: string) => {
     if (!id || !user?.userId) return;
     try {
-      console.log(user.userId, messageId, id);
-
       await messageService.pinnedMessage(user.userId, messageId, id);
     } catch {
       Alert.alert("Lỗi", "Bạn chỉ có thể ghim tối đa 3 tin nhắn");
@@ -219,12 +276,27 @@ export default function ChatWindow() {
     if (!id || !user?.userId) return;
     const res: any = await messageService.getMessagesAroundPinnedMessage(id, user.userId, messageId, 15);
     if (res.success) {
-      setMessages(res.data.messages);
+      const msgs = res.data.messages;
+      setMessages(msgs);
       setNextCursor(res.data.nextCursor);
-      setTimeout(() => {
-        const index = res.data.messages.findIndex((m: any) => m._id === messageId);
-        if (index !== -1) flatListRef.current?.scrollToIndex({ index, animated: true });
-      }, 100);
+      setPrevCursor(res.data.prevCursor);
+      
+      const index = msgs.findIndex((m: any) => m._id === messageId);
+      if (index !== -1) {
+        // Clear previous highlight
+        setHighlightedMessageId(null);
+        
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({
+            index,
+            animated: true,
+            viewPosition: 0.5, // Center it
+          });
+          
+          setHighlightedMessageId(messageId);
+          setTimeout(() => setHighlightedMessageId(null), 2500);
+        }, 300);
+      }
     }
   };
 
@@ -292,12 +364,6 @@ export default function ChatWindow() {
     }
   }, [id, user?.userId]);
 
-  useEffect(() => {
-    if (messages.length && isFirstLoad.current) {
-      flatListRef.current?.scrollToEnd({ animated: false });
-      isFirstLoad.current = false;
-    }
-  }, [messages]);
 
   // ===== SOCKET =====
   useEffect(() => {
@@ -307,10 +373,15 @@ export default function ChatWindow() {
     const handleNewMessage = (newMessage: MessagesType) => {
       setMessages((prev) => {
         if (prev.some((m) => m._id === newMessage._id)) return prev;
-        // New messages from socket come to the BOTTOM (index 0 in inverted list)
-        return [newMessage, ...prev];
+        // New messages from socket go to the END
+        return [...prev, newMessage];
       });
       messageService.readReceipt(user.userId, id);
+      
+      // Auto scroll if user is already at the bottom
+      if (!showScrollToBottom) {
+        setTimeout(() => scrollToBottom(true), 100);
+      }
     };
 
     const handleMessageReacted = (data: any) => {
@@ -363,9 +434,9 @@ export default function ChatWindow() {
 
   // ================= RENDER =================
   const renderItem = ({ item, index }: any) => {
-    // FlatList is inverted so previous = item at higher index
-    const older = messages[index + 1];
-    const newer = messages[index - 1];
+    // Normal list: older is at lower index, newer is at higher index
+    const older = messages[index - 1];
+    const newer = messages[index + 1];
 
     const isMe = item.senderId?._id === user?.userId;
     const sameSenderOlder = older && older.senderId?._id === item.senderId?._id;
@@ -385,7 +456,7 @@ export default function ChatWindow() {
 
     const isSelected = selectedMessages.includes(item._id);
 
-    const isLastReadMessage = index === 0
+    const isLastReadMessage = index === messages.length - 1;
 
     return (
       <View style={{ marginBottom: item.reactions?.length > 0 ? 12 : 0 }}>
@@ -404,6 +475,7 @@ export default function ChatWindow() {
           showTime={showTime}
           isSelected={isSelected}
           isSelectMode={isSelectMode}
+          isHighlighted={highlightedMessageId === item._id}
           onLongPress={() => setContextMenuMsg(item)}
           onPress={() => {
             if (isSelectMode) toggleSelectMessage(item._id);
@@ -491,15 +563,48 @@ export default function ChatWindow() {
             <FlatList
               ref={flatListRef}
               data={messages}
-              inverted
-              keyExtractor={(item) => item?._id || Math.random().toString()}
+              keyExtractor={(item, index) => item?._id || index.toString()}
               renderItem={renderItem}
+              scrollEventThrottle={16}
+              initialNumToRender={20}
+              onScroll={(e) => {
+                const { y } = e.nativeEvent.contentOffset;
+                const { height: contentHeight } = e.nativeEvent.contentSize;
+                const { height: layoutHeight } = e.nativeEvent.layoutMeasurement;
+                
+                // Show button if scrolled up or if in historical mode
+                const isBottom = y >= contentHeight - layoutHeight - 100;
+                setShowScrollToBottom(!isBottom || !!prevCursor);
+
+                if (y < 100) loadMoreMessages();
+              }}
+              onContentSizeChange={(w, h) => {
+                if (isFirstLoad.current && h > 0 && messages.length > 0 && !prevCursor) {
+                  // Use a small delay to ensure final measurements are ready
+                  setTimeout(() => {
+                    scrollToBottom(false);
+                    isFirstLoad.current = false;
+                  }, 100);
+                }
+              }}
+              onScrollToIndexFailed={(info) => {
+                const wait = new Promise((resolve) => setTimeout(resolve, 500));
+                wait.then(() => {
+                  flatListRef.current?.scrollToIndex({
+                    index: info.index,
+                    animated: true,
+                    viewPosition: 0.5,
+                  });
+                });
+              }}
+              onEndReached={() => {
+                if (prevCursor) loadNewerMessages();
+              }}
+              onEndReachedThreshold={0.5}
               contentContainerStyle={{
                 paddingTop: 8,
-                paddingBottom: 90,
+                paddingBottom: 90, // space for input
               }}
-              onEndReached={loadMoreMessages}
-              onEndReachedThreshold={0.3}
               ListEmptyComponent={() => (
                 <View style={{ alignItems: "center", paddingVertical: 40 }}>
                   <Text style={{ color: "#9ca3af", fontSize: 13 }}>Chưa có tin nhắn nào</Text>
@@ -536,18 +641,44 @@ export default function ChatWindow() {
             </View>
           )}
 
-          <ChatInput
-            chatName={conversation?.name}
-            onSendMessage={handleSendMessage}
-            onSendFile={handleSendFile}
-            isSelectMode={isSelectMode}
-            selectedMessages={selectedMessages}
-            onOpenForwardModal={() => setShowForwardModal(true)}
-            onCancelSelect={() => {
-              setIsSelectMode(false);
-              setSelectedMessages([]);
-            }}
-          />
+            <ChatInput
+              chatName={conversation?.name}
+              onSendMessage={handleSendMessage}
+              onSendFile={handleSendFile}
+              isSelectMode={isSelectMode}
+              selectedMessages={selectedMessages}
+              onOpenForwardModal={() => setShowForwardModal(true)}
+              onCancelSelect={() => {
+                setIsSelectMode(false);
+                setSelectedMessages([]);
+              }}
+            />
+
+            {/* Floating Jump to Newest Button */}
+            {showScrollToBottom && (
+              <TouchableOpacity
+                onPress={handleGoToNewest}
+                style={{
+                  position: "absolute",
+                  bottom: 100,
+                  right: 16,
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: "white",
+                  elevation: 4,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 3,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 10,
+                }}
+              >
+                <Ionicons name="chevron-down" size={24} color="#0068ff" />
+              </TouchableOpacity>
+            )}
         </View>
       </KeyboardAvoidingView>
 

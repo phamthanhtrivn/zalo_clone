@@ -24,6 +24,7 @@ type Props = {
   onPress?: () => void;
   onOpenReactionModal?: (reactions: ReactionType[]) => void;
   renderReadReceipts?: boolean;
+  isHighlighted?: boolean;
 };
 
 const TextWithLinks = ({ text }: { text: string }) => {
@@ -104,15 +105,18 @@ export default function MessageBubble({
   onPress,
   onOpenReactionModal,
   renderReadReceipts = true,
+  isHighlighted = false,
 }: Props) {
   const content = message.content;
   const file = content?.file;
 
-  const bubbleBg = isSelected
-    ? "#B4CBE7"
-    : isMe
-      ? "#E5F1FF"
-      : "white";
+  const bubbleBg = isHighlighted
+    ? "#FFF9C4"
+    : isSelected
+      ? "#B4CBE7"
+      : isMe
+        ? "#E5F1FF"
+        : "white";
 
   if (message.recalled) {
     return (

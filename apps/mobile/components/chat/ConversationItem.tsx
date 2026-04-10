@@ -98,7 +98,7 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
       <View className="w-14 h-14 rounded-full overflow-hidden bg-gray-200 mr-5">
         <Image
           source={{ uri: conversation.avatar }}
-          style={{ width: 56, height: 56, borderRadius: 999 }}
+          style={{ width: 56, height: 56, borderRadius: 999, objectFit: "cover" }}
         />
       </View>
 
@@ -139,7 +139,7 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
           </Text>
 
           {/* preview */}
-          <View className="flex-row items-center flex-1 ml-1">
+          <View className="flex-row items-center flex-1">
             {preview.icon && (
               <View className="mr-1 justify-center">
                 {preview.icon}
