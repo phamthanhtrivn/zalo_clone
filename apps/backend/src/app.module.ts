@@ -11,6 +11,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { RedisModule } from './common/redis/redis.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/passport/jwt-auth.guard';
+import { ChatModule } from './modules/chat/chat.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { JwtAuthGuard } from './modules/auth/passport/jwt-auth.guard';
     MembersModule,
     ConversationSettingsModule,
     AuthModule,
+    ChatModule,
   ],
   providers: [
     {

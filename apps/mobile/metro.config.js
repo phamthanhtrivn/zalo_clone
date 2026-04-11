@@ -7,5 +7,5 @@ const projectRoot = path.resolve(__dirname);
 const config = getDefaultConfig(projectRoot);
 
 module.exports = withNativeWind(config, {
-  input: path.join(projectRoot, "global.css"),
+    input: path.join(projectRoot, "global.css"),
 });

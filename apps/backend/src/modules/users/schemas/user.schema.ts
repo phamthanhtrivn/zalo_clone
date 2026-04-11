@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { FriendStatus, Gender } from '@zalo-clone/shared-types';
 import { Types } from 'mongoose';
+import { FriendStatus } from 'src/common/types/enums/friend-status';
+import { Gender } from 'src/common/types/enums/gender';
 
 @Schema({ _id: false })
 export class Profile {
@@ -61,5 +62,6 @@ export class User {
   @Prop({ type: [Friend], default: [] })
   friends?: Friend[];
 }
-
 export const UserSchema = SchemaFactory.createForClass(User);
+UserSchema.index({ phone: 1 });
+UserSchema.index({ 'profile.name': 1 });

@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { ConversationType } from '@zalo-clone/shared-types';
 import { Types } from 'mongoose';
+import { ConversationType } from 'src/common/types/enums/conversation-type';
 
 @Schema({ _id: false })
 export class Group {
