@@ -40,6 +40,9 @@ async function bootstrap() {
   app.enableVersioning({
     type: VersioningType.URI,
   });
+  app.enableCors({
+    origin: true,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({

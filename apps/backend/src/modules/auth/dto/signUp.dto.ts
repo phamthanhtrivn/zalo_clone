@@ -1,6 +1,6 @@
-import { Gender } from '@zalo-clone/shared-types';
 import { IsDateString, IsEnum, IsNotEmpty, Matches } from 'class-validator';
 import { IsAtLeast14 } from 'src/common/decorator/check-valid-old.decorator';
+import { Gender } from 'src/common/types/enums/gender';
 
 export class SignUpDto {
   @IsNotEmpty({ message: 'Vui lòng nhập tên của bạn' })

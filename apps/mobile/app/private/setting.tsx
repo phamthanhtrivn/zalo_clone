@@ -28,7 +28,6 @@ export default function SettingScreen() {
 
   console.log("userInfo : ", userInfo);
 
-
   const handleOnLogout = async () => {
     try {
       await dispatch(logOut()).unwrap();
@@ -111,9 +110,7 @@ export default function SettingScreen() {
                 <Text className="text-sm text-black">Email</Text>
 
                 <Text className="text-gray-500 text-xs mt-1">
-                  {
-                    userInfo?.email ? userInfo?.email : "Chưa liên kết"
-                  }
+                  {userInfo?.email ? userInfo?.email : "Chưa liên kết"}
                 </Text>
               </View>
             </OptionItem>

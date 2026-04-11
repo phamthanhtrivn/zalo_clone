@@ -8,12 +8,11 @@ import { useEffect } from "react";
 import { restoreSession } from "@/store/auth/authThunk";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 
-
 export default function RootLayout() {
   return (
     <Provider store={store}>
-      <SafeAreaProvider >
-        <GestureHandlerRootView >
+      <SafeAreaProvider>
+        <GestureHandlerRootView>
           <BottomSheetModalProvider>
             <AppNavigation />
           </BottomSheetModalProvider>

@@ -1,8 +1,8 @@
-import { FriendStatus } from '@zalo-clone/shared-types';
 import { User } from '../schemas/user.schema';
 import { Model } from 'mongoose';
 import mongoose from 'mongoose';
 import { StorageService } from '../../../common/storage/storage.service';
+import { FriendStatus } from 'src/common/types/enums/friend-status';
 
 export async function getListUserForStatus(
   userModel: Model<User>,

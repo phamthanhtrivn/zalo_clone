@@ -6,10 +6,10 @@ import {
 import { getSignedUrl } from '@aws-sdk/cloudfront-signer';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { FileType } from '@zalo-clone/shared-types';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { FileType } from '../types/enums/file-type';
 
 @Injectable()
 export class StorageService {
@@ -73,6 +73,7 @@ export class StorageService {
 
     return {
       fileKey: key,
+      fileName: file.originalname,
       fileSize: file.size,
       type: fileType,
     };
@@ -92,9 +93,12 @@ export class StorageService {
       return null;
     }
 
+    const encodedKey = encodeURI(fileKey);
+
     return getSignedUrl({
       url:
-        this.configService.getOrThrow<string>('aws.cloudFrontDomain') + fileKey,
+        this.configService.getOrThrow<string>('aws.cloudFrontDomain') +
+        encodedKey,
       dateLessThan: new Date(Date.now() + 1000 * 60 * 60 * 24),
       privateKey: this.privateKey,
       keyPairId: this.configService.getOrThrow<string>(

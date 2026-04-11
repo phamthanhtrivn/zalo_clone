@@ -8,7 +8,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schemas/user.schema';
 import { Model } from 'mongoose';
 import { RequestFriendDto } from './dto/request-friend.dto';
-import { FriendStatus } from '@zalo-clone/shared-types';
 import { updateFriendStatus } from './helper/updateFriendStatus.helper';
 import { checkFriendStatus } from './helper/checkFriendStaus.helper';
 import { SearchFriendDto } from './dto/search-friend.dto';
@@ -18,8 +17,9 @@ import { flattenObject } from './helper/flattenObject.helper';
 import { StorageService } from '../../common/storage/storage.service';
 import { getListUserForStatus } from './helper/getListUserForStatus.helper';
 import { format } from './helper/format.helper';
-import { Gender } from '@zalo-clone/shared-types';
 import * as bcrypt from 'bcrypt';
+import { Gender } from 'src/common/types/enums/gender';
+import { FriendStatus } from 'src/common/types/enums/friend-status';
 
 @Injectable()
 export class UsersService {
@@ -267,7 +267,6 @@ export class UsersService {
   async suggestFriend(userId: string) {
     // id ung cu vien co the kb
     const candidatesIds = await generateSuggestFriends(this.userModel, userId);
-    console.log('candidatesIds : ', candidatesIds);
     const friendsUser = await this.userModel
       .findOne({ _id: userId })
       .select({ friends: 1 })

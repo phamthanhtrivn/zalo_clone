@@ -91,7 +91,7 @@ export const restoreSession = createAsyncThunk(
   async (_, thunkAPI) => {
     try {
       const res = await apiClient.post(
-        "/auth/token/refresh",
+        "/api/auth/token/refresh",
         {},
         { withCredentials: true },
       );
