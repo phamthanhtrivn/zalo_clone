@@ -458,8 +458,10 @@ export default function ChatWindow() {
 
     const isLastReadMessage = index === messages.length - 1;
 
+    const addSpacing = !sameSenderOlder;
+
     return (
-      <View style={{ marginBottom: item.reactions?.length > 0 ? 12 : 0 }}>
+      <View style={{ marginBottom: item.reactions?.length > 0 ? 12 : 0, marginTop: addSpacing ? 16 : 0 }}>
         {showDivider && (
           <View style={{ flexDirection: "row", justifyContent: "center", marginVertical: 12 }}>
             <View style={{ backgroundColor: "#babbbe", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 6 }}>

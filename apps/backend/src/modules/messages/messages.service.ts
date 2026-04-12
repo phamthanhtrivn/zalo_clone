@@ -48,7 +48,7 @@ export class MessagesService {
     private readonly storageService: StorageService,
     private readonly conversationService: ConversationsService,
     private readonly chatGateway: ChatGateway,
-  ) { }
+  ) {}
 
   async getMessagesFromConversation(
     conversationId: string,
@@ -621,16 +621,15 @@ export class MessagesService {
         .to(conversationIdStr)
         .emit('new_message', transformedMessage);
 
+      this.emitMessageForMedias(conversationIdStr, transformedMessage);
+
       const room =
         this.chatGateway.server.sockets.adapter.rooms.get(conversationIdStr);
 
       if (room) {
         for (const socketId of room) {
-          console.log(socketId);
-
           const socket: any =
             this.chatGateway.server.sockets.sockets.get(socketId);
-          console.log(socket?.data.userId);
 
           if (socket?.data?.userId !== senderId) {
             await this.readReceiptMessage({
@@ -1645,24 +1644,24 @@ export class MessagesService {
   private signUser = (user?: any) =>
     user
       ? {
-        ...user,
-        profile: user.profile
-          ? {
-            ...user.profile,
-            avatarUrl: this.signAvatar(user.profile.avatarUrl),
-          }
-          : user.profile,
-      }
+          ...user,
+          profile: user.profile
+            ? {
+                ...user.profile,
+                avatarUrl: this.signAvatar(user.profile.avatarUrl),
+              }
+            : user.profile,
+        }
       : user;
 
   private signFile = (file?: any) =>
     file
       ? {
-        ...file,
-        fileKey: file.fileKey
-          ? this.storageService.signFileUrl(file.fileKey)
-          : file.fileKey,
-      }
+          ...file,
+          fileKey: file.fileKey
+            ? this.storageService.signFileUrl(file.fileKey)
+            : file.fileKey,
+        }
       : file;
 
   private transformMessage(message: any) {
@@ -1688,10 +1687,57 @@ export class MessagesService {
 
       repliedId: message.repliedId
         ? {
-          ...message.repliedId,
-          senderId: this.signUser(message.repliedId.senderId),
-        }
+            ...message.repliedId,
+            senderId: this.signUser(message.repliedId.senderId),
+          }
         : null,
     };
+  }
+
+  private emitMessageForMedias(
+    conversationIdStr: string,
+    transformedMessage: any,
+  ) {
+    const file = transformedMessage.content?.file;
+    const text = transformedMessage.content?.text;
+
+    if (file?.type === 'IMAGE' || file?.type === 'VIDEO') {
+      this.chatGateway.server.to(conversationIdStr).emit('new_media_preview', {
+        type: 'IMAGE_VIDEO',
+        data: {
+          _id: transformedMessage._id,
+          content: {
+            file,
+          },
+          createdAt: transformedMessage.createdAt,
+        },
+      });
+    }
+
+    if (file?.type === 'FILE') {
+      this.chatGateway.server.to(conversationIdStr).emit('new_media_preview', {
+        type: 'FILE',
+        data: {
+          _id: transformedMessage._id,
+          content: {
+            file,
+          },
+          createdAt: transformedMessage.createdAt,
+        },
+      });
+    }
+
+    if (text && /(http|https):\/\/[^\s]+/.test(text)) {
+      this.chatGateway.server.to(conversationIdStr).emit('new_media_preview', {
+        type: 'LINK',
+        data: {
+          _id: transformedMessage._id,
+          content: {
+            text,
+          },
+          createdAt: transformedMessage.createdAt,
+        },
+      });
+    }
   }
 }

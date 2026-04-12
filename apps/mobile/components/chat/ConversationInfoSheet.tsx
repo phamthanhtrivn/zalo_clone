@@ -17,6 +17,7 @@ import type { ConversationItemType } from "@/types/conversation-item.type";
 import { messageService } from "@/services/message.service";
 import { useAppSelector } from "@/store/store";
 import { getDateLabel } from "@/utils/format-message-time..util";
+import { useSocket } from "@/contexts/SocketContext";
 
 interface Props {
   visible: boolean;
@@ -47,7 +48,9 @@ const SectionHeader = ({
   >
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
       {icon}
-      <Text style={{ fontSize: 14, fontWeight: "600", color: "#1f2937" }}>{title}</Text>
+      <Text style={{ fontSize: 14, fontWeight: "600", color: "#1f2937" }}>
+        {title}
+      </Text>
     </View>
     <Ionicons
       name={expanded ? "chevron-down" : "chevron-forward"}
@@ -57,7 +60,12 @@ const SectionHeader = ({
   </TouchableOpacity>
 );
 
-const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation }) => {
+const ConversationInfoSheet: React.FC<Props> = ({
+  visible,
+  onClose,
+  conversation,
+}) => {
+  const { socket } = useSocket();
   const user = useAppSelector((state) => state.auth.user);
   const [medias, setMedias] = useState<any[]>([]);
   const [files, setFiles] = useState<any[]>([]);
@@ -79,7 +87,7 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
       try {
         const res: any = await messageService.getMediasPreview(
           user.userId,
-          conversation.conversationId
+          conversation.conversationId,
         );
         if (res.success) {
           setMedias(res.data.images_videos || []);
@@ -95,10 +103,38 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
     fetch();
   }, [visible, conversation?.conversationId]);
 
-  const getFileExt = (name: string) => name.split(".").pop()?.toUpperCase() || "FILE";
+  useEffect(() => {
+    const handleMediasUpdated = (data: { type: string; data: any }) => {
+      if (data.type === "IMAGE_VIDEO") {
+        setMedias((prev) => [data.data, ...prev].slice(0, 6));
+      }
+
+      if (data.type === "FILE") {
+        setFiles((prev) => [data.data, ...prev].slice(0, 6));
+      }
+
+      if (data.type === "LINK") {
+        setLinks((prev) => [data.data, ...prev].slice(0, 6));
+      }
+    };
+
+    socket?.on("new_media_preview", handleMediasUpdated);
+
+    return () => {
+      socket?.off("new_media_preview", handleMediasUpdated);
+    };
+  }, [socket, conversation?.conversationId]);
+
+  const getFileExt = (name: string) =>
+    name.split(".").pop()?.toUpperCase() || "FILE";
 
   return (
-    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal
+      transparent
+      visible={visible}
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <Pressable
         style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
         onPress={onClose}
@@ -127,7 +163,9 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               borderBottomColor: "#f3f4f6",
             }}
           >
-            <Text style={{ fontSize: 16, fontWeight: "600" }}>Thông tin hội thoại</Text>
+            <Text style={{ fontSize: 16, fontWeight: "600" }}>
+              Thông tin hội thoại
+            </Text>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={22} color="#6b7280" />
             </TouchableOpacity>
@@ -176,7 +214,10 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               {[
                 { icon: "notifications-outline", label: "Tắt thông báo" },
                 { icon: "pin-outline", label: "Ghim hội thoại" },
-                { icon: isGroup ? "person-add-outline" : "people-outline", label: isGroup ? "Thêm TV" : "Tạo nhóm" },
+                {
+                  icon: isGroup ? "person-add-outline" : "people-outline",
+                  label: isGroup ? "Thêm TV" : "Tạo nhóm",
+                },
               ].map((action) => (
                 <TouchableOpacity
                   key={action.label}
@@ -192,9 +233,20 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                       justifyContent: "center",
                     }}
                   >
-                    <Ionicons name={action.icon as any} size={20} color="#374151" />
+                    <Ionicons
+                      name={action.icon as any}
+                      size={20}
+                      color="#374151"
+                    />
                   </View>
-                  <Text style={{ fontSize: 11, color: "#374151", textAlign: "center", maxWidth: 70 }}>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: "#374151",
+                      textAlign: "center",
+                      maxWidth: 70,
+                    }}
+                  >
                     {action.label}
                   </Text>
                 </TouchableOpacity>
@@ -218,11 +270,20 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               {expandedMedia && (
                 <View style={{ paddingHorizontal: 12, paddingBottom: 16 }}>
                   {medias.length === 0 ? (
-                    <Text style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", paddingVertical: 8 }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#9ca3af",
+                        textAlign: "center",
+                        paddingVertical: 8,
+                      }}
+                    >
                       Chưa có ảnh/video trong cuộc trò chuyện
                     </Text>
                   ) : (
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2 }}>
+                    <View
+                      style={{ flexDirection: "row", flexWrap: "wrap", gap: 2 }}
+                    >
                       {medias.slice(0, 6).map((media, idx) => {
                         const file = media?.content?.file;
                         const isVideo = file?.type === "VIDEO";
@@ -230,14 +291,34 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                           <TouchableOpacity
                             key={idx}
                             onPress={() => setPreviewIndex(idx)}
-                            style={{ width: "32%", aspectRatio: 1, backgroundColor: "#e5e7eb", overflow: "hidden" }}
+                            style={{
+                              width: "32%",
+                              aspectRatio: 1,
+                              backgroundColor: "#e5e7eb",
+                              overflow: "hidden",
+                            }}
                           >
                             {isVideo ? (
-                              <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#000" }}>
-                                <Ionicons name="play-circle" size={36} color="white" />
+                              <View
+                                style={{
+                                  flex: 1,
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  backgroundColor: "#000",
+                                }}
+                              >
+                                <Ionicons
+                                  name="play-circle"
+                                  size={36}
+                                  color="white"
+                                />
                               </View>
                             ) : (
-                              <Image source={{ uri: file?.fileKey }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                              <Image
+                                source={{ uri: file?.fileKey }}
+                                style={{ width: "100%", height: "100%" }}
+                                contentFit="cover"
+                              />
                             )}
                           </TouchableOpacity>
                         );
@@ -251,7 +332,13 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
             {/* File section */}
             <View style={{ backgroundColor: "white", marginBottom: 2 }}>
               <SectionHeader
-                icon={<MaterialIcons name="insert-drive-file" size={18} color="#374151" />}
+                icon={
+                  <MaterialIcons
+                    name="insert-drive-file"
+                    size={18}
+                    color="#374151"
+                  />
+                }
                 title="File"
                 expanded={expandedFile}
                 onToggle={() => setExpandedFile((v) => !v)}
@@ -259,7 +346,14 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               {expandedFile && (
                 <View style={{ paddingHorizontal: 12, paddingBottom: 16 }}>
                   {files.length === 0 ? (
-                    <Text style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", paddingVertical: 8 }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#9ca3af",
+                        textAlign: "center",
+                        paddingVertical: 8,
+                      }}
+                    >
                       Chưa có file trong cuộc trò chuyện
                     </Text>
                   ) : (
@@ -291,19 +385,37 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                               justifyContent: "center",
                             }}
                           >
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#1d4ed8" }}>
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: "700",
+                                color: "#1d4ed8",
+                              }}
+                            >
                               {getFileExt(file.fileName)}
                             </Text>
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "500", color: "#111" }}>
+                            <Text
+                              numberOfLines={1}
+                              style={{
+                                fontSize: 13,
+                                fontWeight: "500",
+                                color: "#111",
+                              }}
+                            >
                               {file.fileName}
                             </Text>
                             <Text style={{ fontSize: 11, color: "#9ca3af" }}>
-                              {getDateLabel(item.createdAt)} • {(file.fileSize / 1024).toFixed(1)} KB
+                              {getDateLabel(item.createdAt)} •{" "}
+                              {(file.fileSize / 1024).toFixed(1)} KB
                             </Text>
                           </View>
-                          <Ionicons name="download-outline" size={18} color="#6b7280" />
+                          <Ionicons
+                            name="download-outline"
+                            size={18}
+                            color="#6b7280"
+                          />
                         </TouchableOpacity>
                       );
                     })
@@ -323,14 +435,23 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               {expandedLink && (
                 <View style={{ paddingHorizontal: 12, paddingBottom: 16 }}>
                   {links.length === 0 ? (
-                    <Text style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", paddingVertical: 8 }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#9ca3af",
+                        textAlign: "center",
+                        paddingVertical: 8,
+                      }}
+                    >
                       Chưa có link trong cuộc trò chuyện
                     </Text>
                   ) : (
                     links.slice(0, 6).map((item, idx) => {
                       const url = item.content?.text;
                       let domain = url;
-                      try { domain = new URL(url).hostname.replace("www.", ""); } catch { }
+                      try {
+                        domain = new URL(url).hostname.replace("www.", "");
+                      } catch {}
                       return (
                         <TouchableOpacity
                           key={idx}
@@ -357,11 +478,22 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                               justifyContent: "center",
                             }}
                           >
-                            <MaterialIcons name="link" size={20} color="#6b7280" />
+                            <MaterialIcons
+                              name="link"
+                              size={20}
+                              color="#6b7280"
+                            />
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Text numberOfLines={1} style={{ fontSize: 13, color: "#0068ff" }}>{url}</Text>
-                            <Text style={{ fontSize: 11, color: "#9ca3af" }}>{domain}</Text>
+                            <Text
+                              numberOfLines={1}
+                              style={{ fontSize: 13, color: "#0068ff" }}
+                            >
+                              {url}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: "#9ca3af" }}>
+                              {domain}
+                            </Text>
                           </View>
                         </TouchableOpacity>
                       );
@@ -398,10 +530,27 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
 
           {/* Media preview fullscreen */}
           {previewIndex !== null && (
-            <Modal transparent visible animationType="fade" onRequestClose={() => setPreviewIndex(null)}>
-              <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.95)", alignItems: "center", justifyContent: "center" }}>
+            <Modal
+              transparent
+              visible
+              animationType="fade"
+              onRequestClose={() => setPreviewIndex(null)}
+            >
+              <View
+                style={{
+                  flex: 1,
+                  backgroundColor: "rgba(0,0,0,0.95)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 <TouchableOpacity
-                  style={{ position: "absolute", top: 50, right: 20, zIndex: 10 }}
+                  style={{
+                    position: "absolute",
+                    top: 50,
+                    right: 20,
+                    zIndex: 10,
+                  }}
                   onPress={() => setPreviewIndex(null)}
                 >
                   <Ionicons name="close" size={30} color="white" />
@@ -410,7 +559,9 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                 {previewIndex > 0 && (
                   <TouchableOpacity
                     style={{ position: "absolute", left: 20, zIndex: 10 }}
-                    onPress={() => setPreviewIndex((p) => (p !== null ? p - 1 : p))}
+                    onPress={() =>
+                      setPreviewIndex((p) => (p !== null ? p - 1 : p))
+                    }
                   >
                     <Ionicons name="chevron-back" size={36} color="white" />
                   </TouchableOpacity>
@@ -419,7 +570,9 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                 {previewIndex < medias.length - 1 && (
                   <TouchableOpacity
                     style={{ position: "absolute", right: 20, zIndex: 10 }}
-                    onPress={() => setPreviewIndex((p) => (p !== null ? p + 1 : p))}
+                    onPress={() =>
+                      setPreviewIndex((p) => (p !== null ? p + 1 : p))
+                    }
                   >
                     <Ionicons name="chevron-forward" size={36} color="white" />
                   </TouchableOpacity>

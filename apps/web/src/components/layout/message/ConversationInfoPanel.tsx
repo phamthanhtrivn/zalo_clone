@@ -25,6 +25,7 @@ import type { ConversationItemType } from "@/types/conversation-item.type";
 import { getFileIcon } from "@/utils/file-icon.util";
 import { getDateLabel } from "@/utils/format-message-time..util";
 import { saveAs } from "file-saver";
+import { useSocket } from "@/contexts/SocketContext";
 
 interface ConversationInfoPanelProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ const ConversationInfoPanel = ({
   conversation,
   currentUser,
 }: ConversationInfoPanelProps) => {
+  const { socket } = useSocket();
   const [isMuted, setIsMuted] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [medias, setMedias] = useState<any[]>([]);
@@ -63,7 +65,7 @@ const ConversationInfoPanel = ({
     if (!conversation?.conversationId) return;
 
     fetchMediaPreview();
-  }, [isOpen]);
+  }, [isOpen, conversation?.conversationId]);
 
   useEffect(() => {
     if (!isOpen || !conversation?.conversationId) return;
@@ -134,6 +136,30 @@ const ConversationInfoPanel = ({
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [preview.isOpen, medias.length]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleMediasUpdated = (data: { type: string; data: any }) => {
+      if (data.type === "IMAGE_VIDEO") {
+        setMedias((prev) => [data.data, ...prev].slice(0, 6));
+      }
+
+      if (data.type === "FILE") {
+        setFiles((prev) => [data.data, ...prev].slice(0, 6));
+      }
+
+      if (data.type === "LINK") {
+        setLinks((prev) => [data.data, ...prev].slice(0, 6));
+      }
+    };
+
+    socket.on("new_media_preview", handleMediasUpdated);
+
+    return () => {
+      socket.off("new_media_preview", handleMediasUpdated);
+    };
+  }, [socket, conversation?.conversationId]);
 
   if (!isOpen) return <div className="w-0 overflow-hidden" />;
 

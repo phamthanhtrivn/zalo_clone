@@ -41,6 +41,8 @@ const ConversationPage = () => {
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [loadingForward, setLoadingForward] = useState(false);
   const lastMessageId = messages[messages.length - 1]?._id;
+  const isInitialAutoScrollDone = useRef(false);
+  const scrollTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { socket } = useSocket();
 
@@ -231,7 +233,10 @@ const ConversationPage = () => {
     if (!id) return;
 
     try {
-      const res = await messageService.getPinnedMessages(id, user?.userId || "");
+      const res = await messageService.getPinnedMessages(
+        id,
+        user?.userId || "",
+      );
 
       if (res.success) {
         setPinnedMessages(res.data.messages);
@@ -369,8 +374,9 @@ const ConversationPage = () => {
     if (res.success) {
       setMessages((prev) => prev.filter((m) => m._id !== messageId));
 
-      const res =
-        await conversationService.getConversationsFromUserId(user?.userId || "");
+      const res = await conversationService.getConversationsFromUserId(
+        user?.userId || "",
+      );
 
       if (res.success) {
         dispatch(setConversations(res.data));
@@ -429,33 +435,41 @@ const ConversationPage = () => {
 
   useEffect(() => {
     if (containerRef.current && isFirstLoad.current && messages.length) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    requestAnimationFrame(() => {
+      containerRef.current!.scrollTop =
+        containerRef.current!.scrollHeight;
+
       isFirstLoad.current = false;
-    }
+
+      // ✅ Đánh dấu đã scroll lần đầu
+      isInitialAutoScrollDone.current = true;
+    });
+  }
   }, [messages]);
 
   useEffect(() => {
-    const handleMediaLoaded = () => {
+  const handleMediaLoaded = () => {
+    if (isJumpingRef.current) return;
+
+    // clear timeout cũ (debounce)
+    if (scrollTimeout.current) {
+      clearTimeout(scrollTimeout.current);
+    }
+
+    scrollTimeout.current = setTimeout(() => {
       const container = containerRef.current;
       if (!container) return;
 
-      if (isJumpingRef.current) return;
+      container.scrollTop = container.scrollHeight;
+    }, 100); // delay để gom nhiều media load
+  };
 
-      const prevScrollBottom = container.scrollHeight - container.scrollTop;
+  window.addEventListener("message-media-loaded", handleMediaLoaded);
 
-      requestAnimationFrame(() => {
-        const newScrollTop = container.scrollHeight - prevScrollBottom;
-
-        container.scrollTop = newScrollTop;
-      });
-    };
-
-    window.addEventListener("message-media-loaded", handleMediaLoaded);
-
-    return () => {
-      window.removeEventListener("message-media-loaded", handleMediaLoaded);
-    };
-  }, []);
+  return () => {
+    window.removeEventListener("message-media-loaded", handleMediaLoaded);
+  };
+}, []);
 
   useEffect(() => {
     if (selectedMessages.length === 0 && isSelected) {

@@ -69,7 +69,6 @@ export const MessageItem = ({
         ) : (
           <div className="w-8" />
         ))}
-
       {/* BUBBLE WRAPPER */}
       <div
         className={`flex group items-center gap-2 ${isMe ? "flex-row-reverse" : "flex-row"
