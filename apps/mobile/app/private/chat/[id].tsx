@@ -8,7 +8,6 @@ import {
   Alert,
   Text,
   TouchableOpacity,
-  ActionSheetIOS,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -73,8 +72,9 @@ export default function ChatWindow() {
   const flatListRef = useRef<FlatList>(null);
   const isFirstLoad = useRef(true);
   const isFetchingRef = useRef(false);
-  const isJumpingRef = useRef(false);
   const isFetchingNewerRef = useRef(false);
+
+  const isPinned = contextMenuMsg && pinnedMessages.some((m) => m._id === contextMenuMsg._id);
 
   const scrollToBottom = (animated = true) => {
     flatListRef.current?.scrollToEnd({ animated });
@@ -200,7 +200,7 @@ export default function ChatWindow() {
     try {
       await messageService.pinnedMessage(user.userId, messageId, id);
     } catch {
-      Alert.alert("Lỗi", "Bạn chỉ có thể ghim tối đa 3 tin nhắn");
+      Alert.alert("Bạn chỉ có thể ghim tối đa 3 tin nhắn trong 1 cuộc trò chuyện");
     }
   };
 
@@ -297,62 +297,6 @@ export default function ChatWindow() {
           setTimeout(() => setHighlightedMessageId(null), 2500);
         }, 300);
       }
-    }
-  };
-
-  // ================= LONG PRESS ACTION =================
-  const handleMessageLongPress = (msg: MessagesType) => {
-    const isMe = (typeof msg.senderId === 'string' ? msg.senderId : msg.senderId?._id) === user?.userId;
-    const isPinned = pinnedMessages.some((p) => p._id === msg._id);
-
-    if (Platform.OS === "ios") {
-      const options = [
-        "Thả cảm xúc",
-        "Trích dẫn",
-        isPinned ? "Bỏ ghim" : "Ghim tin nhắn",
-        "Chuyển tiếp",
-        "Xem chi tiết",
-        "Xóa chỉ ở phía tôi",
-        ...(isMe && !msg.recalled ? ["Thu hồi"] : []),
-        "Hủy",
-      ];
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options,
-          cancelButtonIndex: options.length - 1,
-          destructiveButtonIndex: options.indexOf("Xóa chỉ ở phía tôi"),
-        },
-        (buttonIndex) => {
-          if (options[buttonIndex] === "Thả cảm xúc") setReactionPickerMsg(msg);
-          else if (options[buttonIndex] === "Trả lời") setReplyMessage(msg);
-          else if (options[buttonIndex] === "Ghim tin nhắn" || options[buttonIndex] === "Bỏ ghim")
-            handleTogglePin(msg._id);
-          else if (options[buttonIndex] === "Chuyển tiếp") {
-            setIsSelectMode(true);
-            toggleSelectMessage(msg._id);
-          } else if (options[buttonIndex] === "Xem chi tiết") setDetailMessage(msg);
-          else if (options[buttonIndex] === "Xóa chỉ ở phía tôi") handleDeleteForMe(msg._id);
-          else if (options[buttonIndex] === "Thu hồi") handleRecall(msg._id);
-        }
-      );
-    } else {
-      // Android: use Alert with buttons (ActionSheet not native on Android)
-      const actions: any[] = [
-        { text: "Thả cảm xúc", onPress: () => setReactionPickerMsg(msg) },
-        { text: "Trích dẫn", onPress: () => Alert.alert("Thông báo", "Tính năng Trích dẫn sẽ sớm ra mắt") },
-        { text: isPinned ? "Bỏ ghim" : "Ghim tin nhắn", onPress: () => handleTogglePin(msg._id) },
-        {
-          text: "Chuyển tiếp",
-          onPress: () => { setIsSelectMode(true); toggleSelectMessage(msg._id); },
-        },
-        { text: "Xem chi tiết", onPress: () => setDetailMessage(msg) },
-        { text: "Xóa chỉ ở phía tôi", onPress: () => handleDeleteForMe(msg._id), style: "destructive" },
-      ];
-      if (isMe && !msg.recalled) {
-        actions.push({ text: "Thu hồi", onPress: () => handleRecall(msg._id), style: "destructive" });
-      }
-      actions.push({ text: "Hủy", style: "cancel" });
-      Alert.alert("Tùy chọn tin nhắn", "", actions);
     }
   };
 
@@ -823,7 +767,7 @@ export default function ChatWindow() {
               setContextMenuMsg(null);
             }} />
 
-            <MenuItem label="Ghim" onPress={() => {
+            <MenuItem label={isPinned ? "Bỏ ghim" : "Ghim"} onPress={() => {
               handleTogglePin(contextMenuMsg._id);
               setContextMenuMsg(null);
             }} />

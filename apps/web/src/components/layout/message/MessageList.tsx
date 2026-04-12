@@ -130,18 +130,18 @@ const MessageList = ({
 
             {isLastMessage && !message.recalled && message.readReceipts?.length > 0 && (
               <div className={`flex ${isMe ? "justify-end" : "justify-start ml-11"} mt-1 pr-1`}>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center">
                   {message.readReceipts.slice(0, 3).map((user: any, index) => {
 
                     return <img
                       key={index}
                       src={user?.userId?.profile?.avatarUrl}
-                      className="w-4 h-4 rounded-full border border-white -ml-1"
+                      className="w-4 h-4 rounded-full border border-white"
                     />
                   })}
 
                   {message.readReceipts.length > 3 && (
-                    <div className="w-4 h-4 rounded-full bg-gray-300 text-[10px] flex items-center justify-center border border-white -ml-1">
+                    <div className="w-4 h-4 rounded-full bg-gray-300 text-[10px] flex items-center justify-center border border-white">
                       +{message.readReceipts.length - 3}
                     </div>
                   )}
