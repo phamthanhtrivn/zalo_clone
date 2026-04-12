@@ -128,7 +128,7 @@ const MessageList = ({
               toggleSelectMessage={toggleSelectMessage}
             />
 
-            {isLastMessage && message.readReceipts?.length > 0 && (
+            {isLastMessage && !message.recalled && message.readReceipts?.length > 0 && (
               <div className={`flex ${isMe ? "justify-end" : "justify-start ml-11"} mt-1 pr-1`}>
                 <div className="flex items-center gap-1">
                   {message.readReceipts.slice(0, 3).map((user: any, index) => {

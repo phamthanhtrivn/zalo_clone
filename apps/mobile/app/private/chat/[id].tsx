@@ -229,7 +229,7 @@ export default function ChatWindow() {
     try {
       await messageService.recalledMessage(user.userId, messageId, id);
     } catch {
-      Alert.alert("Lỗi", "Chỉ có thể thu hồi trong vòng 24 giờ");
+      Alert.alert("Bạn không thể thu hồi tin nhắn trong vòng 24 giờ");
     }
   };
 

@@ -41,8 +41,6 @@ const ConversationPage = () => {
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [loadingForward, setLoadingForward] = useState(false);
   const lastMessageId = messages[messages.length - 1]?._id;
-  const isInitialAutoScrollDone = useRef(false);
-  const scrollTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { socket } = useSocket();
 
@@ -435,41 +433,33 @@ const ConversationPage = () => {
 
   useEffect(() => {
     if (containerRef.current && isFirstLoad.current && messages.length) {
-    requestAnimationFrame(() => {
-      containerRef.current!.scrollTop =
-        containerRef.current!.scrollHeight;
-
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
       isFirstLoad.current = false;
-
-      // ✅ Đánh dấu đã scroll lần đầu
-      isInitialAutoScrollDone.current = true;
-    });
-  }
+    }
   }, [messages]);
 
   useEffect(() => {
-  const handleMediaLoaded = () => {
-    if (isJumpingRef.current) return;
-
-    // clear timeout cũ (debounce)
-    if (scrollTimeout.current) {
-      clearTimeout(scrollTimeout.current);
-    }
-
-    scrollTimeout.current = setTimeout(() => {
+    const handleMediaLoaded = () => {
       const container = containerRef.current;
       if (!container) return;
 
-      container.scrollTop = container.scrollHeight;
-    }, 100); // delay để gom nhiều media load
-  };
+      if (isJumpingRef.current) return;
 
-  window.addEventListener("message-media-loaded", handleMediaLoaded);
+      const prevScrollBottom = container.scrollHeight - container.scrollTop;
 
-  return () => {
-    window.removeEventListener("message-media-loaded", handleMediaLoaded);
-  };
-}, []);
+      requestAnimationFrame(() => {
+        const newScrollTop = container.scrollHeight - prevScrollBottom;
+
+        container.scrollTop = newScrollTop;
+      });
+    };
+
+    window.addEventListener("message-media-loaded", handleMediaLoaded);
+
+    return () => {
+      window.removeEventListener("message-media-loaded", handleMediaLoaded);
+    };
+  }, []);
 
   useEffect(() => {
     if (selectedMessages.length === 0 && isSelected) {
