@@ -38,7 +38,7 @@ const ForwardModal: React.FC<Props> = ({
   };
 
   const filtered = conversations.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
+    (c.name ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
   const handleClose = () => {

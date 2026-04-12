@@ -22,10 +22,6 @@ import { UpdateCallMessageDto } from './dto/update-call-message.dto';
 import { GetMessagesDto } from './dto/get-messages.dto';
 import { GetMediasPreviewDto } from './dto/get-medias-preview.dto';
 import { GetMediasFileTypeDto } from './dto/get-medias-file-type.dto';
-import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
-import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
-import { DeleteMessageForMeDto } from './dto/delete-message-for-me.dto';
-import { ForwardMessageDto } from './dto/forward-message.dto';
 
 import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
 import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';

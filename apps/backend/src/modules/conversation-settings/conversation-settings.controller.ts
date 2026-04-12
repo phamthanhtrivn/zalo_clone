@@ -106,7 +106,9 @@ export class ConversationSettingsController {
             duration: number;
         },
     ) {
-        return this.conversationSettingsService.setExpire(body);
+        return this.conversationSettingsService.setExpire(body.userId,
+            body.conversationId,
+            body.duration,);
     }
 
 }

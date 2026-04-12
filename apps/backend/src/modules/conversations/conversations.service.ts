@@ -15,11 +15,6 @@ import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { TransferOwnerDto } from './dto/transfer-owenr.dto';
 import { RemoveMemberDto } from './dto/remove-member.dto';
 import { AddMemberDto } from './dto/add-member.dto';
-
-
-import e from 'express';
-
-
 import { ConversationItemDto } from './dto/conversation-item.dto';
 import { StorageService } from 'src/common/storage/storage.service';
 import { ConversationType } from 'src/common/types/enums/conversation-type';
@@ -502,8 +497,6 @@ export class ConversationsService {
           },
         },
 
-
-        // giữ nguyên logic cũ của bạn
         {
           $lookup: {
             from: 'members',
@@ -560,6 +553,34 @@ export class ConversationsService {
             preserveNullAndEmptyArrays: true,
           },
         },
+        {
+          $lookup: {
+            from: 'conversationsettings',
+            let: {
+              conversationId: '$conversation._id',
+              userId: '$userId',
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$conversationId', '$$conversationId'] },
+                      { $eq: ['$userId', '$$userId'] },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: 'settings',
+          },
+        },
+        {
+          $unwind: {
+            path: '$settings',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
 
         {
           $project: {
@@ -567,7 +588,22 @@ export class ConversationsService {
 
             conversationId: '$conversation._id',
             type: '$conversation.type',
-
+            pinned: { $ifNull: ['$settings.pinned', false] },
+            hidden: { $ifNull: ['$settings.hidden', false] },
+            category: { $ifNull: ['$settings.category', null] },
+            expireDuration: { $ifNull: ['$settings.expireDuration', 0] },
+            muted: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: ['$settings.mutedUntil', null] },
+                    { $gt: ['$settings.mutedUntil', '$$NOW'] },
+                  ],
+                },
+                true,
+                false,
+              ],
+            },
             name: {
               $cond: [
                 { $eq: ['$conversation.type', 'GROUP'] },
@@ -585,7 +621,6 @@ export class ConversationsService {
             },
 
             lastMessage: {
-
               _id: '$lastMessage._id',
               senderName: {
                 $cond: [
@@ -608,9 +643,6 @@ export class ConversationsService {
             lastMessageAt: -1,
           },
         },
-
-
-        // ✅ FIX DUPLICATE Ở ĐÂY (QUAN TRỌNG)
         {
           $group: {
             _id: '$conversationId',

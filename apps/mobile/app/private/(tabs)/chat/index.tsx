@@ -9,17 +9,32 @@ import SearchLabel from "@/components/common/SearchLabel";
 import ConversationItem from "@/components/chat/ConversationItem";
 import { useEffect, useState } from "react";
 import { conversationService } from "@/services/conversation.service";
-import { setConversations } from "@/store/slices/conversationSlice";
+import { setConversations, updateConversation } from "@/store/slices/conversationSlice";
 import { useSocket } from "@/contexts/SocketContext";
 import { router } from "expo-router";
+import { createSelector } from "@reduxjs/toolkit";
+import type { RootState } from "@/store/store";
+
+// Memoized selector — only recomputes when conversations array changes
+const selectVisibleConversations = createSelector(
+  (state: RootState) => state.conversation.conversations,
+  (conversations) =>
+    [...conversations]
+      .filter((c) => !c.hidden)
+      .sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        return (
+          new Date(b.lastMessageAt).getTime() -
+          new Date(a.lastMessageAt).getTime()
+        );
+      })
+);
 
 export default function Home() {
   const dispatch = useAppDispatch();
   const { socket } = useSocket();
 
-  const conversations = useAppSelector(
-    (state) => state.conversation.conversations,
-  );
+  const conversations = useAppSelector(selectVisibleConversations);
   const user = useAppSelector((state) => state.auth.user);
 
   const [refreshing, setRefreshing] = useState(false);
@@ -48,23 +63,16 @@ export default function Home() {
     loadConversations();
   }, [user?.userId]);
 
-  // ⚡ Realtime (fix chuẩn Redux)
+  // ⚡ Realtime
   useEffect(() => {
     if (!socket || !user?.userId) return;
 
     const handleNewMessage = (newMessage: any) => {
-      const index = conversations.findIndex(
-        (c) => c.conversationId === newMessage.conversationId,
-      );
-
-      if (index === -1) return;
-
-      const updated = [...conversations];
-      const convo = { ...updated[index] };
-
-      // move lên đầu (Zalo behavior)
-      updated.splice(index, 1);
-      dispatch(setConversations([convo, ...updated]));
+      // Chỉ update conversation tương ứng, KHÔNG ghi đè toàn bộ store
+      // để tránh mất trạng thái pin/mute đã thay đổi local
+      if (newMessage?.conversation) {
+        dispatch(updateConversation(newMessage.conversation));
+      }
     };
 
     socket.on("new_message", handleNewMessage);
@@ -72,7 +80,7 @@ export default function Home() {
     return () => {
       socket.off("new_message", handleNewMessage);
     };
-  }, [socket, user]);
+  }, [socket, user?.userId]);
 
   return (
     <Container>

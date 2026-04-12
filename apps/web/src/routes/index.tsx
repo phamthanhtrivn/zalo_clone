@@ -1,7 +1,4 @@
-<<<<<<< HEAD
 
-=======
->>>>>>> ab3cba3247be0ab8bd4e07f815c36f20957c22f6
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
 import LoginPage from "../pages/LoginPage";

@@ -15,8 +15,10 @@ import { Video } from "expo-av";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import type { ConversationItemType } from "@/types/conversation-item.type";
 import { messageService } from "@/services/message.service";
-import { useAppSelector } from "@/store/store";
+import { useAppDispatch, useAppSelector } from "@/store/store";
 import { getDateLabel } from "@/utils/format-message-time..util";
+import { updateConversationSetting } from "@/store/slices/conversationSlice";
+import { muteConversation, pinConversation, unmuteConversation, unpinConversation } from "@/services/conversation-settings.service";
 
 interface Props {
   visible: boolean;
@@ -63,7 +65,8 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
   const [files, setFiles] = useState<any[]>([]);
   const [links, setLinks] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-
+  const dispatch = useAppDispatch();
+  const [showMuteOptions, setShowMuteOptions] = useState(false);
   const [expandedMedia, setExpandedMedia] = useState(true);
   const [expandedFile, setExpandedFile] = useState(false);
   const [expandedLink, setExpandedLink] = useState(false);
@@ -71,7 +74,20 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   const isGroup = conversation?.type === "GROUP";
+  const currentConversation = useAppSelector((state) =>
+    state.conversation.conversations.find(
+      (c) => c.conversationId === conversation.conversationId
+    )
+  ) || conversation;
 
+  const isPinned = currentConversation?.pinned;
+
+  const isMuted =
+    currentConversation?.muted &&
+    (
+      !currentConversation?.mutedUntil ||
+      new Date(currentConversation.mutedUntil).getTime() > Date.now()
+    );
   useEffect(() => {
     if (!visible || !conversation?.conversationId || !user?.userId) return;
     const fetch = async () => {
@@ -96,7 +112,71 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
   }, [visible, conversation?.conversationId]);
 
   const getFileExt = (name: string) => name.split(".").pop()?.toUpperCase() || "FILE";
+  const handlePin = () => {
+    const newPinned = !conversation.pinned;
 
+    dispatch(updateConversationSetting({
+      conversationId: conversation.conversationId,
+      pinned: newPinned,
+    }));
+
+    (async () => {
+      try {
+        if (newPinned) {
+          await pinConversation(user?.userId, conversation.conversationId);
+        } else {
+          await unpinConversation(user?.userId, conversation.conversationId);
+        }
+      } catch (err) {
+        dispatch(updateConversationSetting({
+          conversationId: conversation.conversationId,
+          pinned: !newPinned,
+        }));
+        console.error(err);
+      }
+    })();
+  };
+  const handleMute = (duration: number) => {
+    let mutedUntil: string | null = null;
+
+    if (duration === 0) {
+      mutedUntil = null;
+    } else if (duration === -1) {
+      mutedUntil = "infinite";
+    } else if (duration === -2) {
+      const now = new Date();
+      const next8AM = new Date();
+      next8AM.setDate(now.getHours() >= 8 ? now.getDate() + 1 : now.getDate());
+      next8AM.setHours(8, 0, 0, 0);
+      mutedUntil = next8AM.toISOString();
+    } else {
+      mutedUntil = new Date(Date.now() + duration * 60 * 1000).toISOString();
+    }
+
+    const newMuted = duration !== 0;
+
+    dispatch(updateConversationSetting({
+      conversationId: conversation.conversationId,
+      muted: newMuted,
+      mutedUntil,
+    }));
+
+    (async () => {
+      try {
+        if (duration === 0) {
+          await unmuteConversation(user?.userId, conversation.conversationId);
+        } else {
+          await muteConversation(user?.userId, conversation.conversationId, duration);
+        }
+      } catch (err) {
+        dispatch(updateConversationSetting({
+          conversationId: conversation.conversationId,
+          muted: !newMuted,
+          mutedUntil: null,
+        }));
+      }
+    })();
+  };
   return (
     <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
       <Pressable
@@ -114,7 +194,7 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
             overflow: "hidden",
           }}
         >
-          {/* Header */}
+
           <View
             style={{
               flexDirection: "row",
@@ -134,7 +214,7 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
-            {/* Profile section */}
+
             <View
               style={{
                 backgroundColor: "white",
@@ -163,7 +243,6 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               </Text>
             </View>
 
-            {/* Action buttons */}
             <View
               style={{
                 backgroundColor: "white",
@@ -174,12 +253,26 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               }}
             >
               {[
-                { icon: "notifications-outline", label: "Tắt thông báo" },
-                { icon: "pin-outline", label: "Ghim hội thoại" },
-                { icon: isGroup ? "person-add-outline" : "people-outline", label: isGroup ? "Thêm TV" : "Tạo nhóm" },
+                {
+                  icon: "notifications-outline",
+                  label: "Tắt thông báo",
+                  onPress: () => setShowMuteOptions(true),
+                  active: isMuted,
+                },
+                {
+                  icon: "pin-outline",
+                  label: "Ghim hội thoại",
+                  onPress: handlePin,
+                  active: isPinned,
+                },
+                {
+                  icon: isGroup ? "person-add-outline" : "people-outline",
+                  label: isGroup ? "Thêm TV" : "Tạo nhóm",
+                },
               ].map((action) => (
                 <TouchableOpacity
                   key={action.label}
+                  onPress={action.onPress}
                   style={{ alignItems: "center", gap: 6 }}
                 >
                   <View
@@ -187,14 +280,26 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                       width: 40,
                       height: 40,
                       borderRadius: 20,
-                      backgroundColor: "#f3f4f6",
+                      backgroundColor: action.active ? "#dbeafe" : "#f3f4f6",
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
-                    <Ionicons name={action.icon as any} size={20} color="#374151" />
+                    <Ionicons
+                      name={action.icon as any}
+                      size={20}
+                      color={action.active ? "#2563eb" : "#374151"}
+                    />
                   </View>
-                  <Text style={{ fontSize: 11, color: "#374151", textAlign: "center", maxWidth: 70 }}>
+
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: action.active ? "#2563eb" : "#374151",
+                      textAlign: "center",
+                      maxWidth: 70,
+                    }}
+                  >
                     {action.label}
                   </Text>
                 </TouchableOpacity>
@@ -248,7 +353,7 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               )}
             </View>
 
-            {/* File section */}
+
             <View style={{ backgroundColor: "white", marginBottom: 2 }}>
               <SectionHeader
                 icon={<MaterialIcons name="insert-drive-file" size={18} color="#374151" />}
@@ -312,7 +417,7 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               )}
             </View>
 
-            {/* Link section */}
+
             <View style={{ backgroundColor: "white", marginBottom: 2 }}>
               <SectionHeader
                 icon={<MaterialIcons name="link" size={18} color="#374151" />}
@@ -371,7 +476,7 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               )}
             </View>
 
-            {/* Danger zone */}
+
             <View style={{ backgroundColor: "white", marginTop: 8 }}>
               <TouchableOpacity
                 style={{
@@ -396,7 +501,7 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
             <View style={{ height: 40 }} />
           </ScrollView>
 
-          {/* Media preview fullscreen */}
+
           {previewIndex !== null && (
             <Modal transparent visible animationType="fade" onRequestClose={() => setPreviewIndex(null)}>
               <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.95)", alignItems: "center", justifyContent: "center" }}>
@@ -447,6 +552,78 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
           )}
         </Pressable>
       </Pressable>
+      <Modal
+        transparent
+        visible={showMuteOptions}
+        animationType="fade"
+        onRequestClose={() => setShowMuteOptions(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
+          onPress={() => setShowMuteOptions(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              bottom: 0,
+              width: "100%",
+              backgroundColor: "white",
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
+              paddingBottom: 20,
+            }}
+          >
+            <Text style={{
+              textAlign: "center",
+              fontSize: 15,
+              fontWeight: "600",
+              paddingVertical: 14
+            }}>
+              Tắt thông báo
+            </Text>
+
+            {[
+              { label: "Trong 1 giờ", duration: 60 },
+              { label: "Trong 4 giờ", duration: 240 },
+              { label: "Cho đến 8:00 AM", duration: -2 },
+              { label: "Cho đến khi mở lại", duration: -1 },
+            ].map((item) => (
+              <TouchableOpacity
+                key={item.label}
+                onPress={() => {
+                  handleMute(item.duration);
+                  setShowMuteOptions(false);
+                }}
+                style={{
+                  paddingVertical: 14,
+                  paddingHorizontal: 20,
+                  borderTopWidth: 1,
+                  borderTopColor: "#f3f4f6",
+                }}
+              >
+                <Text style={{ fontSize: 14, color: "#111" }}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            {/* Cancel */}
+            <TouchableOpacity
+              onPress={() => setShowMuteOptions(false)}
+              style={{
+                marginTop: 8,
+                paddingVertical: 14,
+                alignItems: "center",
+                borderTopWidth: 6,
+                borderTopColor: "#f3f4f6",
+              }}
+            >
+              <Text style={{ fontSize: 14, color: "#ef4444" }}>Hủy</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Modal>
   );
 };

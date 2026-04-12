@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 
-
-=======
->>>>>>> ab3cba3247be0ab8bd4e07f815c36f20957c22f6
 import { useLocation, useParams } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ChatHeader from "@/components/layout/message/ChatHeader";
@@ -19,19 +15,24 @@ import { useAppDispatch, useAppSelector } from "@/store";
 import { setConversations } from "@/store/slices/conversationSlice";
 import ForwardModal from "@/components/layout/message/ForwardModal";
 
-const CURRENT_USER_ID = "699d2b94f9075fe800282901";
 
 
 const ConversationPage = () => {
   const { id } = useParams();
   const location = useLocation();
-  const { conversation } = location.state || {};
+  // const { conversation: conversationFromState } = location.state || {};
   const dispatch = useAppDispatch();
   const conversations = useAppSelector(
     (state) => state.conversation.conversations,
   );
   const user = useAppSelector((state) => state.auth.user);
-
+  const conversation = useAppSelector((state) => {
+    const found = state.conversation.conversations.find(
+      (c) => c.conversationId === id
+    );
+    console.log("[ConversationPage] id:", id, "found:", found?.conversationId, "store size:", state.conversation.conversations.length);
+    return found ?? null;
+  });
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
   const [messages, setMessages] = useState<MessagesType[]>([]);
@@ -414,9 +415,7 @@ const ConversationPage = () => {
 
   const handleForwardMessages = async (targetConversationIds: string[]) => {
     try {
-      await messageService.forwardMessagesToConversations(
-
-        setLoadingForward(true);
+      setLoadingForward(true);
       await messageService.forwardMessagesToConversations(
         user?.userId || "",
         selectedMessages,
@@ -652,8 +651,7 @@ const ConversationPage = () => {
       <ConversationInfoPanel
         isOpen={isInfoOpen}
         conversation={conversation}
-
-        currentUser={{ _id: user?.userId || "" }}
+        onClose={() => setIsInfoOpen(false)}
       />
     </div>
   );

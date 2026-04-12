@@ -46,7 +46,6 @@ export default function ForgotPassword() {
       });
     } catch (err: any) {
 
-
       ToastAndroid.show(err.message, ToastAndroid.LONG);
     }
   };
