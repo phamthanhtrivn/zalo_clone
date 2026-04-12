@@ -1,5 +1,5 @@
-import { FileType } from '@zalo-clone/shared-types';
 import { IsEnum, IsNumber, IsString } from 'class-validator';
+import { FileType } from 'src/common/types/enums/file-type';
 
 export class FileDto {
   @IsString()

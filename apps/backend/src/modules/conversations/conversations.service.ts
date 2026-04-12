@@ -9,10 +9,8 @@ import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Conversation } from './schemas/conversation.schema';
 
 import { Connection, Model, Types } from 'mongoose';
-
 import { Member } from '../members/schemas/member.schema';
 import { CreateGroupDto } from './dto/create-group.dto';
-import { ConversationType, MemberRole } from '@zalo-clone/shared-types';
 import { Message } from '../messages/schemas/message.schema';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { TransferOwnerDto } from './dto/transfer-owenr.dto';
@@ -20,6 +18,9 @@ import { RemoveMemberDto } from './dto/remove-member.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 
 import e from 'express';
+import { StorageService } from 'src/common/storage/storage.service';
+import { ConversationType } from 'src/common/types/enums/conversation-type';
+import { MemberRole } from 'src/common/types/enums/member-role';
 
 import { ConversationItemDto } from './dto/conversation-item.dto';
 
@@ -31,8 +32,9 @@ export class ConversationsService {
     private conversationModel: Model<Conversation>,
     @InjectModel(Member.name) private memberModel: Model<Member>,
     @InjectModel(Message.name) private messageModel: Model<Message>,
-
     @InjectConnection() private connection: Connection,
+
+    private readonly storageService: StorageService,
   ) { }
 
   async createGroup(creatorId: string, dto: CreateGroupDto) {
@@ -434,8 +436,49 @@ export class ConversationsService {
         {
           $lookup: {
             from: 'messages',
-            localField: 'conversation.lastMessageId',
-            foreignField: '_id',
+
+            let: {
+              conversationId: '$conversation._id',
+              lastMessageId: '$conversation.lastMessageId',
+              currentUser: '$userId',
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$conversationId', '$$conversationId'] },
+
+                      {
+                        $not: {
+                          $in: [
+                            '$$currentUser',
+                            { $ifNull: ['$deletedFor', []] },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+
+              {
+                $addFields: {
+                  isLastMessage: {
+                    $eq: ['$_id', '$$lastMessageId'],
+                  },
+                },
+              },
+
+              {
+                $sort: {
+                  isLastMessage: -1,
+                  createdAt: -1,
+                },
+              },
+
+              { $limit: 1 },
+            ],
             as: 'lastMessage',
           },
         },
@@ -546,6 +589,7 @@ export class ConversationsService {
             },
 
             lastMessage: {
+
               senderName: {
                 $cond: [
                   { $eq: ['$lastMessage.senderId', '$userId'] },
@@ -555,6 +599,8 @@ export class ConversationsService {
               },
 
               content: '$lastMessage.content',
+
+              recalled: '$lastMessage.recalled',
             },
 
             lastMessageAt: '$conversation.lastMessageAt',
@@ -568,6 +614,10 @@ export class ConversationsService {
         },
       ]);
 
-    return conversations;
+
+    return conversations.map((c) => ({
+      ...c,
+      avatar: c.avatar ? this.storageService.signFileUrl(c.avatar) : null,
+    }));
   }
 }

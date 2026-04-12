@@ -1,4 +1,5 @@
 import type { ConversationCategory, ConversationItemType } from "@/types/conversation-item.type";
+
 import { Link } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { cn } from "@/lib/utils";
@@ -162,6 +163,7 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
     }
   };
   const expireDays = conversation.expireDuration / (24 * 60 * 60 * 1000);
+
   return (
     <Link
       to={`/conversation/${conversation.conversationId}`}
@@ -187,6 +189,7 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
             )}
           >
             {conversation.type === "GROUP" && (
+
               <MdGroups size={18} color="gray" />
             )}
 
@@ -203,12 +206,14 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
 
               <MdNotificationsOff className="text-gray-400 w-5 h-5" />
             )}
+
             {/* time */}
             <span className="text-[11px] text-gray-400 transition-opacity group-hover:opacity-0">
               {formatMessageTime(conversation.lastMessageAt)}
             </span>
 
             {/* button */}
+
             <div ref={refs.setReference}>
               <MoreHorizontal
                 className="w-4 h-4 text-gray-500 opacity-0 group-hover:opacity-100"
@@ -504,6 +509,7 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
             {getPreviewContent}
           </span>
         </p>
+
       </div>
     </Link>
   );

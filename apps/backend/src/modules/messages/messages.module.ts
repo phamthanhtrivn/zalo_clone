@@ -11,6 +11,9 @@ import {
 } from '../conversations/schemas/conversation.schema';
 import { StorageModule } from 'src/common/storage/storage.module';
 import { ChatGateway } from './messages.gateway';
+import { ChatModule } from '../chat/chat.module';
+import { ConversationsModule } from '../conversations/conversations.module';
+
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -20,6 +23,8 @@ import { ChatGateway } from './messages.gateway';
     ]),
     MembersModule,
     StorageModule,
+    ChatModule,
+    ConversationsModule,
   ],
   providers: [MessagesService, ChatGateway],
   controllers: [MessagesController],

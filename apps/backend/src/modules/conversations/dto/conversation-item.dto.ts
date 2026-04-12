@@ -8,6 +8,7 @@ export class ConversationItemDto {
   lastMessage?: {
     senderName: string;
     content: Content;
+    recalled: boolean;
   };
   lastMessageAt: Date;
 }

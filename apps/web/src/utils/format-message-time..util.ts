@@ -24,9 +24,30 @@ export const formatMessageTime = (dateString: string) => {
     return `${hours} giờ`;
   }
 
-  if (diffMs < 7 * day) {
-    const days = Math.floor(diffMs / day);
-    return `${days} ngày`;
+
+
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+
+  const startOfDate = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  );
+
+  const diffDays = Math.floor(
+    (startOfToday.getTime() - startOfDate.getTime()) / day,
+  );
+
+  if (diffDays === 1) {
+    return "Hôm qua";
+  }
+
+  if (diffDays < 7) {
+    return `${diffDays} ngày`;
   }
 
   const isSameYear = now.getFullYear() === date.getFullYear();

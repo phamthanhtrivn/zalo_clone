@@ -22,11 +22,15 @@ import { UpdateCallMessageDto } from './dto/update-call-message.dto';
 import { GetMessagesDto } from './dto/get-messages.dto';
 import { GetMediasPreviewDto } from './dto/get-medias-preview.dto';
 import { GetMediasFileTypeDto } from './dto/get-medias-file-type.dto';
+
+import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
+import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
+import { DeleteMessageForMeDto } from './dto/delete-message-for-me.dto';
+import { ForwardMessageDto } from './dto/forward-message.dto';
+
 @Controller('messages')
 export class MessagesController {
-  constructor(
-    private readonly messagesService: MessagesService,
-  ) { }
+  constructor(private readonly messagesService: MessagesService) { }
 
   @Get('conversation/:conversationId')
   async getMessagesFromConversation(
@@ -36,6 +40,39 @@ export class MessagesController {
     return this.messagesService.getMessagesFromConversation(
       conversationId,
       getMessagesDto,
+    );
+  }
+
+  @Get('conversation/:conversationId/newer')
+  async getNewerMessages(
+    @Param('conversationId') conversationId: string,
+    @Query() getMessagesDto: GetMessagesDto,
+  ) {
+    return this.messagesService.getNewerMessages(
+      conversationId,
+      getMessagesDto,
+    );
+  }
+
+  @Get('conversation/:conversationId/around')
+  async getMessagesAroundPinnedMessage(
+    @Param('conversationId') conversationId: string,
+    @Query() getAroundPinnedMessage: GetAroundPinnedMessage,
+  ) {
+    return this.messagesService.getMessagesAroundPinnedMessage(
+      conversationId,
+      getAroundPinnedMessage,
+    );
+  }
+
+  @Get('conversation/:conversationId/pinned')
+  async getPinnedMessagesFromConversation(
+    @Param('conversationId') conversationId: string,
+    @Query() getPinnedMessagesDto: GetPinnedMessagesDto,
+  ) {
+    return this.messagesService.getPinnedMessagesFromConversation(
+      conversationId,
+      getPinnedMessagesDto,
     );
   }
 
@@ -90,6 +127,13 @@ export class MessagesController {
     return this.messagesService.recalledMessage(recalledMessageDto);
   }
 
+  @Patch('delete-for-me')
+  async deleteMessageForMe(
+    @Body() deleteMessageForMeDto: DeleteMessageForMeDto,
+  ) {
+    return this.messagesService.deleteMessageForMe(deleteMessageForMeDto);
+  }
+
   @Patch('reaction')
   async reactionMessage(@Body() reactionDto: ReactionDto) {
     return this.messagesService.reactionMessage(reactionDto);
@@ -103,5 +147,10 @@ export class MessagesController {
   @Patch('read-receipt')
   async readReceipt(@Body() readReceiptDto: ReadReceiptDto) {
     return this.messagesService.readReceiptMessage(readReceiptDto);
+  }
+
+  @Post('forward')
+  async forwardMessages(@Body() dto: ForwardMessageDto) {
+    return this.messagesService.forwardMessages(dto);
   }
 }
