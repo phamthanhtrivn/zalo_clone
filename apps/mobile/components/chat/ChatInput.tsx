@@ -105,19 +105,38 @@ const ChatInput: React.FC<ChatInputProps> = ({
     return (
       <View
         style={{
-          backgroundColor: "white",
+          backgroundColor: "#fff",
           borderTopWidth: 1,
           borderTopColor: "#e5e7eb",
           paddingHorizontal: 16,
           paddingVertical: 12,
           flexDirection: "row",
           alignItems: "center",
-          justifyContent: "space-between",
+          justifyContent: "space-around",
         }}
       >
-        <Text>
-          Đã chọn {selectedMessages.length} tin nhắn
+        <TouchableOpacity onPress={onCancelSelect} style={{ padding: 4 }}>
+          <Text style={{ color: "#ef4444", fontWeight: "600", fontSize: 15 }}>Hủy</Text>
+        </TouchableOpacity>
+
+        <Text style={{ fontWeight: "600", fontSize: 15, color: "#1f2937" }}>
+          Đã chọn {selectedMessages.length}
         </Text>
+
+        <TouchableOpacity
+          onPress={onOpenForwardModal}
+          disabled={selectedMessages.length === 0}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            padding: 4,
+            opacity: selectedMessages.length === 0 ? 0.5 : 1,
+          }}
+        >
+          <Ionicons name="arrow-redo-outline" size={22} color="#0068ff" />
+          <Text style={{ color: "#0068ff", fontWeight: "600", fontSize: 15 }}>Tiếp tục</Text>
+        </TouchableOpacity>
       </View>
     );
   }

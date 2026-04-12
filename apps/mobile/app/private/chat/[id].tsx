@@ -310,7 +310,7 @@ export default function ChatWindow() {
         "Thả cảm xúc",
         "Trích dẫn",
         isPinned ? "Bỏ ghim" : "Ghim tin nhắn",
-        "Chọn tin nhắn",
+        "Chuyển tiếp",
         "Xem chi tiết",
         "Xóa chỉ ở phía tôi",
         ...(isMe && !msg.recalled ? ["Thu hồi"] : []),
@@ -327,7 +327,7 @@ export default function ChatWindow() {
           else if (options[buttonIndex] === "Trả lời") setReplyMessage(msg);
           else if (options[buttonIndex] === "Ghim tin nhắn" || options[buttonIndex] === "Bỏ ghim")
             handleTogglePin(msg._id);
-          else if (options[buttonIndex] === "Chọn tin nhắn") {
+          else if (options[buttonIndex] === "Chuyển tiếp") {
             setIsSelectMode(true);
             toggleSelectMessage(msg._id);
           } else if (options[buttonIndex] === "Xem chi tiết") setDetailMessage(msg);
@@ -342,7 +342,7 @@ export default function ChatWindow() {
         { text: "Trích dẫn", onPress: () => Alert.alert("Thông báo", "Tính năng Trích dẫn sẽ sớm ra mắt") },
         { text: isPinned ? "Bỏ ghim" : "Ghim tin nhắn", onPress: () => handleTogglePin(msg._id) },
         {
-          text: "Chọn tin nhắn",
+          text: "Chuyển tiếp",
           onPress: () => { setIsSelectMode(true); toggleSelectMessage(msg._id); },
         },
         { text: "Xem chi tiết", onPress: () => setDetailMessage(msg) },
@@ -548,7 +548,7 @@ export default function ChatWindow() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 50 : 0}
+        keyboardVerticalOffset={50}
       >
         <PinnedMessagesBar
           pinnedMessages={pinnedMessages}
