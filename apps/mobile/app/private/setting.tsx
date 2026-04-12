@@ -6,9 +6,15 @@ import {
   Text,
   View,
   Image,
+<<<<<<< HEAD
   TouchableOpacity,
 } from "react-native";
 import { showToast } from "@/utils/toast";
+=======
+  ToastAndroid,
+  TouchableOpacity,
+} from "react-native";
+>>>>>>> ab3cba3247be0ab8bd4e07f815c36f20957c22f6
 import SimpleLineIcons from "@expo/vector-icons/SimpleLineIcons";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { logOut } from "@/store/auth/authThunk";
@@ -28,6 +34,7 @@ export default function SettingScreen() {
 
   console.log("userInfo : ", userInfo);
 
+<<<<<<< HEAD
 
   const handleOnLogout = async () => {
     try {
@@ -35,6 +42,14 @@ export default function SettingScreen() {
       showToast("Đăng xuất thành công");
     } catch (error: any) {
       showToast(error || "Lỗi hệ thống !");
+=======
+  const handleOnLogout = async () => {
+    try {
+      await dispatch(logOut()).unwrap();
+      ToastAndroid.show("Đăng xuất thành công", ToastAndroid.SHORT);
+    } catch (error: any) {
+      ToastAndroid.show(error || "Lỗi hệ thống !", ToastAndroid.SHORT);
+>>>>>>> ab3cba3247be0ab8bd4e07f815c36f20957c22f6
     }
   };
 
@@ -111,9 +126,13 @@ export default function SettingScreen() {
                 <Text className="text-sm text-black">Email</Text>
 
                 <Text className="text-gray-500 text-xs mt-1">
+<<<<<<< HEAD
                   {
                     userInfo?.email ? userInfo?.email : "Chưa liên kết"
                   }
+=======
+                  {userInfo?.email ? userInfo?.email : "Chưa liên kết"}
+>>>>>>> ab3cba3247be0ab8bd4e07f815c36f20957c22f6
                 </Text>
               </View>
             </OptionItem>

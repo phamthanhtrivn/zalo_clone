@@ -10,8 +10,8 @@ import { useAppDispatch } from "@/store/store";
 import { isVietnamPhone } from "@/utils/data-check";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Text, View } from "react-native";
-import { showToast } from "@/utils/toast";
+
+import { Text, ToastAndroid, View } from "react-native";
 
 export default function Register() {
   const dispatch = useAppDispatch();
@@ -34,14 +34,17 @@ export default function Register() {
     try {
       const data = await dispatch(signUp(phone)).unwrap();
 
-      showToast(data.message);
+
+      ToastAndroid.show(data.message, ToastAndroid.SHORT);
 
       router.push({
         params: { phone, expiresIn: data.expiresIn, purpose: Purpose.SignUp },
         pathname: "/(auth)/verify-otp",
       });
     } catch (err: any) {
-      showToast(err.message, true);
+
+      ToastAndroid.show(err.message, ToastAndroid.LONG);
+
     }
   };
 

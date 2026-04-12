@@ -31,6 +31,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     socket.join(userId); // Join a room of userId update online event for sidebar
 
     console.log(`\nUser ${userId} connected with socket ${socket.id}`);
+
+    console.log(`User ${userId} join room: ${userId}`);
   }
 
   handleDisconnect(socket: Socket) {
@@ -46,5 +48,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     socket.join(conversationId);
 
     console.log(`User ${socket.data.userId} joined room: ${conversationId}`);
+  }
+
+
+  // Conversation room
+  @SubscribeMessage('leave_room')
+  handleLeaveRoom(
+    @MessageBody() coversationId: string,
+    @ConnectedSocket() socket: Socket
+  ) {
+    socket.leave(coversationId);
+    console.log(`User ${socket.data.userId} left room: ${coversationId}`);
   }
 }

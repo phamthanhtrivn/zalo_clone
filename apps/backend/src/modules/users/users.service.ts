@@ -26,7 +26,7 @@ export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     private readonly storageService: StorageService,
-  ) {}
+  ) { }
 
   async findByPhone(phone: string) {
     return this.userModel.findOne({ phone: phone }).exec();
@@ -267,7 +267,7 @@ export class UsersService {
   async suggestFriend(userId: string) {
     // id ung cu vien co the kb
     const candidatesIds = await generateSuggestFriends(this.userModel, userId);
-    console.log('candidatesIds : ', candidatesIds);
+
     const friendsUser = await this.userModel
       .findOne({ _id: userId })
       .select({ friends: 1 })

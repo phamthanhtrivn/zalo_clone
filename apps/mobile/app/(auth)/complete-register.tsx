@@ -10,6 +10,8 @@ import {
   Pressable,
   Text,
   View,
+  ToastAndroid,
+
 } from "react-native";
 import { showToast } from "@/utils/toast";
 import DatePicker from "react-native-date-picker";
@@ -44,7 +46,7 @@ export default function CompleteRegister() {
   }, []);
 
   const signUp = async () => {
-    console.log(tmp_token);
+
     try {
       await dispatch(
         completeSignUp({
@@ -58,7 +60,8 @@ export default function CompleteRegister() {
           tempToken: tmp_token,
         }),
       ).unwrap();
-      showToast("Đăng ký thành công");
+
+      ToastAndroid.show("Đăng ký thành công", ToastAndroid.SHORT);
     } catch (err: any) {
       if (err && err.errors && Array.isArray(err.errors)) {
         const errorsObj: Record<string, string> = {};
@@ -70,7 +73,11 @@ export default function CompleteRegister() {
         });
 
         setFieldErrors(errorsObj);
-        showToast(err.message || "Đăng ký thất bại !");
+
+        ToastAndroid.show(
+          err.message || "Đăng ký thất bại !",
+          ToastAndroid.SHORT,
+        );
       }
     }
   };

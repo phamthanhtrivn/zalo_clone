@@ -1,10 +1,12 @@
 import type { ConversationCategory, ConversationItemType } from "@/types/conversation-item.type";
 
+
 import { Link } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { cn } from "@/lib/utils";
 import { formatMessageTime } from "@/utils/format-message-time..util";
 import { MoreHorizontal } from "lucide-react";
+<<<<<<< HEAD
 import { MdGroups, MdNotificationsOff } from "react-icons/md";
 import React, { useMemo, useState } from "react";
 import { ConversationType } from "@zalo-clone/shared-types";
@@ -164,6 +166,7 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
   };
   const expireDays = conversation.expireDuration / (24 * 60 * 60 * 1000);
 
+
   return (
     <Link
       to={`/conversation/${conversation.conversationId}`}
@@ -207,12 +210,14 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
               <MdNotificationsOff className="text-gray-400 w-5 h-5" />
             )}
 
+
             {/* time */}
             <span className="text-[11px] text-gray-400 transition-opacity group-hover:opacity-0">
               {formatMessageTime(conversation.lastMessageAt)}
             </span>
 
             {/* button */}
+
 
             <div ref={refs.setReference}>
               <MoreHorizontal
@@ -509,6 +514,7 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
             {getPreviewContent}
           </span>
         </p>
+
 
       </div>
     </Link>

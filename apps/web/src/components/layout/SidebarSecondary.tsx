@@ -5,13 +5,11 @@ import ConversationList from "./ConversationList";
 import { useEffect } from "react";
 import { conversationService } from "@/services/conversation.service";
 import { setConversations } from "@/store/slices/conversationSlice";
-
 import { useAppDispatch, useAppSelector } from "@/store";
 
 export const SidebarSecondary = () => {
   const location = useLocation();
   const isContactsRoute = location.pathname.startsWith("/contacts");
-
   const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
 
@@ -28,7 +26,6 @@ export const SidebarSecondary = () => {
     };
 
     fetch();
-
   }, [dispatch, user?.userId]);
 
   return (

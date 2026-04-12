@@ -38,7 +38,6 @@ export const SidebarPrimary = () => {
     fetchUser();
   }, []);
 
-  console.log(user);
 
   return (
     <aside className="w-16 bg-[#005AE0] flex flex-col items-center py-4 shrink-0 z-20">
@@ -76,7 +75,7 @@ export const SidebarPrimary = () => {
           const isActive =
             item.path === "/"
               ? location.pathname === "/" ||
-                location.pathname.startsWith("/chat")
+              location.pathname.startsWith("/chat")
               : location.pathname.startsWith(item.path);
 
           return (

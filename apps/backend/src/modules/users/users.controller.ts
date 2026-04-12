@@ -2,7 +2,10 @@ import {
   Body,
   Controller,
   Get,
+<<<<<<< HEAD
   Param,
+=======
+>>>>>>> ab3cba3247be0ab8bd4e07f815c36f20957c22f6
   Patch,
   Post,
   Request,
@@ -14,7 +17,10 @@ import { RequestFriendDto } from './dto/request-friend.dto';
 import { SearchFriendDto } from './dto/search-friend.dto';
 import { InforUser } from './dto/infor-user.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
+<<<<<<< HEAD
 import { AuthUser } from '../auth/types/auth.type';
+=======
+>>>>>>> ab3cba3247be0ab8bd4e07f815c36f20957c22f6
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}

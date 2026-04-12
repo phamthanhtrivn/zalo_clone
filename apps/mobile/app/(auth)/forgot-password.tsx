@@ -9,8 +9,9 @@ import { useAppDispatch } from "@/store/store";
 import { isVietnamPhone } from "@/utils/data-check";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
-import { showToast } from "@/utils/toast";
+
+
+import { Text, ToastAndroid, TouchableOpacity, View } from "react-native";
 
 export default function ForgotPassword() {
   const router = useRouter();
@@ -32,7 +33,8 @@ export default function ForgotPassword() {
     try {
       const data = await dispatch(forgotPassword(phone)).unwrap();
 
-      showToast(data.message);
+
+      ToastAndroid.show(data.message, ToastAndroid.SHORT);
 
       router.push({
         params: {
@@ -43,7 +45,9 @@ export default function ForgotPassword() {
         pathname: "/(auth)/verify-otp",
       });
     } catch (err: any) {
-      showToast(err.message, true);
+
+
+      ToastAndroid.show(err.message, ToastAndroid.LONG);
     }
   };
 

@@ -33,6 +33,7 @@ interface Props {
     messageIds: string[],
     targetConversationIds: string[],
   ) => void;
+
 }
 
 export const MessageItem = ({
@@ -51,6 +52,7 @@ export const MessageItem = ({
   selectedMessages,
   toggleSelectMessage,
   onForwardMessages,
+
 }: Props) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -77,9 +79,8 @@ export const MessageItem = ({
 
       {/* BUBBLE WRAPPER */}
       <div
-        className={`flex group items-center gap-2 ${
-          isMe ? "flex-row-reverse" : "flex-row"
-        }`}
+        className={`flex group items-center gap-2 ${isMe ? "flex-row-reverse" : "flex-row"
+          }`}
       >
         <div className="relative flex group/bubble">
           <MessageBubble
@@ -225,6 +226,9 @@ export const MessageItem = ({
           </div>
         )}
       </div>
+
+
+
       {showDetailModal && (
         <ViewDetailMessageModal
           selectedMessage={message}

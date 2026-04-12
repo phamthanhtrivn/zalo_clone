@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Conversation } from './schemas/conversation.schema';
-
 import { Connection, Model, Types } from 'mongoose';
 import { Member } from '../members/schemas/member.schema';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -17,13 +16,14 @@ import { TransferOwnerDto } from './dto/transfer-owenr.dto';
 import { RemoveMemberDto } from './dto/remove-member.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 
+
 import e from 'express';
+
+
+import { ConversationItemDto } from './dto/conversation-item.dto';
 import { StorageService } from 'src/common/storage/storage.service';
 import { ConversationType } from 'src/common/types/enums/conversation-type';
 import { MemberRole } from 'src/common/types/enums/member-role';
-
-import { ConversationItemDto } from './dto/conversation-item.dto';
-
 
 @Injectable()
 export class ConversationsService {
@@ -33,7 +33,6 @@ export class ConversationsService {
     @InjectModel(Member.name) private memberModel: Model<Member>,
     @InjectModel(Message.name) private messageModel: Model<Message>,
     @InjectConnection() private connection: Connection,
-
     private readonly storageService: StorageService,
   ) { }
 
@@ -436,7 +435,6 @@ export class ConversationsService {
         {
           $lookup: {
             from: 'messages',
-
             let: {
               conversationId: '$conversation._id',
               lastMessageId: '$conversation.lastMessageId',
@@ -448,7 +446,6 @@ export class ConversationsService {
                   $expr: {
                     $and: [
                       { $eq: ['$conversationId', '$$conversationId'] },
-
                       {
                         $not: {
                           $in: [
@@ -461,7 +458,6 @@ export class ConversationsService {
                   },
                 },
               },
-
               {
                 $addFields: {
                   isLastMessage: {
@@ -506,7 +502,8 @@ export class ConversationsService {
           },
         },
 
-        // lấy toàn bộ member của conversation
+
+        // giữ nguyên logic cũ của bạn
         {
           $lookup: {
             from: 'members',
@@ -516,7 +513,7 @@ export class ConversationsService {
           },
         },
 
-        // tìm user còn lại trong PRIVATE chat
+
         {
           $lookup: {
             from: 'users',
@@ -569,7 +566,6 @@ export class ConversationsService {
             _id: 0,
 
             conversationId: '$conversation._id',
-
             type: '$conversation.type',
 
             name: {
@@ -590,6 +586,7 @@ export class ConversationsService {
 
             lastMessage: {
 
+              _id: '$lastMessage._id',
               senderName: {
                 $cond: [
                   { $eq: ['$lastMessage.senderId', '$userId'] },
@@ -599,7 +596,6 @@ export class ConversationsService {
               },
 
               content: '$lastMessage.content',
-
               recalled: '$lastMessage.recalled',
             },
 
@@ -612,8 +608,19 @@ export class ConversationsService {
             lastMessageAt: -1,
           },
         },
-      ]);
 
+
+        // ✅ FIX DUPLICATE Ở ĐÂY (QUAN TRỌNG)
+        {
+          $group: {
+            _id: '$conversationId',
+            data: { $first: '$$ROOT' },
+          },
+        },
+        {
+          $replaceRoot: { newRoot: '$data' },
+        },
+      ]);
 
     return conversations.map((c) => ({
       ...c,

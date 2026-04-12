@@ -25,7 +25,6 @@ export const formatMessageTime = (dateString: string) => {
   }
 
 
-
   const startOfToday = new Date(
     now.getFullYear(),
     now.getMonth(),

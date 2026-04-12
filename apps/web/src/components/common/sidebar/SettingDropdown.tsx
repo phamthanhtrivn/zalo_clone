@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 
 import SideBarItem from "./SideBarItem";
 import { Settings } from "lucide-react";
@@ -7,13 +6,12 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useAppDispatch } from "@/store";
 import { logOut } from "@/store/auth/authThunk";
 import { toast } from "react-toastify";
+import { useAppDispatch } from "@/store";
 
 export default function SettingDropdownSidebar() {
   const dispatch = useAppDispatch();

@@ -49,10 +49,7 @@ export class MessagesService {
     @InjectModel(Conversation.name)
     private readonly conversationModel: Model<Conversation>,
     private readonly storageService: StorageService,
-    // <<<<<<< HEAD
-    //     private readonly gateway: ChatGateway,
-    //   ) { }
-    // =======
+
     private readonly conversationService: ConversationsService,
     private readonly chatGateway: ChatGateway,
   ) { }
@@ -83,7 +80,6 @@ export class MessagesService {
       deletedFor: { $ne: userObjectId },
       ...(cursor && { _id: { $lt: new Types.ObjectId(cursor) } }),
     };
-
 
     const messages = await this.messageModel
       .find(query)
@@ -126,7 +122,6 @@ export class MessagesService {
     const finalMessages = transformedMessages.reverse();
 
     return {
-
       messages: finalMessages,
       nextCursor:
         transformedMessages.length > 0 ? transformedMessages[0]._id : null,
@@ -1376,9 +1371,15 @@ export class MessagesService {
         .populate('reactions.userId', 'profile.name profile.avatarUrl')
         .lean();
 
+
+      const reactions = (updatedMessage?.reactions || []).map((r) => ({
+        ...r,
+        userId: this.signUser(r.userId),
+      }));
+
       this.chatGateway.server.to(conversationId).emit('message_reacted', {
         messageId,
-        reactions: updatedMessage?.reactions,
+        reactions: reactions,
       });
 
       return updatedMessage;
@@ -1417,9 +1418,15 @@ export class MessagesService {
         .populate('reactions.userId', 'profile.name profile.avatarUrl')
         .lean();
 
+
+      const reactions = (updatedMessage?.reactions || []).map((r) => ({
+        ...r,
+        userId: this.signUser(r.userId),
+      }));
+
       this.chatGateway.server.to(conversationId).emit('message_reacted', {
         messageId,
-        reactions: updatedMessage?.reactions,
+        reactions: reactions,
       });
 
       return updatedMessage;
@@ -1642,6 +1649,7 @@ export class MessagesService {
       userId,
       lastReadMessageId: lastMessageId,
     };
+
   }
 
   private signAvatar = (avatar?: string) =>

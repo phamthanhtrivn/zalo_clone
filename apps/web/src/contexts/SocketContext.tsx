@@ -48,7 +48,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     // 🔥 chỉ connect khi có user
     if (!user?.userId) return;
-    // if (!currentUserId) return;
 
     if (!socketRef.current) {
       socketRef.current = io(apiUrl, {
@@ -85,8 +84,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [
     apiUrl,
     dispatch,
-    user?.userId,
-    // currentUserId,
+
+    user?.userId
   ]);
 
   return (

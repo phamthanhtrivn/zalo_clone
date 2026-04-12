@@ -2,7 +2,6 @@ import type { EmojiType } from "@/constants/emoji.constant";
 import { apiClient } from "./apiClient";
 
 export const messageService = {
-
   getMessagesFromConversation: async (
     conversationId: string,
     userId: string,

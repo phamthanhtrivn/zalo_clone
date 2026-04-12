@@ -10,10 +10,11 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Text,
+
+  ToastAndroid,
   TouchableOpacity,
   View,
 } from "react-native";
-import { showToast } from "@/utils/toast";
 import { useSelector } from "react-redux";
 
 export default function Login() {
@@ -50,10 +51,11 @@ export default function Login() {
   const handleOnSignIn = async () => {
     try {
       await dispatch(signIn({ phone, password })).unwrap();
-      showToast("Đăng nhập thành công");
+
+      ToastAndroid.show("Đăng nhập thành công", ToastAndroid.SHORT);
     } catch (err: any) {
       console.log(err);
-      showToast("Đăng nhập thất bại");
+      ToastAndroid.show("Đăng nhập thất bại", ToastAndroid.SHORT);
     }
   };
 
@@ -83,7 +85,8 @@ export default function Login() {
           security={isHiddenPass}
           onChangeText={handleOnChangePassword}
         />
-        <Text className="text-red-600">{error?.message}</Text>
+
+        <Text className="text-red-600">{error.message}</Text>
         <TouchableOpacity className="w-32" onPress={handleForgotPassword}>
           <Text className="text-primary/70 font-semibold">
             Lấy lại mật khẩu

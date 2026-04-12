@@ -1,8 +1,9 @@
 import Tips from "@/components/auth/Tips";
 import Container from "@/components/common/Container";
 import Header from "@/components/common/Header";
-import { ActivityIndicator, Text, View } from "react-native";
-import { showToast } from "@/utils/toast";
+
+
+import { ActivityIndicator, Text, ToastAndroid, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { COLORS } from "@/constants/colors";
@@ -52,9 +53,11 @@ export default function VerifyOtp() {
       }
 
       setTimeLeft(data.expiresIn);
-      showToast(data.message);
+
+
+      ToastAndroid.show(data.message, ToastAndroid.SHORT);
     } catch (err: any) {
-      showToast(err);
+      ToastAndroid.show(err, ToastAndroid.SHORT);
     }
   };
 
@@ -69,7 +72,8 @@ export default function VerifyOtp() {
       console.log(data);
     } catch (err: any) {
       console.log(error);
-      showToast(err.message);
+
+      ToastAndroid.show(err.message, ToastAndroid.SHORT);
     }
   };
 
