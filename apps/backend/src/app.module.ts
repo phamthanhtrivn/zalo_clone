@@ -9,6 +9,8 @@ import { MembersModule } from './modules/members/members.module';
 import { ConversationSettingsModule } from './modules/conversation-settings/conversation-settings.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { RedisModule } from './common/redis/redis.module';
+
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/passport/jwt-auth.guard';
 import { ChatModule } from './modules/chat/chat.module';
@@ -25,6 +27,7 @@ import { ChatModule } from './modules/chat/chat.module';
         uri: configService.get<string>('mongoUri'),
       }),
     }),
+    ScheduleModule.forRoot(),
     RedisModule,
     UsersModule,
     ConversationsModule,
@@ -41,4 +44,5 @@ import { ChatModule } from './modules/chat/chat.module';
     },
   ],
 })
-export class AppModule { }
+
+export class AppModule {}

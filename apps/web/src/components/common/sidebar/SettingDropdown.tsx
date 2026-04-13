@@ -1,5 +1,3 @@
-
-
 import SideBarItem from "./SideBarItem";
 import { Settings } from "lucide-react";
 import {

@@ -13,7 +13,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSocket } from "@/contexts/SocketContext";
 import { messageService } from "@/services/message.service";
-import { useAppSelector } from "@/store/store";
+import { useAppDispatch, useAppSelector } from "@/store/store";
 import type { MessagesType, ReactionType } from "@/types/messages.type";
 import { EMOJI_MAP, REACTION_EMOJIS, type EmojiType } from "@/constants/emoji.constant";
 import Container from "@/components/common/Container";
@@ -28,6 +28,8 @@ import ConversationInfoSheet from "@/components/chat/ConversationInfoSheet";
 import { getDateLabel, isSameHourAndMinute } from "@/utils/format-message-time..util";
 import { Image } from "expo-image";
 import MenuItem from "@/components/chat/MenuItem";
+import { conversationService } from "@/services/conversation.service";
+import { setConversations } from "@/store/slices/conversationSlice";
 
 export default function ChatWindow() {
   const conversations = useAppSelector((state) => state.conversation.conversations);
@@ -35,6 +37,7 @@ export default function ChatWindow() {
   const { socket } = useSocket();
   const user = useAppSelector((state) => state.auth.user);
   const router = useRouter();
+  const dispatch = useAppDispatch()
 
   const conversation = conversations.find((c) => c.conversationId === id);
   const [contextMenuMsg, setContextMenuMsg] = useState<MessagesType | null>(null);
@@ -238,6 +241,14 @@ export default function ChatWindow() {
     try {
       await messageService.deleteMessageForMe(user.userId, messageId, id);
       setMessages((prev) => prev.filter((m) => m._id !== messageId));
+
+      const res: any = await conversationService.getConversationsFromUserId(
+        user?.userId || "",
+      );
+
+      if (res.success) {
+        dispatch(setConversations(res.data));
+      }
     } catch (err) {
       console.error(err);
     }

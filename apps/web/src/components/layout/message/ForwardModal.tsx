@@ -116,7 +116,7 @@ const ForwardModal = ({
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

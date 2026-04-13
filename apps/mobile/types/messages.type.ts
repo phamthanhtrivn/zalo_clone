@@ -21,6 +21,7 @@ export interface MessagesType {
   readReceipts: ReadReceiptType[];
   repliedId: string | null;
   call: string | null;
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,7 +41,6 @@ export interface ReactionType {
   createdAt: string;
   updatedAt: string;
 }
-
 export interface ReadReceiptType {
   userId: {
     _id: string;

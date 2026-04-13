@@ -56,10 +56,13 @@ export class ConversationSettingsController {
     muteConversation(
         @Body('userId') userId: string,
         @Body('conversationId') conversationId: string,
+        @Body('duration') duration: number
     ) {
         return this.conversationSettingsService.muteConversation(
             new Types.ObjectId(userId),
-            new Types.ObjectId(conversationId));
+            new Types.ObjectId(conversationId),
+            duration
+        );
     }
     // Bật thông báo
     @Patch('unmute')
@@ -70,6 +73,42 @@ export class ConversationSettingsController {
         return this.conversationSettingsService.unmuteConversation(
             new Types.ObjectId(userId),
             new Types.ObjectId(conversationId));
+    }
+    // Phân loại cuộc hội thoại
+    // Phân loại
+    @Patch('category')
+    setCategory(
+        @Body('userId') userId: string,
+        @Body('conversationId') conversationId: string,
+        @Body('category') category: string,
+    ) {
+        return this.conversationSettingsService.setCategory(
+            new Types.ObjectId(userId),
+            new Types.ObjectId(conversationId),
+            category
+        );
+    }
+    @Patch('delete')
+    deleteConversation(
+        @Body('userId') userId: string,
+        @Body('conversationId') conversationId: string,
+    ) {
+        return this.conversationSettingsService.deleteConversation(
+            new Types.ObjectId(userId),
+            new Types.ObjectId(conversationId),
+        );
+    }
+    @Patch('expire')
+    async setExpire(
+        @Body() body: {
+            userId: string;
+            conversationId: string;
+            duration: number;
+        },
+    ) {
+        return this.conversationSettingsService.setExpire(body.userId,
+            body.conversationId,
+            body.duration,);
     }
 
 }

@@ -3,8 +3,14 @@ export interface ConversationItemType {
   type: string;
   name: string;
   avatar: string;
+  muted: boolean;
+  mutedUntil: Date | null;
+  pinned: boolean;
+  hidden: boolean;
+  category?: ConversationCategory;
+  deletedAt: Date | null;
+  expireDuration: number;
   lastMessage: {
-    senderId: string;
     _id: string;
     senderName: string;
     content: {
@@ -23,3 +29,13 @@ export interface File {
   fileSize: number;
   type: "IMAGE" | "VIDEO" | "FILE";
 }
+
+
+export type ConversationCategory =
+  | 'customer'
+  | 'family'
+  | 'work'
+  | 'friends'
+  | 'later'
+  | 'colleague'
+  | null;

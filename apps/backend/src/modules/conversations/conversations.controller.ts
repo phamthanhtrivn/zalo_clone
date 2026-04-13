@@ -18,7 +18,7 @@ import { AddMemberDto } from './dto/add-member.dto';
 
 @Controller('conversations')
 export class ConversationsController {
-  constructor(private readonly conversationsService: ConversationsService) {}
+  constructor(private readonly conversationsService: ConversationsService) { }
 
   @Post('group')
   //   @UseGuards()

@@ -551,13 +551,56 @@ export class ConversationsService {
             preserveNullAndEmptyArrays: true,
           },
         },
+        {
+          $lookup: {
+            from: 'conversationsettings',
+            let: {
+              conversationId: '$conversation._id',
+              userId: '$userId',
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$conversationId', '$$conversationId'] },
+                      { $eq: ['$userId', '$$userId'] },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: 'settings',
+          },
+        },
+        {
+          $unwind: {
+            path: '$settings',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
 
         {
           $project: {
             _id: 0,
             conversationId: '$conversation._id',
             type: '$conversation.type',
-
+            pinned: { $ifNull: ['$settings.pinned', false] },
+            hidden: { $ifNull: ['$settings.hidden', false] },
+            category: { $ifNull: ['$settings.category', null] },
+            expireDuration: { $ifNull: ['$settings.expireDuration', 0] },
+            muted: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: ['$settings.mutedUntil', null] },
+                    { $gt: ['$settings.mutedUntil', '$$NOW'] },
+                  ],
+                },
+                true,
+                false,
+              ],
+            },
             name: {
               $cond: [
                 { $eq: ['$conversation.type', 'GROUP'] },

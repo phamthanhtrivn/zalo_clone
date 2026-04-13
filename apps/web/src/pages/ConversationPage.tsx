@@ -16,14 +16,17 @@ import ForwardModal from "@/components/layout/message/ForwardModal";
 
 const ConversationPage = () => {
   const { id } = useParams();
-  const location = useLocation();
-  const { conversation } = location.state || {};
   const dispatch = useAppDispatch();
   const conversations = useAppSelector(
     (state) => state.conversation.conversations,
   );
   const user = useAppSelector((state) => state.auth.user);
-
+  const conversation = useAppSelector((state) => {
+    const found = state.conversation.conversations.find(
+      (c) => c.conversationId === id,
+    );
+    return found ?? null;
+  });
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
   const [messages, setMessages] = useState<MessagesType[]>([]);
@@ -627,7 +630,7 @@ const ConversationPage = () => {
       <ConversationInfoPanel
         isOpen={isInfoOpen}
         conversation={conversation}
-        currentUser={{ _id: user?.userId || "" }}
+        onClose={() => setIsInfoOpen(false)}
       />
     </div>
   );

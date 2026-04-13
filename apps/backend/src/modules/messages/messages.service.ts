@@ -23,6 +23,10 @@ import { UpdateCallMessageDto } from './dto/update-call-message.dto';
 import { GetMessagesDto } from './dto/get-messages.dto';
 import { GetMediasPreviewDto } from './dto/get-medias-preview.dto';
 import { GetMediasFileTypeDto } from './dto/get-medias-file-type.dto';
+
+import { Cron, CronExpression } from '@nestjs/schedule';
+// import { ChatGateway } from './messages.gateway';
+
 import { MessageResponse } from './types/message-response.type';
 import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
 import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
@@ -35,7 +39,6 @@ import { MemberRole } from 'src/common/types/enums/member-role';
 import { CallStatus } from 'src/common/types/enums/call-status';
 import { FileType } from 'src/common/types/enums/file-type';
 import { ForwardMessageDto } from './dto/forward-message.dto';
-
 @Injectable()
 export class MessagesService {
   constructor(
@@ -46,6 +49,7 @@ export class MessagesService {
     @InjectModel(Conversation.name)
     private readonly conversationModel: Model<Conversation>,
     private readonly storageService: StorageService,
+
     private readonly conversationService: ConversationsService,
     private readonly chatGateway: ChatGateway,
   ) {}
@@ -528,7 +532,10 @@ export class MessagesService {
     const { senderId, conversationId, content, repliedId } = sendMessageDto;
 
     const conversation = await this.conversationModel.findById(conversationId);
-
+    let expiresAt: Date | undefined;
+    if (sendMessageDto.expireDuration) {
+      expiresAt = new Date(Date.now() + sendMessageDto.expireDuration);
+    }
     if (!conversation) {
       throw new NotFoundException('Conversation not found');
     }
@@ -581,6 +588,8 @@ export class MessagesService {
       conversationId: new Types.ObjectId(conversationId),
       content: formattedContent,
       call: null,
+      expiresAt,
+      expired: false,
       pinned: false,
       recalled: false,
       reactions: [],

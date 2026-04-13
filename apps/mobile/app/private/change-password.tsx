@@ -7,7 +7,8 @@ import { changePassword } from "@/store/auth/authThunk";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Text, ToastAndroid, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
+import { showToast } from "@/utils/toast";
 
 export default function ChangePassword() {
   const router = useRouter();
@@ -33,7 +34,7 @@ export default function ChangePassword() {
           oldPassword: oldPassword,
         }),
       ).unwrap();
-      ToastAndroid.show("Đổi mật khẩu thành công", ToastAndroid.SHORT);
+      showToast("Đổi mật khẩu thành công");
       router.back();
     } catch (err: any) {
       if (err && err.errors && Array.isArray(err.errors)) {
@@ -47,10 +48,7 @@ export default function ChangePassword() {
 
         setFieldErrors(errorsObj);
       }
-      ToastAndroid.show(
-        err.message || "Đổi mật khẩu thất bại !",
-        ToastAndroid.SHORT,
-      );
+      showToast(err.message || "Đổi mật khẩu thất bại !");
     }
   };
 

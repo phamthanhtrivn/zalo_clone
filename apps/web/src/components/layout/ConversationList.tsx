@@ -3,12 +3,26 @@ import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { Button } from "../ui/button";
 import ConversationListItem from "./ConversationListItem";
 import { useAppSelector } from "@/store";
+import { useMemo, useState } from "react";
+
 
 const ConversationList = () => {
   const { id } = useParams();
   const conversations = useAppSelector(
     (state) => state.conversation.conversations,
   );
+  const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const sortedConversations = useMemo(() => {
+    return [...conversations].sort((a, b) => {
+      if (a.pinned !== b.pinned) {
+        return a.pinned ? -1 : 1;
+      }
+
+      return (
+        new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+      );
+    });
+  }, [conversations]);
 
   return (
     <div className="flex flex-col h-full">
@@ -48,17 +62,18 @@ const ConversationList = () => {
           </div>
         )}
 
-        {
-          conversations.map((c) => (
-            <ConversationListItem
-              key={c.conversationId}
-              conversation={c}
-              isActive={id === c.conversationId}
-            />
-          ))
-        }
-      </div >
-    </div >
+        {sortedConversations.filter(c => !c.hidden).map((c) => (
+          <ConversationListItem
+            key={c.conversationId}
+            conversation={c}
+            isActive={id === c.conversationId}
+            openMenu={openMenu}
+            setOpenMenu={setOpenMenu}
+          />
+        ))}
+      </div>
+    </div>
+
   );
 };
 

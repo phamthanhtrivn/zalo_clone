@@ -9,9 +9,11 @@ import {
   ActivityIndicator,
   Pressable,
   Text,
-  ToastAndroid,
   View,
+  ToastAndroid,
+
 } from "react-native";
+import { showToast } from "@/utils/toast";
 import DatePicker from "react-native-date-picker";
 import { formatDate } from "@/utils/formater";
 import { useAppDispatch, useAppSelector } from "@/store/store";
@@ -57,6 +59,7 @@ export default function CompleteRegister() {
           tempToken: tmp_token,
         }),
       ).unwrap();
+
       ToastAndroid.show("Đăng ký thành công", ToastAndroid.SHORT);
     } catch (err: any) {
       if (err && err.errors && Array.isArray(err.errors)) {
@@ -69,6 +72,7 @@ export default function CompleteRegister() {
         });
 
         setFieldErrors(errorsObj);
+
         ToastAndroid.show(
           err.message || "Đăng ký thất bại !",
           ToastAndroid.SHORT,
