@@ -8,7 +8,7 @@ import { useEffect } from "react";
 export default function TabLayout() {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
-  
+
   useEffect(() => {
     dispatch(fetchUserById(user?.userId ? user?.userId : ""));
   }, [dispatch, user]);

@@ -29,7 +29,7 @@ export class ConversationsService {
     @InjectModel(Message.name) private messageModel: Model<Message>,
     @InjectConnection() private connection: Connection,
     private readonly storageService: StorageService,
-  ) {}
+  ) { }
 
   async createGroup(creatorId: string, dto: CreateGroupDto) {
     const uniqueMemberIds = [...new Set(dto.memberIds)];
@@ -441,7 +441,6 @@ export class ConversationsService {
                   $expr: {
                     $and: [
                       { $eq: ['$conversationId', '$$conversationId'] },
-
                       {
                         $not: {
                           $in: [
@@ -454,7 +453,6 @@ export class ConversationsService {
                   },
                 },
               },
-
               {
                 $addFields: {
                   isLastMessage: {
@@ -462,14 +460,12 @@ export class ConversationsService {
                   },
                 },
               },
-
               {
                 $sort: {
                   isLastMessage: -1,
                   createdAt: -1,
                 },
               },
-
               { $limit: 1 },
             ],
             as: 'lastMessage',
@@ -499,7 +495,7 @@ export class ConversationsService {
           },
         },
 
-        // lấy toàn bộ member của conversation
+        // giữ nguyên logic cũ của bạn
         {
           $lookup: {
             from: 'members',
@@ -509,7 +505,6 @@ export class ConversationsService {
           },
         },
 
-        // tìm user còn lại trong PRIVATE chat
         {
           $lookup: {
             from: 'users',
@@ -556,15 +551,56 @@ export class ConversationsService {
             preserveNullAndEmptyArrays: true,
           },
         },
+        {
+          $lookup: {
+            from: 'conversationsettings',
+            let: {
+              conversationId: '$conversation._id',
+              userId: '$userId',
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$conversationId', '$$conversationId'] },
+                      { $eq: ['$userId', '$$userId'] },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: 'settings',
+          },
+        },
+        {
+          $unwind: {
+            path: '$settings',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
 
         {
           $project: {
             _id: 0,
-
             conversationId: '$conversation._id',
-
             type: '$conversation.type',
-
+            pinned: { $ifNull: ['$settings.pinned', false] },
+            hidden: { $ifNull: ['$settings.hidden', false] },
+            category: { $ifNull: ['$settings.category', null] },
+            expireDuration: { $ifNull: ['$settings.expireDuration', 0] },
+            muted: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: ['$settings.mutedUntil', null] },
+                    { $gt: ['$settings.mutedUntil', '$$NOW'] },
+                  ],
+                },
+                true,
+                false,
+              ],
+            },
             name: {
               $cond: [
                 { $eq: ['$conversation.type', 'GROUP'] },
@@ -590,7 +626,6 @@ export class ConversationsService {
                   '$sender.profile.name',
                 ],
               },
-
               content: '$lastMessage.content',
               recalled: '$lastMessage.recalled',
             },
@@ -603,6 +638,17 @@ export class ConversationsService {
           $sort: {
             lastMessageAt: -1,
           },
+        },
+
+        // ✅ FIX DUPLICATE Ở ĐÂY (QUAN TRỌNG)
+        {
+          $group: {
+            _id: '$conversationId',
+            data: { $first: '$$ROOT' },
+          },
+        },
+        {
+          $replaceRoot: { newRoot: '$data' },
         },
       ]);
 

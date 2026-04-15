@@ -5,6 +5,12 @@ export class ConversationItemDto {
   type: string;
   name: string;
   avatar?: string;
+  mutedUntil: Date | null;
+  pinned: boolean;
+  hidden: boolean;
+  category?: ConversationCategory;
+  deletedAt: Date | null;
+  expireDuration: number;
   lastMessage?: {
     senderName: string;
     content: Content;
@@ -12,3 +18,12 @@ export class ConversationItemDto {
   };
   lastMessageAt: Date;
 }
+
+export type ConversationCategory =
+  | 'customer'
+  | 'family'
+  | 'work'
+  | 'friends'
+  | 'later'
+  | 'colleague'
+  | null;

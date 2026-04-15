@@ -27,6 +27,11 @@ import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
 import { DeleteMessageForMeDto } from './dto/delete-message-for-me.dto';
 import { ForwardMessageDto } from './dto/forward-message.dto';
 
+import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
+import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
+import { DeleteMessageForMeDto } from './dto/delete-message-for-me.dto';
+import { ForwardMessageDto } from './dto/forward-message.dto';
+
 @Controller('messages')
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) { }

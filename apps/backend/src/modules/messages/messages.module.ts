@@ -10,6 +10,7 @@ import {
   ConversationSchema,
 } from '../conversations/schemas/conversation.schema';
 import { StorageModule } from 'src/common/storage/storage.module';
+import { ChatGateway } from './messages.gateway';
 import { ChatModule } from '../chat/chat.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 
@@ -25,7 +26,7 @@ import { ConversationsModule } from '../conversations/conversations.module';
     ChatModule,
     ConversationsModule,
   ],
-  providers: [MessagesService],
+  providers: [MessagesService, ChatGateway],
   controllers: [MessagesController],
 })
-export class MessagesModule {}
+export class MessagesModule { }

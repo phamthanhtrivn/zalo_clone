@@ -24,10 +24,7 @@ type Props = {
   setIsSelected: (isSelected: boolean) => void;
   selectedMessages: string[];
   toggleSelectMessage: (messageId: string) => void;
-  onForwardMessages: (
-    messageIds: string[],
-    targetConversationIds: string[],
-  ) => void;
+  lastMessageId: string;
 };
 
 const MessageList = ({
@@ -45,7 +42,7 @@ const MessageList = ({
   setIsSelected,
   selectedMessages,
   toggleSelectMessage,
-  onForwardMessages,
+  lastMessageId
 }: Props) => {
   const [selectedMessageReactions, setSelectedMessageReactions] = useState<
     ReactionType[] | null
@@ -75,7 +72,7 @@ const MessageList = ({
         const showDivider =
           !prev ||
           new Date(prev.createdAt).toDateString() !==
-            new Date(message.createdAt).toDateString();
+          new Date(message.createdAt).toDateString();
 
         const sameSenderPrev =
           prev && prev.senderId._id === message.senderId._id;
@@ -94,6 +91,7 @@ const MessageList = ({
 
         const showAvatar = !isMe && isFirstInCluster;
         const showTime = isLastInCluster;
+        const isLastMessage = lastMessageId === message._id
 
         return (
           <div
@@ -128,8 +126,28 @@ const MessageList = ({
               setIsSelected={setIsSelected}
               selectedMessages={selectedMessages}
               toggleSelectMessage={toggleSelectMessage}
-              onForwardMessages={onForwardMessages}
             />
+
+            {isLastMessage && !message.recalled && message.readReceipts?.length > 0 && (
+              <div className={`flex ${isMe ? "justify-end" : "justify-start ml-11"} mt-1 pr-1`}>
+                <div className="flex items-center">
+                  {message.readReceipts.slice(0, 3).map((user: any, index) => {
+
+                    return <img
+                      key={index}
+                      src={user?.userId?.profile?.avatarUrl}
+                      className="w-4 h-4 rounded-full border border-white"
+                    />
+                  })}
+
+                  {message.readReceipts.length > 3 && (
+                    <div className="w-4 h-4 rounded-full bg-gray-300 text-[10px] flex items-center justify-center border border-white">
+                      +{message.readReceipts.length - 3}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         );
       })}

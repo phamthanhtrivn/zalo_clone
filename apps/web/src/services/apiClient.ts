@@ -4,8 +4,6 @@ const API_URL = import.meta.env.VITE_API_URL;
 import { store } from "@/store";
 import { clearAuth, updateToken } from "@/store/auth/authSlice";
 
-console.log(API_URL);
-
 export const apiClient = axios.create({
   baseURL: API_URL,
   headers: {

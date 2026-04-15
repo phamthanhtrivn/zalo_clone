@@ -23,6 +23,10 @@ import { UpdateCallMessageDto } from './dto/update-call-message.dto';
 import { GetMessagesDto } from './dto/get-messages.dto';
 import { GetMediasPreviewDto } from './dto/get-medias-preview.dto';
 import { GetMediasFileTypeDto } from './dto/get-medias-file-type.dto';
+
+import { Cron, CronExpression } from '@nestjs/schedule';
+// import { ChatGateway } from './messages.gateway';
+
 import { MessageResponse } from './types/message-response.type';
 import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
 import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
@@ -35,7 +39,6 @@ import { MemberRole } from 'src/common/types/enums/member-role';
 import { CallStatus } from 'src/common/types/enums/call-status';
 import { FileType } from 'src/common/types/enums/file-type';
 import { ForwardMessageDto } from './dto/forward-message.dto';
-
 @Injectable()
 export class MessagesService {
   constructor(
@@ -46,6 +49,7 @@ export class MessagesService {
     @InjectModel(Conversation.name)
     private readonly conversationModel: Model<Conversation>,
     private readonly storageService: StorageService,
+
     private readonly conversationService: ConversationsService,
     private readonly chatGateway: ChatGateway,
   ) {}
@@ -528,7 +532,10 @@ export class MessagesService {
     const { senderId, conversationId, content, repliedId } = sendMessageDto;
 
     const conversation = await this.conversationModel.findById(conversationId);
-
+    let expiresAt: Date | undefined;
+    if (sendMessageDto.expireDuration) {
+      expiresAt = new Date(Date.now() + sendMessageDto.expireDuration);
+    }
     if (!conversation) {
       throw new NotFoundException('Conversation not found');
     }
@@ -581,6 +588,8 @@ export class MessagesService {
       conversationId: new Types.ObjectId(conversationId),
       content: formattedContent,
       call: null,
+      expiresAt,
+      expired: false,
       pinned: false,
       recalled: false,
       reactions: [],
@@ -621,16 +630,15 @@ export class MessagesService {
         .to(conversationIdStr)
         .emit('new_message', transformedMessage);
 
+      this.emitMessageForMedias(conversationIdStr, transformedMessage);
+
       const room =
         this.chatGateway.server.sockets.adapter.rooms.get(conversationIdStr);
 
       if (room) {
         for (const socketId of room) {
-          console.log(socketId);
-
           const socket: any =
             this.chatGateway.server.sockets.sockets.get(socketId);
-          console.log(socket?.data.userId);
 
           if (socket?.data?.userId !== senderId) {
             await this.readReceiptMessage({
@@ -1361,9 +1369,14 @@ export class MessagesService {
         .populate('reactions.userId', 'profile.name profile.avatarUrl')
         .lean();
 
+      const reactions = (updatedMessage?.reactions || []).map((r) => ({
+        ...r,
+        userId: this.signUser(r.userId),
+      }));
+
       this.chatGateway.server.to(conversationId).emit('message_reacted', {
         messageId,
-        reactions: updatedMessage?.reactions,
+        reactions: reactions,
       });
 
       return updatedMessage;
@@ -1402,9 +1415,14 @@ export class MessagesService {
         .populate('reactions.userId', 'profile.name profile.avatarUrl')
         .lean();
 
+      const reactions = (updatedMessage?.reactions || []).map((r) => ({
+        ...r,
+        userId: this.signUser(r.userId),
+      }));
+
       this.chatGateway.server.to(conversationId).emit('message_reacted', {
         messageId,
-        reactions: updatedMessage?.reactions,
+        reactions: reactions,
       });
 
       return updatedMessage;
@@ -1683,5 +1701,52 @@ export class MessagesService {
           }
         : null,
     };
+  }
+
+  private emitMessageForMedias(
+    conversationIdStr: string,
+    transformedMessage: any,
+  ) {
+    const file = transformedMessage.content?.file;
+    const text = transformedMessage.content?.text;
+
+    if (file?.type === 'IMAGE' || file?.type === 'VIDEO') {
+      this.chatGateway.server.to(conversationIdStr).emit('new_media_preview', {
+        type: 'IMAGE_VIDEO',
+        data: {
+          _id: transformedMessage._id,
+          content: {
+            file,
+          },
+          createdAt: transformedMessage.createdAt,
+        },
+      });
+    }
+
+    if (file?.type === 'FILE') {
+      this.chatGateway.server.to(conversationIdStr).emit('new_media_preview', {
+        type: 'FILE',
+        data: {
+          _id: transformedMessage._id,
+          content: {
+            file,
+          },
+          createdAt: transformedMessage.createdAt,
+        },
+      });
+    }
+
+    if (text && /(http|https):\/\/[^\s]+/.test(text)) {
+      this.chatGateway.server.to(conversationIdStr).emit('new_media_preview', {
+        type: 'LINK',
+        data: {
+          _id: transformedMessage._id,
+          content: {
+            text,
+          },
+          createdAt: transformedMessage.createdAt,
+        },
+      });
+    }
   }
 }

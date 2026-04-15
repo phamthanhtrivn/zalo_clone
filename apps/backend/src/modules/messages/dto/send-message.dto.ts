@@ -1,4 +1,9 @@
-import { IsMongoId, IsOptional, ValidateNested } from 'class-validator';
+import {
+  IsMongoId,
+  IsOptional,
+  ValidateNested,
+  IsNumber,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ContentDto } from './content.dto';
 
@@ -14,4 +19,7 @@ export class SendMessageDto {
   @IsOptional()
   @IsMongoId()
   repliedId?: string;
+  @IsOptional()
+  @IsNumber()
+  expireDuration?: number;
 }

@@ -10,7 +10,8 @@ import conversationReducer from "./slices/conversationSlice";
 export const store = configureStore({
   reducer: {
     auth: authReducer,
-    conversation: conversationReducer
+
+    conversation: conversationReducer,
   },
 });
 
