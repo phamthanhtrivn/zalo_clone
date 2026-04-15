@@ -25,6 +25,8 @@ type Props = {
   selectedMessages: string[];
   toggleSelectMessage: (messageId: string) => void;
   lastMessageId: string;
+  isGroup: boolean;
+  onJumpToMessage?: (messageId: string) => void;
 };
 
 const MessageList = ({
@@ -42,7 +44,9 @@ const MessageList = ({
   setIsSelected,
   selectedMessages,
   toggleSelectMessage,
-  lastMessageId
+  lastMessageId,
+  isGroup,
+  onJumpToMessage
 }: Props) => {
   const [selectedMessageReactions, setSelectedMessageReactions] = useState<
     ReactionType[] | null
@@ -126,6 +130,8 @@ const MessageList = ({
               setIsSelected={setIsSelected}
               selectedMessages={selectedMessages}
               toggleSelectMessage={toggleSelectMessage}
+              isGroup={isGroup}
+              onJumpToMessage={onJumpToMessage}
             />
 
             {isLastMessage && !message.recalled && message.readReceipts?.length > 0 && (

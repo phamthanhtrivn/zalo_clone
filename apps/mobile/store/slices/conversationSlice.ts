@@ -6,10 +6,12 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
 type ConversationState = {
   conversations: ConversationItemType[];
+  replyingMessage: any | null;
 };
 
 const initialState: ConversationState = {
   conversations: [],
+  replyingMessage: null,
 };
 
 const conversationSlice = createSlice({
@@ -101,6 +103,14 @@ const conversationSlice = createSlice({
         (c) => c.conversationId !== action.payload,
       );
     },
+
+    setReplyingMessage(state, action: PayloadAction<any | null>) {
+      state.replyingMessage = action.payload;
+    },
+
+    clearReplyingMessage(state) {
+      state.replyingMessage = null;
+    },
   },
 });
 
@@ -112,6 +122,8 @@ export const {
   hideConversationLocal,
   setCategoryLocal,
   removeConversation,
+  setReplyingMessage,
+  clearReplyingMessage,
 } = conversationSlice.actions;
 
 export default conversationSlice.reducer;

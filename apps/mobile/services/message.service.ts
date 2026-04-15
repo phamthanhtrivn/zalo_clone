@@ -115,7 +115,8 @@ export const messageService = {
         conversationId: string,
         senderId: string,
         content?: { text?: string; icon?: string },
-        file?: File | null,
+        file?: any | null,
+        repliedId?: string | null,
     ) => {
         if (file) {
             const formData = new FormData();
@@ -126,6 +127,9 @@ export const messageService = {
             }
             if (content?.icon) {
                 formData.append("content[icon]", content.icon);
+            }
+            if (repliedId) {
+                formData.append("repliedId", repliedId);
             }
             formData.append("file", file);
 
@@ -141,6 +145,7 @@ export const messageService = {
             conversationId,
             senderId,
             content,
+            repliedId,
         });
         return response;
     },

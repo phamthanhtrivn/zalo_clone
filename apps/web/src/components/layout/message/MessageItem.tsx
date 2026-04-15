@@ -13,6 +13,8 @@ import { RiUnpinLine } from "react-icons/ri";
 import { FaRegTrashAlt } from "react-icons/fa";
 import ViewDetailMessageModal from "./ViewDetailMessageModal";
 import { FaListCheck } from "react-icons/fa6";
+import { useAppDispatch } from "@/store";
+import { setReplyingMessage } from "@/store/slices/conversationSlice";
 
 interface Props {
   message: MessagesType;
@@ -27,8 +29,9 @@ interface Props {
   handleDeleteMessageForMe: (messageId: string) => void;
   isSelected: boolean;
   setIsSelected: (isSelected: boolean) => void;
-  selectedMessages: string[];
   toggleSelectMessage: (messageId: string) => void;
+  isGroup: boolean;
+  onJumpToMessage?: (messageId: string) => void;
 }
 
 export const MessageItem = ({
@@ -46,7 +49,10 @@ export const MessageItem = ({
   setIsSelected,
   selectedMessages,
   toggleSelectMessage,
+  isGroup,
+  onJumpToMessage,
 }: Props) => {
+  const dispatch = useAppDispatch();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
@@ -71,11 +77,13 @@ export const MessageItem = ({
         ))}
       {/* BUBBLE WRAPPER */}
       <div
-        className={`flex group items-center gap-2 ${
-          isMe ? "flex-row-reverse" : "flex-row"
-        }`}
+        className={`flex group items-center gap-2 ${isMe ? "flex-row-reverse" : "flex-row"
+          }`}
       >
-        <div className="relative flex group/bubble">
+        <div className="relative flex flex-col group/bubble">
+          {!isMe && isGroup && showAvatar && (
+            <div className="text-[12px] text-gray-500 mb-1 ml-1">{message.senderId.profile.name}</div>
+          )}
           <MessageBubble
             message={message}
             isMe={isMe}
@@ -83,6 +91,7 @@ export const MessageItem = ({
             isSelected={isSelected}
             selectedMessages={selectedMessages}
             toggleSelectMessage={toggleSelectMessage}
+            onJumpToMessage={onJumpToMessage}
           />
 
           {!message.recalled && (
@@ -113,6 +122,7 @@ export const MessageItem = ({
           "
           >
             <button
+              onClick={() => dispatch(setReplyingMessage(message))}
               title="Trả lời"
               className="cursor-pointer w-7 h-7 flex items-center justify-center rounded-full bg-white shadow-sm border border-gray-100 text-gray-600 hover:bg-gray-50 hover:text-blue-500"
             >

@@ -29,7 +29,7 @@ import { getDateLabel, isSameHourAndMinute } from "@/utils/format-message-time..
 import { Image } from "expo-image";
 import MenuItem from "@/components/chat/MenuItem";
 import { conversationService } from "@/services/conversation.service";
-import { setConversations } from "@/store/slices/conversationSlice";
+import { setConversations, setReplyingMessage, clearReplyingMessage } from "@/store/slices/conversationSlice";
 
 export default function ChatWindow() {
   const conversations = useAppSelector((state) => state.conversation.conversations);
@@ -40,6 +40,7 @@ export default function ChatWindow() {
   const dispatch = useAppDispatch()
 
   const conversation = conversations.find((c) => c.conversationId === id);
+  const isGroup = conversation?.type === "GROUP";
   const [contextMenuMsg, setContextMenuMsg] = useState<MessagesType | null>(null);
 
   // ===== STATE =====
@@ -70,12 +71,14 @@ export default function ChatWindow() {
   const [showInfoSheet, setShowInfoSheet] = useState(false);
 
   // Reply mode
-  const [replyMessage, setReplyMessage] = useState<MessagesType | null>(null);
+  const replyingMessage = useAppSelector((state) => state.conversation.replyingMessage);
 
   const flatListRef = useRef<FlatList>(null);
   const isFirstLoad = useRef(true);
   const isFetchingRef = useRef(false);
   const isFetchingNewerRef = useRef(false);
+  const isJumpingRef = useRef(false);
+  const prevCursorRef = useRef<string | null>(null);
 
   const isPinned = contextMenuMsg && pinnedMessages.some((m) => m._id === contextMenuMsg._id);
 
@@ -85,12 +88,9 @@ export default function ChatWindow() {
   };
 
   const handleGoToNewest = () => {
-    if (prevCursor) {
-      isFirstLoad.current = true;
-      fetchInitialMessages();
-    } else {
-      scrollToBottom();
-    }
+    isFirstLoad.current = true;
+    setPrevCursor(null);
+    fetchInitialMessages();
   };
 
 
@@ -107,11 +107,11 @@ export default function ChatWindow() {
         // API usually returns newest-first. For normal list we want oldest-first.
         const isOldestFirst = msgs.length >= 2 && new Date(msgs[0].createdAt) < new Date(msgs[msgs.length - 1].createdAt);
         const sorted = isOldestFirst ? msgs : [...msgs].reverse();
-        
+
         setMessages(sorted);
         setNextCursor(res.data.nextCursor);
         // If we just loaded history, we are at the end of known history
-        setPrevCursor(null); 
+        setPrevCursor(null);
       }
       const pinRes: any = await messageService.getPinnedMessages(id, user.userId);
       if (pinRes.success) setPinnedMessages(pinRes.data.messages);
@@ -149,12 +149,13 @@ export default function ChatWindow() {
   };
 
   const loadNewerMessages = async () => {
-    if (!id || !user?.userId || !prevCursor || isFetchingNewerRef.current) return;
+    if (!id || !user?.userId || !prevCursor || isFetchingNewerRef.current || isJumpingRef.current) return;
     isFetchingNewerRef.current = true;
     try {
       const res: any = await messageService.getNewerMessages(id, user.userId, prevCursor, 20);
       if (res.success && res.data.messages.length > 0) {
         const newMsgs = res.data.messages;
+        // API returns newest first (typically). We want oldest-first for our state.
         const isOldestFirst = newMsgs.length >= 2 && new Date(newMsgs[0].createdAt) < new Date(newMsgs[newMsgs.length - 1].createdAt);
         const sortedNew = isOldestFirst ? newMsgs : [...newMsgs].reverse();
 
@@ -163,8 +164,12 @@ export default function ChatWindow() {
           const uniqueNew = sortedNew.filter((m: MessagesType) => !existingIds.has(m._id));
           return [...prev, ...uniqueNew];
         });
-        setPrevCursor(res.data.prevCursor); // API returns prevCursor for newer
+
+        // The last message in the new batch is the one used for the NEXT newer fetch
+        const lastMsg = sortedNew[sortedNew.length - 1]; // Use sortedNew last element
+        setPrevCursor(lastMsg._id);
       } else {
+        // If no more newer messages, we are back to live history
         setPrevCursor(null);
       }
     } catch (err) {
@@ -178,8 +183,8 @@ export default function ChatWindow() {
   const handleSendMessage = async (text: string) => {
     if (!id || !user?.userId) return;
     try {
-      await messageService.sendMessage(id, user.userId, { text }, null);
-      if (replyMessage) setReplyMessage(null);
+      await messageService.sendMessage(id, user.userId, { text }, null, replyingMessage?._id);
+      if (replyingMessage) dispatch(clearReplyingMessage());
       scrollToBottom();
     } catch (err) {
       console.error(err);
@@ -189,8 +194,8 @@ export default function ChatWindow() {
   const handleSendFile = async (file: any) => {
     if (!id || !user?.userId) return;
     try {
-      await messageService.sendMessage(id, user.userId, undefined, file);
-      if (replyMessage) setReplyMessage(null);
+      await messageService.sendMessage(id, user.userId, undefined, file, replyingMessage?._id);
+      if (replyingMessage) dispatch(clearReplyingMessage());
       scrollToBottom();
     } catch (err) {
       console.error(err);
@@ -287,26 +292,32 @@ export default function ChatWindow() {
     if (!id || !user?.userId) return;
     const res: any = await messageService.getMessagesAroundPinnedMessage(id, user.userId, messageId, 15);
     if (res.success) {
+      isJumpingRef.current = true;
       const msgs = res.data.messages;
       setMessages(msgs);
       setNextCursor(res.data.nextCursor);
       setPrevCursor(res.data.prevCursor);
-      
+
       const index = msgs.findIndex((m: any) => m._id === messageId);
       if (index !== -1) {
         // Clear previous highlight
         setHighlightedMessageId(null);
-        
+
         setTimeout(() => {
           flatListRef.current?.scrollToIndex({
             index,
             animated: true,
             viewPosition: 0.5, // Center it
           });
-          
+
           setHighlightedMessageId(messageId);
-          setTimeout(() => setHighlightedMessageId(null), 2500);
+          setTimeout(() => {
+            setHighlightedMessageId(null);
+            isJumpingRef.current = false;
+          }, 2500);
         }, 300);
+      } else {
+        isJumpingRef.current = false;
       }
     }
   };
@@ -316,8 +327,13 @@ export default function ChatWindow() {
     if (id && user?.userId) {
       fetchInitialMessages();
       messageService.readReceipt(user.userId, id);
+      dispatch(clearReplyingMessage());
     }
   }, [id, user?.userId]);
+
+  useEffect(() => {
+    prevCursorRef.current = prevCursor;
+  }, [prevCursor]);
 
 
   // ===== SOCKET =====
@@ -326,13 +342,18 @@ export default function ChatWindow() {
     socket.emit("join_room", id);
 
     const handleNewMessage = (newMessage: MessagesType) => {
+      // ONLY append if we are at the end (no newer history)
+      if (prevCursorRef.current) {
+        setShowScrollToBottom(true); // Hint there is new content
+        return;
+      }
       setMessages((prev) => {
         if (prev.some((m) => m._id === newMessage._id)) return prev;
         // New messages from socket go to the END
         return [...prev, newMessage];
       });
       messageService.readReceipt(user.userId, id);
-      
+
       // Auto scroll if user is already at the bottom
       if (!showScrollToBottom) {
         setTimeout(() => scrollToBottom(true), 100);
@@ -439,6 +460,8 @@ export default function ChatWindow() {
           }}
           onOpenReactionModal={(reactions) => setReactionModalData(reactions)}
           renderReadReceipts={isLastReadMessage}
+          onReplyPress={handleJumpToMessage}
+          isGroup={isGroup}
         />
       </View>
     );
@@ -528,12 +551,15 @@ export default function ChatWindow() {
                 const { y } = e.nativeEvent.contentOffset;
                 const { height: contentHeight } = e.nativeEvent.contentSize;
                 const { height: layoutHeight } = e.nativeEvent.layoutMeasurement;
-                
+
                 // Show button if scrolled up or if in historical mode
                 const isBottom = y >= contentHeight - layoutHeight - 100;
                 setShowScrollToBottom(!isBottom || !!prevCursor);
 
+                if (isJumpingRef.current) return;
+
                 if (y < 100) loadMoreMessages();
+                if (isBottom && prevCursor) loadNewerMessages();
               }}
               onContentSizeChange={(w, h) => {
                 if (isFirstLoad.current && h > 0 && messages.length > 0 && !prevCursor) {
@@ -571,7 +597,7 @@ export default function ChatWindow() {
           )}
 
           {/* Reply Bar */}
-          {replyMessage && (
+          {replyingMessage && (
             <View
               style={{
                 backgroundColor: "white",
@@ -586,56 +612,56 @@ export default function ChatWindow() {
               <View style={{ width: 4, height: 30, backgroundColor: "#0068ff", borderRadius: 2 }} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 12, fontWeight: "700", color: "#0068ff" }}>
-                  Đang trả lời {replyMessage.senderId?._id === user?.userId ? "chính mình" : (replyMessage.senderId?.profile?.name || "Bạn")}
+                  Đang trả lời {replyingMessage.senderId?._id === user?.userId ? "chính mình" : (replyingMessage.senderId?.profile?.name || "Bạn")}
                 </Text>
                 <Text numberOfLines={1} style={{ fontSize: 12, color: "#6b7280" }}>
-                  {replyMessage.content?.text || (replyMessage.content?.file ? "[Tệp đính kèm]" : "[Biểu cảm]")}
+                  {replyingMessage.content?.text || (replyingMessage.content?.file ? replyingMessage.content.file.fileName : "[Biểu cảm]")}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setReplyMessage(null)}>
+              <TouchableOpacity onPress={() => dispatch(clearReplyingMessage())}>
                 <Ionicons name="close-circle" size={20} color="#9ca3af" />
               </TouchableOpacity>
             </View>
           )}
 
-            <ChatInput
-              chatName={conversation?.name}
-              onSendMessage={handleSendMessage}
-              onSendFile={handleSendFile}
-              isSelectMode={isSelectMode}
-              selectedMessages={selectedMessages}
-              onOpenForwardModal={() => setShowForwardModal(true)}
-              onCancelSelect={() => {
-                setIsSelectMode(false);
-                setSelectedMessages([]);
-              }}
-            />
+          <ChatInput
+            chatName={conversation?.name}
+            onSendMessage={handleSendMessage}
+            onSendFile={handleSendFile}
+            isSelectMode={isSelectMode}
+            selectedMessages={selectedMessages}
+            onOpenForwardModal={() => setShowForwardModal(true)}
+            onCancelSelect={() => {
+              setIsSelectMode(false);
+              setSelectedMessages([]);
+            }}
+          />
 
-            {/* Floating Jump to Newest Button */}
-            {showScrollToBottom && (
-              <TouchableOpacity
-                onPress={handleGoToNewest}
-                style={{
-                  position: "absolute",
-                  bottom: 100,
-                  right: 16,
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  backgroundColor: "white",
-                  elevation: 4,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 3,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  zIndex: 10,
-                }}
-              >
-                <Ionicons name="chevron-down" size={24} color="#0068ff" />
-              </TouchableOpacity>
-            )}
+          {/* Floating Jump to Newest Button */}
+          {showScrollToBottom && (
+            <TouchableOpacity
+              onPress={handleGoToNewest}
+              style={{
+                position: "absolute",
+                bottom: 100,
+                right: 16,
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: "white",
+                elevation: 4,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 3,
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 10,
+              }}
+            >
+              <Ionicons name="chevron-down" size={24} color="#0068ff" />
+            </TouchableOpacity>
+          )}
         </View>
       </KeyboardAvoidingView>
 
@@ -767,7 +793,7 @@ export default function ChatWindow() {
             }}
           >
             <MenuItem label="Trả lời" onPress={() => {
-              setReplyMessage(contextMenuMsg);
+              dispatch(setReplyingMessage(contextMenuMsg));
               setContextMenuMsg(null);
             }} />
 

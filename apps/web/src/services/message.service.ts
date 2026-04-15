@@ -114,6 +114,7 @@ export const messageService = {
   sendMessage: async (
     conversationId: string,
     senderId: string,
+    repliedId?: string,
     content?: { text?: string; icon?: string },
     file?: File | null,
   ) => {
@@ -127,6 +128,11 @@ export const messageService = {
       if (content?.icon) {
         formData.append("content[icon]", content.icon);
       }
+
+      if (repliedId) {
+        formData.append("repliedId", repliedId);
+      }
+
       formData.append("file", file);
 
       const response = await apiClient.post(`/api/messages`, formData, {
@@ -140,6 +146,7 @@ export const messageService = {
     const response = await apiClient.post(`/api/messages`, {
       conversationId,
       senderId,
+      repliedId,
       content,
     });
     return response.data;

@@ -19,7 +19,4 @@ export class SendMessageDto {
   @IsOptional()
   @IsMongoId()
   repliedId?: string;
-  @IsOptional()
-  @IsNumber()
-  expireDuration?: number;
 }

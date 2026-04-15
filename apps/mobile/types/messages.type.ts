@@ -19,7 +19,7 @@ export interface MessagesType {
   recalled: boolean;
   reactions: ReactionType[];
   readReceipts: ReadReceiptType[];
-  repliedId: string | null;
+  repliedId: MessagesType | null;
   call: string | null;
   expiresAt: string | null;
   createdAt: string;

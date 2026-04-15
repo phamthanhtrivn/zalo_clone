@@ -6,10 +6,12 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
 type ConversationState = {
   conversations: ConversationItemType[];
+  replyingMessage: any | null;
 };
 
 const initialState: ConversationState = {
   conversations: [],
+  replyingMessage: null,
 };
 
 const conversationSlice = createSlice({
@@ -95,6 +97,14 @@ const conversationSlice = createSlice({
         conversation.lastMessage.recalled = true;
       }
     },
+
+    setReplyingMessage(state, action: PayloadAction<any | null>) {
+      state.replyingMessage = action.payload;
+    },
+
+    clearReplyingMessage(state) {
+      state.replyingMessage = null;
+    },
   },
 });
 
@@ -105,6 +115,8 @@ export const {
   setCategoryLocal,
   removeConversation,
   updateRecallMessageInConversation,
+  setReplyingMessage,
+  clearReplyingMessage,
 } = conversationSlice.actions;
 
 export default conversationSlice.reducer;

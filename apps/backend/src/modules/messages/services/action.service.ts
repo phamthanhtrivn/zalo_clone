@@ -71,11 +71,6 @@ export class MessagesActionService {
       );
     }
 
-    let expiresAt: Date | undefined;
-    if (sendMessageDto.expireDuration) {
-      expiresAt = new Date(Date.now() + sendMessageDto.expireDuration);
-    }
-
     const formattedContent: any = {
       text: content?.text ?? null,
       icon: content?.icon ?? null,
@@ -100,8 +95,6 @@ export class MessagesActionService {
       senderId: new Types.ObjectId(senderId),
       conversationId: new Types.ObjectId(conversationId),
       content: formattedContent,
-      expiresAt,
-      expired: false,
       pinned: false,
       recalled: false,
       reactions: [],

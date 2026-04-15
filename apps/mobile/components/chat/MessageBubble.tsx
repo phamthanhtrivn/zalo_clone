@@ -25,6 +25,8 @@ type Props = {
   onOpenReactionModal?: (reactions: ReactionType[]) => void;
   renderReadReceipts?: boolean;
   isHighlighted?: boolean;
+  onReplyPress?: (messageId: string) => void;
+  isGroup: boolean;
 };
 
 const TextWithLinks = ({ text }: { text: string }) => {
@@ -106,6 +108,8 @@ export default function MessageBubble({
   onOpenReactionModal,
   renderReadReceipts = true,
   isHighlighted = false,
+  onReplyPress,
+  isGroup
 }: Props) {
   const content = message.content;
   const file = content?.file;
@@ -210,7 +214,7 @@ export default function MessageBubble({
       {/* BUBBLE */}
       <View style={{ maxWidth: "75%", alignItems: isMe ? "flex-end" : "flex-start" }}>
         {/* NAME */}
-        {!isMe && showName && (
+        {!isMe && isGroup && showName && (
           <Text style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>
             {message.senderId?.profile.name}
           </Text>
@@ -251,6 +255,34 @@ export default function MessageBubble({
             borderColor: "#e5e7eb",
           }}
         >
+          {/* REPLY PREVIEW */}
+          {message.repliedId && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => onReplyPress?.(message.repliedId?._id || "")}
+              style={{
+                backgroundColor: "rgba(0,0,0,0.05)",
+                borderLeftWidth: 3,
+                borderLeftColor: "#0068ff",
+                padding: 6,
+                borderRadius: 4,
+                marginBottom: 6,
+                minWidth: 100,
+              }}
+            >
+              <Text
+                numberOfLines={1}
+                style={{ fontSize: 11, fontWeight: "bold", color: "#0068ff", marginBottom: 2 }}
+              >
+                {message.repliedId.senderId?.profile?.name || "Người dùng"}
+              </Text>
+              <Text numberOfLines={1} style={{ fontSize: 12, color: "#4b5563" }}>
+                {message.repliedId.content?.text ||
+                  (message.repliedId.content?.file ? message.repliedId.content.file.fileName : "[Tệp đính kèm]")}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {/* TEXT */}
           {content?.text && <TextWithLinks text={content.text} />}
 

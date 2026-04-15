@@ -11,7 +11,7 @@ import { toast, Zoom } from "react-toastify";
 import { useSocket } from "@/contexts/SocketContext";
 import { conversationService } from "@/services/conversation.service";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { setConversations } from "@/store/slices/conversationSlice";
+import { setConversations, clearReplyingMessage } from "@/store/slices/conversationSlice";
 import ForwardModal from "@/components/layout/message/ForwardModal";
 
 const ConversationPage = () => {
@@ -27,6 +27,9 @@ const ConversationPage = () => {
     );
     return found ?? null;
   });
+
+  const isGroup = conversation?.type === "GROUP"
+  const replyingMessage = useAppSelector((state) => state.conversation.replyingMessage);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
   const [messages, setMessages] = useState<MessagesType[]>([]);
@@ -329,9 +332,12 @@ const ConversationPage = () => {
     if (!id || !text.trim()) return;
 
     try {
-      await messageService.sendMessage(id, user?.userId || "", {
+      await messageService.sendMessage(id, user?.userId || "", replyingMessage?._id, {
         text,
       });
+      if (replyingMessage) {
+        dispatch(clearReplyingMessage());
+      }
     } catch (error) {
       console.error(error);
     }
@@ -342,7 +348,7 @@ const ConversationPage = () => {
 
     try {
       const promises = Array.from(files).map((file) =>
-        messageService.sendMessage(id, user?.userId || "", undefined, file),
+        messageService.sendMessage(id, user?.userId || "", replyingMessage?._id, undefined, file),
       );
 
       const results = await Promise.all(promises);
@@ -432,6 +438,7 @@ const ConversationPage = () => {
     handleLoadMessagesFromConversation();
     handleLoadPinnedMessages();
     handleOpenConversation();
+    dispatch(clearReplyingMessage());
   }, [id]);
 
   useEffect(() => {
@@ -601,6 +608,8 @@ const ConversationPage = () => {
             selectedMessages={selectedMessages}
             toggleSelectMessage={toggleSelectMessage}
             lastMessageId={lastMessageId}
+            isGroup={isGroup}
+            onJumpToMessage={handleJumpToMessage}
           />
 
           <ChatInput

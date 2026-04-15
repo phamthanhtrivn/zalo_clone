@@ -11,6 +11,7 @@ interface Props {
   isSelected: boolean;
   selectedMessages: string[];
   toggleSelectMessage: (messageId: string) => void;
+  onJumpToMessage?: (messageId: string) => void;
 }
 
 const renderTextWithLinks = (text: string) => {
@@ -42,6 +43,7 @@ export const MessageBubble = ({
   isSelected,
   selectedMessages,
   toggleSelectMessage,
+  onJumpToMessage,
 }: Props) => {
   const content = message.content;
   const file = content?.file;
@@ -100,6 +102,30 @@ export const MessageBubble = ({
         }`}
     >
       <div className="space-y-2 wrap-break-word">
+        {message.repliedId && (
+          <div
+            className={`
+              mb-2 p-2 rounded border-l-4 border-blue-400 bg-black/5 
+              flex flex-col gap-0.5 min-w-[120px] max-w-full
+              cursor-pointer hover:bg-black/10 transition-colors
+            `}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onJumpToMessage && message.repliedId?._id) {
+                onJumpToMessage(message.repliedId._id);
+              }
+            }}
+          >
+            <div className="text-[11px] font-bold text-blue-600 truncate">
+              {message.repliedId.senderId?.profile?.name || "Người dùng"}
+            </div>
+            <div className="text-[12px] text-gray-600 truncate">
+              {message.repliedId.content?.text ||
+                (message.repliedId.content?.file ? message.repliedId.content.file.fileName : "")}
+            </div>
+          </div>
+        )}
+
         {content?.text && <p>{renderTextWithLinks(content.text)}</p>}
 
         {content?.icon && <p className="text-2xl">{content.icon}</p>}
