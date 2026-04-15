@@ -15,7 +15,6 @@ interface Props {
 
 const renderTextWithLinks = (text: string) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
-
   return text.split(urlRegex).map((part, index) => {
     if (urlRegex.test(part)) {
       return (
@@ -30,7 +29,6 @@ const renderTextWithLinks = (text: string) => {
         </a>
       );
     }
-
     return <span key={index}>{part}</span>;
   });
 };
@@ -48,15 +46,10 @@ export const MessageBubble = ({
   const call = message.call;
 
   const handleDownload = async () => {
+    if (!file?.fileKey) return;
     try {
       const response = await fetch(file.fileKey);
-
-      if (!response.ok) {
-        throw new Error("Download failed");
-      }
-
       const blob = await response.blob();
-
       saveAs(blob, file.fileName);
     } catch (error) {
       console.error("Download error:", error);
@@ -118,12 +111,9 @@ export const MessageBubble = ({
   if (message.recalled) {
     return (
       <div
-        className={`rounded-lg px-3 py-2 max-w-md border shadow-sm text-gray-500 ${
-          isMe ? "bg-[#E5F1FF]" : "bg-white"
-        }`}
+        className={`rounded-lg px-3 py-2 max-w-md border shadow-sm text-gray-500 ${isMe ? "bg-[#E5F1FF]" : "bg-white"}`}
       >
         <p>Tin nhắn đã được thu hồi</p>
-
         {showTime && (
           <div className="text-[12px] text-gray-400 mt-1 text-right not-italic">
             {formatTime(message.createdAt)}

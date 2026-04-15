@@ -14,6 +14,7 @@ type Props = {
   conversations: Conversation[];
   selectedMessageIds: string[];
   onSubmit: (conversationIds: string[]) => void;
+  loadingForward: boolean;
 };
 
 const ForwardModal = ({
@@ -22,6 +23,7 @@ const ForwardModal = ({
   conversations,
   selectedMessageIds,
   onSubmit,
+  loadingForward,
 }: Props) => {
   const [selectedConversations, setSelectedConversations] = useState<string[]>(
     [],
@@ -44,9 +46,9 @@ const ForwardModal = ({
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
       <div className="w-120 bg-white rounded-xl shadow-xl flex flex-col">
         {/* HEADER */}
-        <div className="flex justify-between items-center px-4 py-3 border-b">
+        <div className="flex justify-between items-center px-4 py-3 border-b ">
           <h2 className="font-semibold text-lg">Chia sẻ</h2>
-          <button onClick={onClose}>
+          <button onClick={onClose} className="cursor-pointer">
             <X />
           </button>
         </div>
@@ -106,15 +108,15 @@ const ForwardModal = ({
 
             <button
               onClick={() => onSubmit(selectedConversations)}
-              disabled={selectedConversations.length === 0}
-              className={`px-4 py-2 rounded bg-blue-500 text-white disabled:opacity-50 ${selectedConversations.length > 0 ? "hover:bg-blue-600 cursor-pointer" : "cursor-not-allowed"}`}
+              disabled={selectedConversations.length === 0 || loadingForward}
+              className={`px-4 py-2 rounded bg-blue-500 text-white disabled:opacity-50 ${selectedConversations.length > 0 && !loadingForward ? "hover:bg-blue-600 cursor-pointer" : "cursor-not-allowed"}`}
             >
-              Chia sẻ
+              {loadingForward ? "Đang chia sẻ..." : "Chia sẻ"}
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

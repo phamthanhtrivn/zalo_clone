@@ -1,8 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Types } from 'mongoose';
-
 import { MessageType } from 'src/common/enums/message-type.enum';
-
 import { CallStatus } from 'src/common/types/enums/call-status';
 import { CallType } from 'src/common/types/enums/call-type';
 import { EmojiType } from 'src/common/types/enums/emoji-type';
@@ -112,12 +110,21 @@ export class Message {
   @Prop({ type: Call })
   call?: Call;
 
+  // Tính năng tin nhắn tự hủy (từ PhamThanhTri)
+  @Prop({ type: Date, default: null })
+  expiresAt: Date | null;
+
+  @Prop({ default: false })
+  expired: boolean;
+
+  // Khai báo để sửa lỗi TypeScript 
   createdAt: Date;
   updatedAt: Date;
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);
 
+// Indexing
 MessageSchema.index({ conversationId: 1, createdAt: -1 });
 MessageSchema.index({
   conversationId: 1,
@@ -125,3 +132,4 @@ MessageSchema.index({
   createdAt: -1,
 });
 MessageSchema.index({ senderId: 1 });
+MessageSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });

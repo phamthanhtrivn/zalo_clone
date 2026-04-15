@@ -6,7 +6,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useEffect, useState } from "react";
 import { userService } from "../../services/user.service";
 import ProfileModal from "./ProfileModal";
-import SettingDropdownSidebar from "../common/sidebar/SettingDropdown";
 
 interface NavItem {
   icon: any;
@@ -37,8 +36,6 @@ export const SidebarPrimary = () => {
     };
     fetchUser();
   }, []);
-
-  console.log(user);
 
   return (
     <aside className="w-16 bg-[#005AE0] flex flex-col items-center py-4 shrink-0 z-20">
@@ -76,7 +73,7 @@ export const SidebarPrimary = () => {
           const isActive =
             item.path === "/"
               ? location.pathname === "/" ||
-                location.pathname.startsWith("/chat")
+              location.pathname.startsWith("/chat")
               : location.pathname.startsWith(item.path);
 
           return (
@@ -108,7 +105,16 @@ export const SidebarPrimary = () => {
 
       {/* Bottom Actions */}
       <div className="mt-auto flex flex-col items-center">
-        <SettingDropdownSidebar />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button className="w-full aspect-square flex items-center justify-center text-white/70 hover:bg-white/10 hover:text-white transition-colors group relative cursor-pointer">
+              <Settings className="w-6.5 h-6.5 stroke-[1.5]" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>Cài đặt</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
     </aside>
   );

@@ -13,6 +13,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/passport/jwt-auth.guard';
 import { ChatModule } from './modules/chat/chat.module';
 
+import { ScheduleModule } from '@nestjs/schedule';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -25,6 +27,7 @@ import { ChatModule } from './modules/chat/chat.module';
         uri: configService.get<string>('mongoUri'),
       }),
     }),
+    ScheduleModule.forRoot(),
     RedisModule,
     UsersModule,
     ConversationsModule,

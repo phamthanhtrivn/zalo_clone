@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,8 +47,26 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
-import { removeConversation } from "@/store/slices/conversationSlice";
+import {
+  removeConversation,
+  updateConversationSetting,
+} from "@/store/slices/conversationSlice";
+import {
+  pinConversation,
+  unpinConversation,
+  muteConversation,
+  unmuteConversation,
+} from "@/services/conversation-settings.service";
+import {
+  useFloating,
+  offset,
+  flip,
+  shift,
+  autoUpdate,
+  FloatingPortal,
+} from "@floating-ui/react";
 
+// --- TYPES & CONSTANTS ---
 type ConversationMemberRow = {
   userId: string;
   name: string;
@@ -56,39 +74,49 @@ type ConversationMemberRow = {
   role: "OWNER" | "ADMIN" | "MEMBER";
 };
 
-function memberRoleLabel(role: ConversationMemberRow["role"]): string {
-  switch (role) {
-    case "OWNER":
-      return "Trưởng nhóm";
-    case "ADMIN":
-      return "Phó nhóm";
-    default:
-      return "Thành viên";
-  }
-}
+const MUTE_OPTIONS = [
+  { label: "Trong 1 giờ", duration: 60 },
+  { label: "Trong 4 giờ", duration: 240 },
+  { label: "Cho đến 8:00 AM", duration: -2 },
+  { label: "Cho đến khi mở lại", duration: -1 },
+];
 
 interface ConversationInfoPanelProps {
   isOpen: boolean;
-  conversation: ConversationItemType;
-  currentUser: { _id: string };
+  conversation: ConversationItemType | null;
+  onClose?: () => void;
+  currentUser?: { _id: string };
 }
 
 const ConversationInfoPanel = ({
   isOpen,
   conversation,
-  currentUser,
+  onClose,
 }: ConversationInfoPanelProps) => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const currentUserFromStore = useAppSelector((state) => state.auth.user);
   const { socket } = useSocket();
-  const currentUserId =
-    currentUserFromStore?.userId ||
-    (currentUserFromStore as { _id?: string } | null | undefined)?._id ||
-    currentUser?._id ||
-    "";
-  const [isMuted, setIsMuted] = useState(false);
-  const [isPinned, setIsPinned] = useState(false);
+  const user = useAppSelector((state) => state.auth.user);
+  const currentUserId = user?.userId || (user as any)?._id || "";
+
+  // Select conversation from store to get real-time Pin/Mute status
+  const currentConversation = useAppSelector((state) =>
+    conversation?.conversationId
+      ? (state.conversation.conversations.find(
+          (c) => c.conversationId === conversation.conversationId,
+        ) ?? conversation)
+      : null,
+  );
+
+  const [showMuteOptions, setShowMuteOptions] = useState(false);
+  const { refs, floatingStyles } = useFloating({
+    open: showMuteOptions,
+    onOpenChange: setShowMuteOptions,
+    placement: "bottom",
+    middleware: [offset(8), flip(), shift({ padding: 8 })],
+    whileElementsMounted: autoUpdate,
+  });
+
   const [medias, setMedias] = useState<any[]>([]);
   const [files, setFiles] = useState<any[]>([]);
   const [links, setLinks] = useState<any[]>([]);
@@ -109,183 +137,157 @@ const ConversationInfoPanel = ({
   const [addMemberModalOpen, setAddMemberModalOpen] = useState(false);
   const [leaveGroupDialogOpen, setLeaveGroupDialogOpen] = useState(false);
   const [isLeavingGroup, setIsLeavingGroup] = useState(false);
-  const [leaveGroupErrorDialogOpen, setLeaveGroupErrorDialogOpen] = useState(false);
+  const [leaveGroupErrorDialogOpen, setLeaveGroupErrorDialogOpen] =
+    useState(false);
   const [leaveGroupErrorMessage, setLeaveGroupErrorMessage] = useState("");
   const [deleteGroupDialogOpen, setDeleteGroupDialogOpen] = useState(false);
   const [isDeletingGroup, setIsDeletingGroup] = useState(false);
-
-  const isGroup = conversation?.type === "GROUP";
-
-  const [preview, setPreview] = useState<{
-    isOpen: boolean;
-    index: number;
-  }>({
+  const [preview, setPreview] = useState<{ isOpen: boolean; index: number }>({
     isOpen: false,
     index: 0,
   });
 
-  useEffect(() => {
-    if (!isOpen) return;
-    if (!conversation?.conversationId) return;
+  const isGroup = currentConversation?.type === "GROUP";
+  const isPinned = currentConversation?.pinned ?? false;
+  const isMuted =
+    !!currentConversation?.muted &&
+    (!currentConversation?.mutedUntil ||
+      currentConversation.mutedUntil === "infinite" ||
+      new Date(currentConversation.mutedUntil).getTime() > Date.now());
 
+  // --- DATA FETCHING ---
+  useEffect(() => {
+    if (!isOpen || !currentConversation?.conversationId || !currentUserId)
+      return;
+    const fetchMediaPreview = async () => {
+      try {
+        const res = await messageService.getMediasPreview(
+          currentUserId,
+          currentConversation.conversationId,
+        );
+        if (res.success) {
+          setMedias(res.data.images_videos || []);
+          setFiles(res.data.files || []);
+          setLinks(res.data.links || []);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
     fetchMediaPreview();
-  }, [isOpen]);
+  }, [isOpen, currentConversation?.conversationId, currentUserId]);
 
   useEffect(() => {
-    if (!isOpen || !conversation?.conversationId) return;
-  }, [expandedSections, isOpen, conversation?.conversationId]);
-
-  useEffect(() => {
-    if (!isOpen || !isGroup || !conversation?.conversationId) {
+    if (!isOpen || !isGroup || !currentConversation?.conversationId) {
       setMembers([]);
       return;
     }
-
     let cancelled = false;
-
     const loadMembers = async () => {
       setMembersLoading(true);
       try {
         const res = await conversationService.getListMembers(
-          conversation.conversationId,
+          currentConversation.conversationId,
         );
-        if (cancelled) return;
-        if (res?.success && Array.isArray(res.data)) {
+        if (!cancelled && res?.success && Array.isArray(res.data))
           setMembers(res.data as ConversationMemberRow[]);
-        } else {
-          setMembers([]);
-        }
       } catch {
         if (!cancelled) setMembers([]);
       } finally {
         if (!cancelled) setMembersLoading(false);
       }
     };
-
     loadMembers();
     return () => {
       cancelled = true;
     };
-  }, [isOpen, isGroup, conversation?.conversationId, membersRefreshKey]);
+  }, [isOpen, isGroup, currentConversation?.conversationId, membersRefreshKey]);
 
-  const fetchMediaPreview = async () => {
-    if (!currentUserId) return;
+  // --- ACTIONS ---
+  const handlePin = async () => {
+    if (!currentConversation) return;
+    const newPinned = !isPinned;
+    dispatch(
+      updateConversationSetting({
+        conversationId: currentConversation.conversationId,
+        pinned: newPinned,
+      }),
+    );
     try {
-      const res = await messageService.getMediasPreview(
-        currentUserId,
-        conversation.conversationId,
-      );
-      if (res.success) {
-        setMedias(res.data.images_videos || []);
-        setFiles(res.data.files || []);
-        setLinks(res.data.links || []);
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const toggleSection = (
-    section: "media" | "file" | "link" | "members",
-  ) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [section]: !prev[section],
-    }));
-  };
-
-  const currentMember = members.find(
-    (m) => String(m.userId) === String(currentUserId),
-  );
-  const canManageMembers =
-    currentMember?.role === "OWNER" || currentMember?.role === "ADMIN";
-
-  const canRemoveMember = (target: ConversationMemberRow) => {
-    if (!canManageMembers) return false;
-    if (String(target.userId) === String(currentUserId)) return false;
-    if (currentMember?.role === "ADMIN" && target.role === "OWNER") return false;
-    return true;
-  };
-
-  const canShowRoleMenu = (target: ConversationMemberRow) => {
-    if (currentMember?.role !== "OWNER") return false;
-    if (String(target.userId) === String(currentUserId)) return false;
-    return true;
-  };
-
-  const handleUpdateMemberRole = async (
-    target: ConversationMemberRow,
-    newRole: "ADMIN" | "MEMBER",
-  ) => {
-    if (!conversation?.conversationId) return;
-    if (currentMember?.role !== "OWNER") return;
-    if (String(target.userId) === String(currentUserId)) return;
-
-    try {
-      const res = await conversationService.updateMembersRole(
-        conversation.conversationId,
-        [target.userId],
-        newRole,
-      );
-
-      if (!res?.success) {
-        return;
-      }
-
-      setMembers((prev) =>
-        prev.map((member) =>
-          member.userId === target.userId ? { ...member, role: newRole } : member,
-        ),
-      );
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const handleTransferOwner = async (target: ConversationMemberRow) => {
-    if (!conversation?.conversationId) return;
-    if (currentMember?.role !== "OWNER") return;
-    if (String(target.userId) === String(currentUserId)) return;
-
-    try {
-      const res = await conversationService.transferOwner(
-        conversation.conversationId,
-        target.userId,
-      );
-      if (!res?.success) return;
-
-      setMembers((prev) =>
-        prev.map((member) => {
-          if (member.userId === target.userId) {
-            return { ...member, role: "OWNER" };
-          }
-          if (member.userId === currentUserId) {
-            return { ...member, role: "MEMBER" };
-          }
-          return member;
+      newPinned
+        ? await pinConversation(
+            currentUserId,
+            currentConversation.conversationId,
+          )
+        : await unpinConversation(
+            currentUserId,
+            currentConversation.conversationId,
+          );
+    } catch {
+      dispatch(
+        updateConversationSetting({
+          conversationId: currentConversation.conversationId,
+          pinned: !newPinned,
         }),
       );
-    } catch (error) {
-      console.error(error);
+    }
+  };
+
+  const handleMute = async (duration: number) => {
+    if (!currentConversation) return;
+    setShowMuteOptions(false);
+    let mutedUntil: string | null = null;
+    if (duration === -1) mutedUntil = "infinite";
+    else if (duration === -2) {
+      const next8AM = new Date();
+      if (next8AM.getHours() >= 8) next8AM.setDate(next8AM.getDate() + 1);
+      next8AM.setHours(8, 0, 0, 0);
+      mutedUntil = next8AM.toISOString();
+    } else if (duration > 0)
+      mutedUntil = new Date(Date.now() + duration * 60 * 1000).toISOString();
+
+    const newMuted = duration !== 0;
+    dispatch(
+      updateConversationSetting({
+        conversationId: currentConversation.conversationId,
+        muted: newMuted,
+        mutedUntil,
+      }),
+    );
+    try {
+      duration === 0
+        ? await unmuteConversation(
+            currentUserId,
+            currentConversation.conversationId,
+          )
+        : await muteConversation(
+            currentUserId,
+            currentConversation.conversationId,
+            duration,
+          );
+    } catch {
+      dispatch(
+        updateConversationSetting({
+          conversationId: currentConversation.conversationId,
+          muted: !newMuted,
+          mutedUntil: currentConversation.mutedUntil ?? null,
+        }),
+      );
     }
   };
 
   const handleRemoveMember = async (target: ConversationMemberRow) => {
-    if (!conversation?.conversationId || !canRemoveMember(target)) return;
-
+    if (!currentConversation?.conversationId) return;
     try {
       setRemovingMemberId(target.userId);
       const res = await conversationService.removeMember(
-        conversation.conversationId,
+        currentConversation.conversationId,
         target.userId,
       );
-
-      if (!res?.success) return;
-
-      setMembers((prev) =>
-        prev.filter((member) => member.userId !== target.userId),
-      );
-      setMembersRefreshKey((k) => k + 1);
+      if (res?.success) {
+        setMembers((prev) => prev.filter((m) => m.userId !== target.userId));
+        setMembersRefreshKey((k) => k + 1);
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -294,235 +296,168 @@ const ConversationInfoPanel = ({
   };
 
   const handleLeaveGroup = async () => {
-    if (!conversation?.conversationId || isLeavingGroup) return;
-
+    if (!currentConversation?.conversationId || isLeavingGroup) return;
     try {
       setIsLeavingGroup(true);
-      const res = await conversationService.leaveGroup(conversation.conversationId);
-
+      const res = await conversationService.leaveGroup(
+        currentConversation.conversationId,
+      );
       if (!res?.success) {
-        const message =
-          typeof res?.message === "string"
-            ? res.message
-            : "Bạn cần chuyển quyền Trưởng nhóm cho thành viên khác trước khi rời nhóm.";
-        setLeaveGroupErrorMessage(message);
+        setLeaveGroupErrorMessage(
+          res?.message || "Bạn cần chuyển quyền Trưởng nhóm trước khi rời đi.",
+        );
         setLeaveGroupErrorDialogOpen(true);
         return;
       }
-
-      dispatch(removeConversation({ conversationId: conversation.conversationId }));
-      setLeaveGroupDialogOpen(false);
+      dispatch(
+        removeConversation({
+          conversationId: currentConversation.conversationId,
+        }),
+      );
       navigate("/");
-    } catch (error: any) {
-      const rawMessage =
-        error?.response?.data?.message ||
-        error?.response?.data?.error ||
-        error?.message;
-      const message = Array.isArray(rawMessage)
-        ? rawMessage[0]
-        : rawMessage || "Bạn cần chuyển quyền Trưởng nhóm cho thành viên khác trước khi rời nhóm.";
-      setLeaveGroupErrorMessage(message);
+    } catch (err) {
       setLeaveGroupErrorDialogOpen(true);
     } finally {
       setIsLeavingGroup(false);
     }
   };
 
-  const handleDeleteGroup = async () => {
-    if (!conversation?.conversationId || isDeletingGroup) return;
-    if (currentMember?.role !== "OWNER") return;
-
-    try {
-      setIsDeletingGroup(true);
-      const res = await conversationService.deleteGroup(conversation.conversationId);
-
-      if (!res?.success) {
-        return;
-      }
-
-      dispatch(removeConversation({ conversationId: conversation.conversationId }));
-      setDeleteGroupDialogOpen(false);
-      navigate("/");
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsDeletingGroup(false);
-    }
-  };
-
   const handleDownload = async (file: any) => {
     try {
       const response = await fetch(file.fileKey);
-
-      if (!response.ok) {
-        throw new Error("Download failed");
-      }
-
       const blob = await response.blob();
-
       saveAs(blob, file.fileName);
     } catch (error) {
-      console.error("Download error:", error);
+      console.error(error);
     }
   };
 
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (!preview.isOpen) return;
-
-      if (e.key === "Escape") {
-        setPreview({ isOpen: false, index: 0 });
-      }
-
-      if (e.key === "ArrowRight") {
-        setPreview((prev) => ({
-          ...prev,
-          index: Math.min(prev.index + 1, medias.length - 1),
-        }));
-      }
-
-      if (e.key === "ArrowLeft") {
-        setPreview((prev) => ({
-          ...prev,
-          index: Math.max(prev.index - 1, 0),
-        }));
-      }
-    };
-
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [preview.isOpen, medias.length]);
-
-  useEffect(() => {
-    if (!socket || !conversation?.conversationId) return;
-
-    const handleRoleUpdated = (payload: any) => {
-      const isTargetConversation =
-        payload?.conversationId === conversation.conversationId;
-      if (!isTargetConversation) return;
-
-      const updateData =
-        payload?.type === "ROLE_UPDATE" ? payload?.data : payload?.data || payload;
-
-      const memberIds = (updateData?.memberIds || []) as string[];
-      const newRole = updateData?.newRole as ConversationMemberRow["role"] | undefined;
-      const newRoles = updateData?.newRoles as
-        | Record<string, ConversationMemberRow["role"]>
-        | undefined;
-
-      if (newRoles && typeof newRoles === "object") {
-        setMembers((prev) =>
-          prev.map((member) =>
-            newRoles[member.userId]
-              ? { ...member, role: newRoles[member.userId] }
-              : member,
-          ),
-        );
-        return;
-      }
-
-      if (!Array.isArray(memberIds) || !newRole) return;
-
-      setMembers((prev) =>
-        prev.map((member) =>
-          memberIds.includes(member.userId) ? { ...member, role: newRole } : member,
-        ),
-      );
-    };
-
-    socket.on("conversation_updated", handleRoleUpdated);
-    socket.on("role_updated", handleRoleUpdated);
-
-    return () => {
-      socket.off("conversation_updated", handleRoleUpdated);
-      socket.off("role_updated", handleRoleUpdated);
-    };
-  }, [socket, conversation?.conversationId]);
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
 
   if (!isOpen) return <div className="w-0 overflow-hidden" />;
 
+  const currentMember = members.find(
+    (m) => String(m.userId) === String(currentUserId),
+  );
+  const canManage =
+    currentMember?.role === "OWNER" || currentMember?.role === "ADMIN";
+
   return (
     <div className="w-[320px] h-full bg-[#f7f8fa] border-l flex flex-col">
-      {/* HEADER */}
-      <div className="h-14 bg-white flex items-center justify-between px-4 border-b">
-        <h2 className="text-[15px] font-medium text-gray-800">
-          Thông tin hội thoại
-        </h2>
-        <X size={18} className="text-gray-500 cursor-pointer" />
+      <div className="h-14 bg-white flex items-center justify-between px-4 border-b shrink-0">
+        <h2 className="text-[15px] font-medium">Thông tin hội thoại</h2>
+        {onClose && (
+          <X
+            size={18}
+            className="text-gray-500 cursor-pointer"
+            onClick={onClose}
+          />
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* PROFILE */}
+        {/* Profile Header */}
         <div className="bg-white flex flex-col items-center py-5">
           <Avatar className="w-16 h-16 mb-2">
-            <AvatarImage src={conversation?.avatar} />
-            <AvatarFallback>{conversation?.name?.charAt(0)}</AvatarFallback>
+            <AvatarImage src={currentConversation?.avatar} />
+            <AvatarFallback>
+              {currentConversation?.name?.charAt(0)}
+            </AvatarFallback>
           </Avatar>
-
-          <h3 className="text-[15px] font-medium text-gray-900 text-center px-3">
-            {conversation?.name}
+          <h3 className="text-[15px] font-medium px-3 text-center">
+            {currentConversation?.name}
           </h3>
         </div>
 
-        {/* ACTION */}
-        <div className="bg-white py-3 flex items-start px-10">
-          {/* BUTTON */}
+        {/* Quick Actions */}
+        <div className="bg-white py-3 flex items-start px-8 gap-2">
+          <div className="flex-1 flex flex-col items-center">
+            <button
+              ref={refs.setReference}
+              onClick={() =>
+                isMuted ? handleMute(0) : setShowMuteOptions(!showMuteOptions)
+              }
+              className="flex flex-col items-center gap-1 cursor-pointer"
+            >
+              <div
+                className={`w-9 h-9 rounded-full flex items-center justify-center ${isMuted ? "bg-blue-100" : "bg-gray-100"}`}
+              >
+                {isMuted ? (
+                  <BellOff size={18} className="text-[#0068ff]" />
+                ) : (
+                  <Bell size={18} className="text-gray-600" />
+                )}
+              </div>
+              <span className="text-[11px]">
+                {isMuted ? "Đang tắt" : "Tắt thông báo"}
+              </span>
+            </button>
+            {showMuteOptions && (
+              <FloatingPortal>
+                <div
+                  className="fixed inset-0 z-[9998]"
+                  onClick={() => setShowMuteOptions(false)}
+                />
+                <div
+                  ref={refs.setFloating}
+                  style={floatingStyles}
+                  className="z-[9999] w-52 bg-white rounded-xl shadow-xl border text-sm overflow-hidden"
+                >
+                  <div className="px-3 py-2 text-xs font-semibold text-gray-400 border-b bg-gray-50">
+                    Tắt thông báo trong
+                  </div>
+                  {MUTE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.label}
+                      onClick={() => handleMute(opt.duration)}
+                      className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-gray-700"
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </FloatingPortal>
+            )}
+          </div>
+
           <button
-            onClick={() => setIsMuted(!isMuted)}
+            onClick={handlePin}
             className="flex-1 flex flex-col items-center gap-1 cursor-pointer"
           >
-            <div className="w-9 h-9 bg-gray-100 rounded-full flex items-center justify-center">
-              {isMuted ? (
-                <BellOff size={18} className="text-[#0068ff]" />
-              ) : (
-                <Bell size={18} className="text-gray-600" />
-              )}
-            </div>
-
-            <span className="text-[11px] text-gray-600 text-center wrap-break-word leading-tight max-w-17.5">
-              Tắt thông báo
-            </span>
-          </button>
-
-          <button
-            onClick={() => setIsPinned(!isPinned)}
-            className="flex-1 flex flex-col items-center gap-1 cursor-pointer"
-          >
-            <div className="w-9 h-9 bg-gray-100 rounded-full flex items-center justify-center">
+            <div
+              className={`w-9 h-9 rounded-full flex items-center justify-center ${isPinned ? "bg-blue-100" : "bg-gray-100"}`}
+            >
               {isPinned ? (
                 <PinOff size={18} className="text-[#0068ff]" />
               ) : (
                 <Pin size={18} className="text-gray-600" />
               )}
             </div>
-
-            <span className="text-[11px] text-gray-600 text-center wrap-break-word leading-tight max-w-17.5">
-              Ghim hội thoại
+            <span className="text-[11px]">
+              {isPinned ? "Bỏ ghim" : "Ghim hội thoại"}
             </span>
           </button>
 
           <button
-            type="button"
-            onClick={() => {
-              if (isGroup) setAddMemberModalOpen(true);
-            }}
+            onClick={() => isGroup && setAddMemberModalOpen(true)}
             className="flex-1 flex flex-col items-center gap-1 cursor-pointer"
           >
             <div className="w-9 h-9 bg-gray-100 rounded-full flex items-center justify-center">
               {isGroup ? <UserPlus size={18} /> : <Users size={18} />}
             </div>
-
-            <span className="text-[11px] text-gray-600 text-center wrap-break-word leading-tight max-w-17.5">
-              {isGroup ? "Thêm thành viên" : "Tạo nhóm"}
+            <span className="text-[11px]">
+              {isGroup ? "Thêm bạn" : "Tạo nhóm"}
             </span>
           </button>
         </div>
 
-        {/* MEDIA */}
-        <div className="bg-white mt-2">
+        {/* Media Section */}
+        <div className="bg-white mt-2 border-t">
           <button
             onClick={() => toggleSection("media")}
-            className="h-12 w-full flex items-center justify-between px-4 cursor-pointer"
+            className="h-12 w-full flex items-center justify-between px-4"
           >
             <div className="flex items-center gap-3">
               <ImageIcon size={18} />
@@ -534,220 +469,43 @@ const ConversationInfoPanel = ({
               <ChevronRight size={16} />
             )}
           </button>
-
           {expandedSections.media && (
             <div className="px-4 pb-4">
               {medias.length > 0 ? (
-                <div className="grid grid-cols-3 gap-0.5">
-                  {medias.slice(0, 6).map((media, idx) => {
-                    const file = media?.content?.file;
-                    const isVideo = file?.type === "VIDEO";
-
-                    return (
-                      <div
-                        key={idx}
-                        className="aspect-square bg-gray-100 overflow-hidden relative cursor-pointer"
-                        onClick={() =>
-                          setPreview({
-                            isOpen: true,
-                            index: idx,
-                          })
-                        }
-                      >
-                        {isVideo ? (
-                          <>
-                            <video
-                              src={file?.fileKey}
-                              className="w-full h-full object-cover"
-                              muted
-                            />
-
-                            {/* overlay play icon giống Zalo */}
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                              <div className="w-7 h-7 rounded-full bg-black/50 flex items-center justify-center">
-                                <div className="ml-1 border-l-8 border-l-white border-y-6 border-y-transparent" />
-                              </div>
-                            </div>
-                          </>
-                        ) : (
-                          <img
-                            src={file?.fileKey}
-                            className="w-full h-full object-cover"
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-xs text-gray-400 text-center py-2">
-                  Chưa có ảnh/video trong cuộc trò chuyện
-                </p>
-              )}
-
-              <Button className="w-full bg-gray-200 mt-3 text-black cursor-pointer hover:bg-gray-300">
-                Xem tất cả
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* FILE */}
-        <div className="bg-white mt-0.5">
-          <button
-            onClick={() => toggleSection("file")}
-            className="h-12 w-full flex items-center justify-between px-4 cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <FileText size={18} />
-              <span className="text-[14px] font-medium">File</span>
-            </div>
-            {expandedSections.file ? (
-              <ChevronDown size={16} />
-            ) : (
-              <ChevronRight size={16} />
-            )}
-          </button>
-
-          {expandedSections.file && (
-            <div className="px-4 pb-4">
-              {files.length > 0 ? (
-                <div className="space-y-2">
-                  {files.slice(0, 6).map((item, idx) => {
-                    const file = item.content?.file;
-
-                    return (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-3 p-2 bg-white hover:bg-gray-50 rounded-lg border transition"
-                      >
-                        {/* ICON */}
-                        <div className="shrink-0">
-                          {getFileIcon(file.fileName)}
-                        </div>
-
-                        {/* INFO */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-medium truncate">
-                            {file.fileName}
-                          </p>
-                          <p className="text-[11px] text-gray-500">
-                            {getDateLabel(item.createdAt)} •{" "}
-                            {(file.fileSize / 1024).toFixed(1)} KB
-                          </p>
-                        </div>
-
-                        {/* DOWNLOAD */}
-                        <button
-                          onClick={() => handleDownload(file)}
-                          className="p-1 border rounded-md hover:bg-gray-100 cursor-pointer"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-xs text-gray-400 text-center py-2">
-                  Chưa có file trong cuộc trò chuyện
-                </p>
-              )}
-
-              <Button className="w-full bg-gray-200 mt-3 text-black hover:bg-gray-300">
-                Xem tất cả
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* LINK */}
-        <div className="bg-white mt-0.5">
-          <button
-            onClick={() => toggleSection("link")}
-            className="h-12 w-full flex items-center justify-between px-4 cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <LinkIcon size={18} />
-              <span className="text-[14px] font-medium">Link</span>
-            </div>
-            {expandedSections.link ? (
-              <ChevronDown size={16} />
-            ) : (
-              <ChevronRight size={16} />
-            )}
-          </button>
-
-          {expandedSections.link && (
-            <div className="px-4 pb-4 space-y-2">
-              {links.length > 0 ? (
-                links.slice(0, 6).map((item, idx) => {
-                  const url = item.content?.text;
-
-                  const getDomain = (url: string) => {
-                    try {
-                      return new URL(url).hostname.replace("www.", "");
-                    } catch {
-                      return url;
-                    }
-                  };
-
-                  return (
-                    <a
-                      key={idx}
-                      href={url}
-                      target="_blank"
-                      className="flex items-center gap-3 p-2 bg-white border rounded-lg hover:bg-gray-50 transition"
+                <div className="grid grid-cols-3 gap-1">
+                  {medias.slice(0, 6).map((m, i) => (
+                    <div
+                      key={i}
+                      className="aspect-square bg-gray-100 rounded overflow-hidden cursor-pointer"
+                      onClick={() => setPreview({ isOpen: true, index: i })}
                     >
-                      {/* ICON */}
-                      <div className="w-9 h-9 flex items-center justify-center bg-gray-100 rounded-md shrink-0">
-                        <LinkIcon size={18} />
-                      </div>
-
-                      {/* CONTENT */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] text-[#0068ff] truncate">
-                          {url}
-                        </p>
-
-                        <p className="text-[11px] text-gray-500 truncate">
-                          {getDomain(url)}
-                        </p>
-                      </div>
-
-                      {/* TIME */}
-                      <div className="text-[10px] text-gray-400 shrink-0">
-                        {getDateLabel(item.createdAt)}
-                      </div>
-                    </a>
-                  );
-                })
+                      <img
+                        src={m?.content?.file?.fileKey}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <p className="text-xs text-gray-400 text-center py-2">
-                  Chưa có link trong cuộc trò chuyện
+                  Chưa có ảnh/video
                 </p>
               )}
-
-              <Button className="w-full bg-gray-200 mt-3 text-black hover:bg-gray-300">
-                Xem tất cả
-              </Button>
             </div>
           )}
         </div>
 
-        {/* GROUP */}
+        {/* Members Section */}
         {isGroup && (
-          <div className="bg-white mt-2">
+          <div className="bg-white mt-2 border-t">
             <button
-              type="button"
               onClick={() => toggleSection("members")}
-              className="h-12 w-full flex items-center justify-between px-4 gap-3 cursor-pointer"
+              className="h-12 w-full flex items-center justify-between px-4"
             >
               <div className="flex items-center gap-3">
                 <Users size={18} />
-                <span className="text-[14px] font-medium">Thành viên</span>
-                <span className="text-[12px] text-gray-400">
-                  ({membersLoading ? "…" : members.length})
+                <span className="text-[14px] font-medium">
+                  Thành viên ({members.length})
                 </span>
               </div>
               {expandedSections.members ? (
@@ -756,362 +514,97 @@ const ConversationInfoPanel = ({
                 <ChevronRight size={16} />
               )}
             </button>
-
             {expandedSections.members && (
-              <div className="px-2 pb-3 max-h-72 overflow-y-auto border-t border-gray-100">
-                {membersLoading ? (
-                  <p className="text-xs text-gray-400 text-center py-4">
-                    Đang tải danh sách...
-                  </p>
-                ) : members.length === 0 ? (
-                  <p className="text-xs text-gray-400 text-center py-4">
-                    Không có thành viên
-                  </p>
-                ) : (
-                  <ul className="flex flex-col gap-1 pt-1">
-                    {members.map((m) => (
-                      <li
-                        key={m.userId}
-                        className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50"
+              <div className="px-2 pb-3">
+                {members.map((m) => (
+                  <div
+                    key={m.userId}
+                    className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50"
+                  >
+                    <Avatar className="w-9 h-9">
+                      <AvatarImage src={m.avatarUrl ?? ""} />
+                      <AvatarFallback>{m.name[0]}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium truncate">
+                        {m.name}{" "}
+                        {m.role !== "MEMBER" && (
+                          <span className="text-[10px] bg-gray-100 px-1 rounded ml-1">
+                            {m.role}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    {canManage && m.userId !== currentUserId && (
+                      <button
+                        onClick={() => setMemberPendingRemove(m)}
+                        className="p-1 text-gray-400 hover:text-red-500"
                       >
-                        <Avatar className="w-10 h-10 shrink-0">
-                          <AvatarImage src={m.avatarUrl ?? undefined} alt="" />
-                          <AvatarFallback>
-                            {m.name.charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-medium text-gray-900 truncate flex items-center gap-1.5">
-                            {m.name}
-                            {m.role === "OWNER" && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-600 leading-none align-middle">
-                                Trưởng nhóm
-                              </span>
-                            )}
-                            {m.role === "ADMIN" && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-50 text-gray-600 leading-none align-middle">
-                                Phó nhóm
-                              </span>
-                            )}
-                          </p>
-                        </div>
-                        {canShowRoleMenu(m) && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                type="button"
-                                className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 cursor-pointer"
-                                title="Tùy chọn thành viên"
-                              >
-                                <MoreHorizontal size={16} />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {m.role === "MEMBER" && (
-                                <DropdownMenuItem
-                                  onClick={() => handleUpdateMemberRole(m, "ADMIN")}
-                                >
-                                  Bổ nhiệm Phó nhóm
-                                </DropdownMenuItem>
-                              )}
-                              {m.role === "ADMIN" && (
-                                <DropdownMenuItem
-                                  onClick={() => handleUpdateMemberRole(m, "MEMBER")}
-                                >
-                                  Gỡ chức Phó nhóm
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem
-                                onClick={() => setMemberPendingTransfer(m)}
-                              >
-                                Chuyển trưởng nhóm
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-                        {canRemoveMember(m) && (
-                          <button
-                            type="button"
-                            onClick={() => setMemberPendingRemove(m)}
-                            disabled={removingMemberId === m.userId}
-                            className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 cursor-pointer"
-                            title="Xoá thành viên"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
-
-            <button className="h-12 w-full flex items-center px-4 gap-3 border-t">
-              <Link2 size={18} />
-              <span className="text-[14px]">Link nhóm</span>
-            </button>
           </div>
         )}
 
-        {/* DANGER */}
-        <div className="bg-white mt-2">
+        {/* Footer Actions */}
+        <div className="bg-white mt-2 border-t">
           {isGroup && currentMember?.role === "OWNER" && (
             <button
-              type="button"
               onClick={() => setDeleteGroupDialogOpen(true)}
-              className="h-12 w-full flex items-center px-4 gap-3 text-red-500 cursor-pointer border-t"
+              className="h-12 w-full flex items-center px-4 gap-3 text-red-500 border-b"
             >
               <Trash2 size={18} />
-              <span className="text-[14px]">Giải tán nhóm</span>
+              <span>Giải tán nhóm</span>
             </button>
           )}
           <button
-            type="button"
-            onClick={() => {
-              if (isGroup) {
-                setLeaveGroupDialogOpen(true);
-              }
-            }}
-            className="h-12 w-full flex items-center px-4 gap-3 text-red-500 cursor-pointer border-t"
+            onClick={() => (isGroup ? setLeaveGroupDialogOpen(true) : null)}
+            className="h-12 w-full flex items-center px-4 gap-3 text-red-500"
           >
             {isGroup ? <LogOut size={18} /> : <Trash2 size={18} />}
-            <span className="text-[14px]">
-              {isGroup ? "Rời nhóm" : "Xóa lịch sử"}
-            </span>
+            <span>{isGroup ? "Rời nhóm" : "Xóa lịch sử"}</span>
           </button>
         </div>
       </div>
 
-      <AlertDialog open={deleteGroupDialogOpen} onOpenChange={setDeleteGroupDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Giải tán nhóm?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Mọi tin nhắn sẽ bị ẩn và tất cả thành viên sẽ bị mời ra khỏi nhóm.
-              Hành động này không thể hoàn tác.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeletingGroup}>Hủy</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isDeletingGroup}
-              onClick={(e) => {
-                e.preventDefault();
-                handleDeleteGroup();
-              }}
-            >
-              Giải tán nhóm
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {preview.isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
-          {/* CLOSE */}
-          <button
-            onClick={() => setPreview({ isOpen: false, index: 0 })}
-            className="absolute top-5 right-5 text-white hover:opacity-70 cursor-pointer"
-          >
-            <X size={28} />
-          </button>
-
-          {/* DOWNLOAD */}
-          <button
-            onClick={() => {
-              const file = medias[preview.index]?.content?.file;
-              handleDownload(file);
-            }}
-            className="absolute top-5 left-5 text-white hover:opacity-70 cursor-pointer"
-          >
-            <Download size={24} />
-          </button>
-
-          {/* PREV */}
-          {preview.index > 0 && (
-            <button
-              onClick={() =>
-                setPreview((prev) => ({
-                  ...prev,
-                  index: prev.index - 1,
-                }))
-              }
-              className="absolute left-5 text-white bg-black/50 p-2 rounded-full cursor-pointer"
-            >
-              <ChevronLeft size={28} />
-            </button>
-          )}
-
-          {/* NEXT */}
-          {preview.index < medias.length - 1 && (
-            <button
-              onClick={() =>
-                setPreview((prev) => ({
-                  ...prev,
-                  index: prev.index + 1,
-                }))
-              }
-              className="absolute right-5 text-white bg-black/50 p-2 rounded-full cursor-pointer"
-            >
-              <ChevronRight size={28} />
-            </button>
-          )}
-
-          {/* CONTENT */}
-          <div
-            className="max-w-[90%] max-h-[90%]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {(() => {
-              const file = medias[preview.index]?.content?.file;
-
-              if (!file) return null;
-
-              return file.type === "VIDEO" ? (
-                <video
-                  src={file.fileKey}
-                  controls
-                  autoPlay
-                  className="max-h-[85vh] rounded-lg"
-                />
-              ) : (
-                <img
-                  src={file.fileKey}
-                  className="max-h-[85vh] rounded-lg object-contain"
-                />
-              );
-            })()}
-          </div>
-        </div>
-      )}
-
-      {isGroup && conversation?.conversationId && (
-        <CreateGroupModal
-          open={addMemberModalOpen}
-          onOpenChange={setAddMemberModalOpen}
-          mode="ADD_MEMBER"
-          conversationId={conversation.conversationId}
-          excludeUserIds={members.map((m) => m.userId)}
-          onMembersAdded={() => setMembersRefreshKey((k) => k + 1)}
-        />
-      )}
-
-      <AlertDialog
-        open={Boolean(memberPendingRemove)}
-        onOpenChange={(open) => {
-          if (!open) setMemberPendingRemove(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Xác nhận xóa thành viên</AlertDialogTitle>
-            <AlertDialogDescription>
-              {`Bạn có chắc chắn muốn mời ${
-                memberPendingRemove?.name || "thành viên này"
-              } rời khỏi nhóm không?`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                if (!memberPendingRemove) return;
-                handleRemoveMember(memberPendingRemove);
-                setMemberPendingRemove(null);
-              }}
-            >
-              Xác nhận
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={Boolean(memberPendingTransfer)}
-        onOpenChange={(open) => {
-          if (!open) setMemberPendingTransfer(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Chuyển nhượng Trưởng nhóm</AlertDialogTitle>
-            <AlertDialogDescription>
-              {`Bạn sẽ mất quyền điều hành nhóm. Xác nhận chuyển Trưởng nhóm cho ${
-                memberPendingTransfer?.name || "thành viên này"
-              }?`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                if (!memberPendingTransfer) return;
-                handleTransferOwner(memberPendingTransfer);
-                setMemberPendingTransfer(null);
-              }}
-            >
-              Xác nhận
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
+      {/* Modals */}
       <AlertDialog
         open={leaveGroupDialogOpen}
         onOpenChange={setLeaveGroupDialogOpen}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Xác nhận rời nhóm</AlertDialogTitle>
+            <AlertDialogTitle>Rời nhóm?</AlertDialogTitle>
             <AlertDialogDescription>
-              Bạn có chắc chắn muốn rời nhóm này? Bạn sẽ không thể xem lại tin
-              nhắn mới sau khi rời đi.
+              Bạn sẽ không thể xem lại tin nhắn sau khi rời đi.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isLeavingGroup}>Hủy</AlertDialogCancel>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-500 hover:bg-red-600 text-white rounded-md"
-              onClick={(e) => {
-                e.preventDefault();
-                handleLeaveGroup();
-              }}
-              disabled={isLeavingGroup}
+              onClick={handleLeaveGroup}
+              className="bg-red-500"
             >
-              {isLeavingGroup ? "Đang xử lý..." : "Xác nhận"}
+              Rời nhóm
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog
-        open={leaveGroupErrorDialogOpen}
-        onOpenChange={setLeaveGroupErrorDialogOpen}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Thông báo</AlertDialogTitle>
-            <AlertDialogDescription>
-              {leaveGroupErrorMessage ||
-                "Bạn cần chuyển quyền Trưởng nhóm cho thành viên khác trước khi rời nhóm."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction
-              className="bg-[#0068ff] hover:bg-[#0052cc] text-white rounded-md"
-              onClick={(e) => {
-                e.preventDefault();
-                setLeaveGroupErrorDialogOpen(false);
-              }}
-            >
-              Đã hiểu
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {addMemberModalOpen && (
+        <CreateGroupModal
+          open={addMemberModalOpen}
+          onOpenChange={setAddMemberModalOpen}
+          mode="ADD_MEMBER"
+          conversationId={currentConversation!.conversationId}
+          excludeUserIds={members.map((m) => m.userId)}
+          onMembersAdded={() => setMembersRefreshKey((k) => k + 1)}
+        />
+      )}
     </div>
   );
 };

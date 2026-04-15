@@ -24,10 +24,7 @@ type Props = {
   setIsSelected: (isSelected: boolean) => void;
   selectedMessages: string[];
   toggleSelectMessage: (messageId: string) => void;
-  onForwardMessages: (
-    messageIds: string[],
-    targetConversationIds: string[],
-  ) => void;
+  lastMessageId: string;
 };
 
 const MessageList = ({
@@ -45,7 +42,7 @@ const MessageList = ({
   setIsSelected,
   selectedMessages,
   toggleSelectMessage,
-  onForwardMessages,
+  lastMessageId,
 }: Props) => {
   const [selectedMessageReactions, setSelectedMessageReactions] = useState<
     ReactionType[] | null
@@ -70,39 +67,35 @@ const MessageList = ({
         const prev = messages[index - 1];
         const next = messages[index + 1];
 
-        // --- CẢI TIẾN LOGIC TẠI ĐÂY ---
-        // 1. Kiểm tra isMe (Dùng optional chaining)
+        // 1. Kiểm tra isMe và isSystem
         const isMe =
           message.type !== "SYSTEM" && message.senderId?._id === currentUserId;
-
-        // 2. Logic gom nhóm tin nhắn (Chỉ áp dụng cho tin nhắn không phải SYSTEM)
         const isSystem = message.type === "SYSTEM";
 
+        // 2. Logic gom nhóm tin nhắn
         const sameSenderPrev =
           !isSystem &&
           prev &&
           prev.type !== "SYSTEM" &&
           prev.senderId?._id === message.senderId?._id;
-
         const sameSenderNext =
           !isSystem &&
           next &&
           next.type !== "SYSTEM" &&
           next.senderId?._id === message.senderId?._id;
 
-        // 3. Kiểm tra thời gian
         const sameMinutePrev =
           prev && isSameHourAndMinute(prev.createdAt, message.createdAt);
-
         const sameMinuteNext =
           next && isSameHourAndMinute(next.createdAt, message.createdAt);
 
-        // 4. Quyết định hiển thị Avatar và thời gian
         const isFirstInCluster = !(sameSenderPrev && sameMinutePrev);
         const isLastInCluster = !(sameSenderNext && sameMinuteNext);
 
+        // 3. Hiển thị Avatar, Thời gian và Divider ngày
         const showAvatar = !isSystem && !isMe && isFirstInCluster;
         const showTime = !isSystem && isLastInCluster;
+        const isLastMessage = lastMessageId === message._id;
 
         const showDivider =
           !prev ||
@@ -142,8 +135,33 @@ const MessageList = ({
               setIsSelected={setIsSelected}
               selectedMessages={selectedMessages}
               toggleSelectMessage={toggleSelectMessage}
-              onForwardMessages={onForwardMessages}
             />
+
+            {/* Read Receipts logic từ PhamThanhTri */}
+            {isLastMessage &&
+              !message.recalled &&
+              message.readReceipts &&
+              message.readReceipts.length > 0 && (
+                <div
+                  className={`flex ${isMe ? "justify-end" : "justify-start ml-11"} mt-1 pr-1`}
+                >
+                  <div className="flex items-center">
+                    {message.readReceipts.slice(0, 3).map((user: any, idx) => (
+                      <img
+                        key={idx}
+                        src={user?.userId?.profile?.avatarUrl}
+                        className="w-4 h-4 rounded-full border border-white -ml-1 first:ml-0"
+                        title={user?.userId?.profile?.name}
+                      />
+                    ))}
+                    {message.readReceipts.length > 3 && (
+                      <div className="w-4 h-4 rounded-full bg-gray-300 text-[8px] flex items-center justify-center border border-white -ml-1">
+                        +{message.readReceipts.length - 3}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
           </div>
         );
       })}

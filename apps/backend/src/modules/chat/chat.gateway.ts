@@ -39,6 +39,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     socket.join(userId); // Join a room of userId update online event for sidebar
 
     console.log(`\nUser ${userId} connected with socket ${socket.id}`);
+    console.log(`User ${userId} join room: ${userId}`);
   }
 
   handleDisconnect(socket: Socket) {
@@ -53,23 +54,31 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  // Conversation room
+  // Tham gia phòng chat
   @SubscribeMessage('join_room')
   handleJoinRoom(
     @MessageBody() conversationId: string,
     @ConnectedSocket() socket: Socket,
   ) {
     socket.join(conversationId);
-
     console.log(`User ${socket.data.userId} joined room: ${conversationId}`);
+  }
+
+  // Rời phòng chat (Từ nhánh PhamThanhTri)
+  @SubscribeMessage('leave_room')
+  handleLeaveRoom(
+    @MessageBody() conversationId: string,
+    @ConnectedSocket() socket: Socket,
+  ) {
+    socket.leave(conversationId);
+    console.log(`User ${socket.data.userId} left room: ${conversationId}`);
   }
 
   // Gửi tín hiệu WebRTC (Offer, Answer, ICE Candidates)
   @SubscribeMessage('call:signal')
   handleCallSignal(
     @ConnectedSocket() socket: Socket,
-    @MessageBody()
-    data: any,
+    @MessageBody() data: any,
   ) {
     console.log(`\n--- GIAO DỊCH TÍN HIỆU ---`);
     console.log(`Từ: ${socket.data.userId}`);
@@ -116,6 +125,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     }
   }
+
   // Cúp máy chủ động
   @SubscribeMessage('call:end')
   async handleCallEnd(

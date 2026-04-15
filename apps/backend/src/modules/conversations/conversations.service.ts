@@ -40,6 +40,7 @@ export class ConversationsService {
 
     @InjectConnection() private connection: Connection,
     private readonly storageService: StorageService,
+
     private readonly chatGateway: ChatGateway,
     @Inject(forwardRef(() => MessagesService))
     private readonly messagesService: MessagesService,
@@ -746,15 +747,8 @@ export class ConversationsService {
     const userObjectId = new Types.ObjectId(userId);
 
     const conversations = await this.memberModel.aggregate([
+      { $match: { userId: userObjectId, leftAt: null } },
       {
-        // 1. Tìm tất cả các nhóm mà User này tham gia và chưa rời khỏi
-        $match: {
-          userId: userObjectId,
-          leftAt: null,
-        },
-      },
-      {
-        // 2. Lấy thông tin chi tiết của Hội thoại
         $lookup: {
           from: 'conversations',
           localField: 'conversationId',
@@ -764,7 +758,6 @@ export class ConversationsService {
       },
       { $unwind: '$conversation' },
       {
-        // 3. Lấy tin nhắn cuối cùng
         $lookup: {
           from: 'messages',
           let: {
@@ -794,7 +787,6 @@ export class ConversationsService {
       },
       { $unwind: { path: '$lastMessage', preserveNullAndEmptyArrays: true } },
       {
-        // 4. Lấy thông tin người gửi tin nhắn cuối
         $lookup: {
           from: 'users',
           localField: 'lastMessage.senderId',
@@ -809,7 +801,6 @@ export class ConversationsService {
         },
       },
       {
-        // 5. Nếu là DIRECT, tìm User "đối phương"
         $lookup: {
           from: 'members',
           let: { convId: '$conversationId' },
@@ -842,13 +833,47 @@ export class ConversationsService {
         $unwind: { path: '$otherMemberInfo', preserveNullAndEmptyArrays: true },
       },
       {
-        // 6. Project kết quả cuối cùng
+        $lookup: {
+          from: 'conversationsettings',
+          let: { cid: '$conversation._id', uid: userObjectId },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$conversationId', '$$cid'] },
+                    { $eq: ['$userId', '$$uid'] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: 'settings',
+        },
+      },
+      { $unwind: { path: '$settings', preserveNullAndEmptyArrays: true } },
+      {
         $project: {
           _id: 0,
           conversationId: '$conversation._id',
           type: '$conversation.type',
           unreadCount: { $ifNull: ['$unreadCount', 0] },
-
+          pinned: { $ifNull: ['$settings.pinned', false] },
+          hidden: { $ifNull: ['$settings.hidden', false] },
+          category: { $ifNull: ['$settings.category', null] },
+          expireDuration: { $ifNull: ['$settings.expireDuration', 0] },
+          muted: {
+            $cond: [
+              {
+                $and: [
+                  { $ne: ['$settings.mutedUntil', null] },
+                  { $gt: ['$settings.mutedUntil', '$$NOW'] },
+                ],
+              },
+              true,
+              false,
+            ],
+          },
           name: {
             $cond: [
               { $eq: ['$conversation.type', ConversationType.GROUP] },
@@ -886,6 +911,8 @@ export class ConversationsService {
         },
       },
       { $sort: { lastMessageAt: -1 } },
+      { $group: { _id: '$conversationId', data: { $first: '$$ROOT' } } },
+      { $replaceRoot: { newRoot: '$data' } },
     ]);
 
     return conversations.map((c) => ({
@@ -896,63 +923,54 @@ export class ConversationsService {
   }
 
   async getOrCreateDirectConversation(user1Id: string, user2Id: string) {
-    if (user1Id === user2Id) {
+    if (user1Id === user2Id)
       throw new BadRequestException('Không thể tạo hội thoại với chính mình');
-    }
-
-    const user1ObjectId = new Types.ObjectId(user1Id);
-    const user2ObjectId = new Types.ObjectId(user2Id);
+    const u1 = new Types.ObjectId(user1Id);
+    const u2 = new Types.ObjectId(user2Id);
 
     let conversation = await this.conversationModel.findOne({
       type: ConversationType.DIRECT,
-      participants: { $all: [user1ObjectId, user2ObjectId] },
+      participants: { $all: [u1, u2] },
     });
 
-    if (conversation) {
-      return conversation;
-    }
+    if (conversation) return conversation;
 
     const session = await this.connection.startSession();
     session.startTransaction();
-
     try {
-      const newConversation = new this.conversationModel({
+      const savedConv = await new this.conversationModel({
         type: ConversationType.DIRECT,
-        participants: [user1ObjectId, user2ObjectId],
+        participants: [u1, u2],
         lastMessageAt: new Date(),
-      });
+      }).save({ session });
 
-      const savedConv = await newConversation.save({ session });
+      await this.memberModel.insertMany(
+        [
+          {
+            conversationId: savedConv._id,
+            userId: u1,
+            role: MemberRole.MEMBER,
+            joinedAt: new Date(),
+            unreadCount: 0,
+          },
+          {
+            conversationId: savedConv._id,
+            userId: u2,
+            role: MemberRole.MEMBER,
+            joinedAt: new Date(),
+            unreadCount: 0,
+          },
+        ],
+        { session },
+      );
 
-      const members = [
-        {
-          conversationId: savedConv._id,
-          userId: user1ObjectId,
-          role: MemberRole.MEMBER,
-          joinedAt: new Date(),
-          unreadCount: 0,
-        },
-        {
-          conversationId: savedConv._id,
-          userId: user2ObjectId,
-          role: MemberRole.MEMBER,
-          joinedAt: new Date(),
-          unreadCount: 0,
-        },
-      ];
-
-      await this.memberModel.insertMany(members, { session });
       await session.commitTransaction();
 
-      const convId = savedConv._id.toString();
-
-      const formattedForPartner = await this.getFormattedConversationForUser(
-        convId,
+      const formatted = await this.getFormattedConversationForUser(
+        savedConv._id.toString(),
         user2Id,
       );
-      this.chatGateway.server
-        .to(user2Id)
-        .emit('new_conversation', formattedForPartner);
+      this.chatGateway.server.to(user2Id).emit('new_conversation', formatted);
 
       return savedConv;
     } catch (error) {

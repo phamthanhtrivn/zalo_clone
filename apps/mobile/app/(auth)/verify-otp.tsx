@@ -1,6 +1,8 @@
 import Tips from "@/components/auth/Tips";
 import Container from "@/components/common/Container";
 import Header from "@/components/common/Header";
+
+
 import { ActivityIndicator, Text, ToastAndroid, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -51,6 +53,8 @@ export default function VerifyOtp() {
       }
 
       setTimeLeft(data.expiresIn);
+
+
       ToastAndroid.show(data.message, ToastAndroid.SHORT);
     } catch (err: any) {
       ToastAndroid.show(err, ToastAndroid.SHORT);
@@ -68,6 +72,7 @@ export default function VerifyOtp() {
       console.log(data);
     } catch (err: any) {
       console.log(error);
+
       ToastAndroid.show(err.message, ToastAndroid.SHORT);
     }
   };

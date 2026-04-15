@@ -1,113 +1,165 @@
 /* eslint-disable prettier/prettier */
-import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import {
-    ConversationSetting,
-    ConversationSettingDocument
-} from './schemas/conversation-setting.schema';
-import { Model, Types } from 'mongoose';
+
+import { BadRequestException, Injectable } from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model, Types } from "mongoose";
+import { ConversationSetting, ConversationSettingDocument } from "./schemas/conversation-setting.schema";
+import { ConversationSettingGateway } from "./conversation-setting.gateway";
+
 @Injectable()
 export class ConversationSettingsService {
     constructor(
         @InjectModel(ConversationSetting.name)
-        private readonly conversationSettingModel: Model<ConversationSettingDocument>,
+        private readonly model: Model<ConversationSettingDocument>,
+        private readonly gateway: ConversationSettingGateway,
     ) { }
+    private async emitFullState(userId: string, conversationId: string, setting: any) {
+        this.gateway.emitConversationUpdated(userId, {
+            conversationId,
+            pinned: setting.pinned,
+            hidden: setting.hidden,
+            mutedUntil: setting.mutedUntil,
+            category: setting.category,
+            expireDuration: setting.expireDuration,
+        });
+    }
 
-    // Ẩn cuộc hội thoại
-    async hideConversation(
-        userId: Types.ObjectId,
-        conversationId: Types.ObjectId) {
-        const setting = await this.conversationSettingModel.findOneAndUpdate(
-            {
-                userId,
-                conversationId,
-            },
-            {
-                $set: { hidden: true },
-            },
-            {
-                new: true,
-                upsert: true,
-                setDefaultsOnInsert: true,
-            },
-        );
-        return setting;
-    }
-    // Bổ ẩn
-    async unhideConversation(
-        userId: Types.ObjectId,
-        conversationId: Types.ObjectId) {
-        const setting = await this.conversationSettingModel.findOneAndUpdate(
-            { userId, conversationId },
-            { $set: { hidden: false } },
-            { new: true }
-        );
-        if (!setting) {
-            throw new Error('Conversation setting not found');
-        }
-        return setting;
-    }
-    // Gim cuộc hội thoại
-    async pinConversation(
-        userId: Types.ObjectId,
-        conversationId: Types.ObjectId) {
-        const setting = await this.conversationSettingModel.findOneAndUpdate(
+    async pinConversation(userId: Types.ObjectId, conversationId: Types.ObjectId) {
+        const setting = await this.model.findOneAndUpdate(
             { userId, conversationId },
             { $set: { pinned: true } },
-            {
-                new: true,
-                upsert: true,
-                setDefaultsOnInsert: true,
-            }
+            { new: true, upsert: true },
         );
 
+        await this.emitFullState(userId.toString(), conversationId.toString(), setting);
         return setting;
     }
-    // Bỏ gim
-    async unpinConversation(
-        userId: Types.ObjectId,
-        conversationId: Types.ObjectId) {
-        const setting = await this.conversationSettingModel.findOneAndUpdate(
+
+    async unpinConversation(userId: Types.ObjectId, conversationId: Types.ObjectId) {
+        const setting = await this.model.findOneAndUpdate(
             { userId, conversationId },
             { $set: { pinned: false } },
-            { new: true }
+            { new: true },
         );
-        if (!setting) {
-            throw new Error('Conversation setting not found');
-        }
-        return setting;
 
+        if (!setting) throw new BadRequestException("Not found");
+
+        await this.emitFullState(userId.toString(), conversationId.toString(), setting);
+        return setting;
     }
-    // Tắt thông báo
-    async muteConversation(
-        userId: Types.ObjectId,
-        conversationId: Types.ObjectId) {
-        const setting = await this.conversationSettingModel.findOneAndUpdate(
+
+    async hideConversation(userId: Types.ObjectId, conversationId: Types.ObjectId) {
+        const setting = await this.model.findOneAndUpdate(
             { userId, conversationId },
-            { $set: { muted: true } },
+            { $set: { hidden: true } },
+            { new: true, upsert: true },
+        );
+
+        await this.emitFullState(userId.toString(), conversationId.toString(), setting);
+        return setting;
+    }
+
+    async unhideConversation(userId: Types.ObjectId, conversationId: Types.ObjectId) {
+        const setting = await this.model.findOneAndUpdate(
+            { userId, conversationId },
+            { $set: { hidden: false } },
+            { new: true },
+        );
+
+        if (!setting) throw new BadRequestException("Not found");
+
+        await this.emitFullState(userId.toString(), conversationId.toString(), setting);
+        return setting;
+    }
+
+    async muteConversation(userId: Types.ObjectId, conversationId: Types.ObjectId, duration: number) {
+        if (duration == null) throw new BadRequestException("Duration required");
+
+        let mutedUntil: Date;
+
+        const now = new Date();
+
+        if (duration === -1) {
+            mutedUntil = new Date("2999-12-31");
+        } else if (duration === -2) {
+            const target = new Date();
+            target.setHours(8, 0, 0, 0);
+            if (now >= target) target.setDate(target.getDate() + 1);
+            mutedUntil = target;
+        } else {
+            mutedUntil = new Date(Date.now() + duration * 60 * 1000);
+        }
+
+        const setting = await this.model.findOneAndUpdate(
+            { userId, conversationId },
+            { $set: { mutedUntil } },
+            { new: true, upsert: true },
+        );
+
+        await this.emitFullState(userId.toString(), conversationId.toString(), setting);
+        return setting;
+    }
+
+    async unmuteConversation(userId: Types.ObjectId, conversationId: Types.ObjectId) {
+        const setting = await this.model.findOneAndUpdate(
+            { userId, conversationId },
+            { $set: { mutedUntil: null } },
+            { new: true },
+        );
+
+        if (!setting) throw new BadRequestException("Not found");
+
+        await this.emitFullState(userId.toString(), conversationId.toString(), setting);
+        return setting;
+    }
+
+    async setCategory(userId: Types.ObjectId, conversationId: Types.ObjectId, category: string | null) {
+        const valid = ["customer", "family", "work", "friends", "later", "colleague"];
+
+        if (category !== null && !valid.includes(category)) {
+            throw new BadRequestException("Invalid category");
+        }
+
+        const setting = await this.model.findOneAndUpdate(
+            { userId, conversationId },
+            { $set: { category } },
+            { new: true, upsert: true },
+        );
+
+        await this.emitFullState(userId.toString(), conversationId.toString(), setting);
+        return setting;
+    }
+
+    async deleteConversation(userId: Types.ObjectId, conversationId: Types.ObjectId) {
+        const setting = await this.model.findOneAndUpdate(
+            { userId, conversationId },
+            { $set: { deletedAt: new Date() } },
+            { new: true, upsert: true },
+        );
+
+        this.gateway.emitConversationDeleted(userId.toString(), {
+            conversationId: conversationId.toString(),
+            deletedAt: setting.deletedAt,
+        });
+
+        return { success: true };
+    }
+
+    async setExpire(userId: string, conversationId: string, duration: number) {
+        const setting = await this.model.findOneAndUpdate(
             {
-                new: true,
-                upsert: true,
-                setDefaultsOnInsert: true,
-            }
+                userId: new Types.ObjectId(userId),
+                conversationId: new Types.ObjectId(conversationId),
+            },
+            { $set: { expireDuration: duration } },
+            { new: true, upsert: true },
         );
 
-        return setting;
+        this.gateway.emitConversationUpdated(userId, {
+            conversationId,
+            expireDuration: setting.expireDuration,
+        });
 
-    }
-    // Bật thông báo
-    async unmuteConversation(
-        userId: Types.ObjectId,
-        conversationId: Types.ObjectId) {
-        const setting = await this.conversationSettingModel.findOneAndUpdate(
-            { userId, conversationId },
-            { $set: { muted: false } },
-            { new: true }
-        );
-        if (!setting) {
-            throw new Error('Conversation setting not found');
-        }
         return setting;
     }
 }
-

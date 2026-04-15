@@ -21,7 +21,7 @@ import { JwtAuthGuard } from '../auth/passport/jwt-auth.guard';
 @Controller('conversations')
 @UseGuards(JwtAuthGuard)
 export class ConversationsController {
-  constructor(private readonly conversationsService: ConversationsService) {}
+  constructor(private readonly conversationsService: ConversationsService) { }
 
   @Get()
   async getMyConversations(@Req() req) {

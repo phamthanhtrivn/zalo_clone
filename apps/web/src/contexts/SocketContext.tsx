@@ -12,6 +12,7 @@ import {
   fetchConversations,
   removeConversation,
   updateConversationFromSocket,
+  updateConversationSetting,
   updateRecallMessageInConversation,
 } from "@/store/slices/conversationSlice";
 import {
@@ -42,25 +43,42 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const apiUrl = import.meta.env.VITE_API_URL;
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [groupDisbandedDialogOpen, setGroupDisbandedDialogOpen] = useState(false);
-  const [groupDisbandedConversationId, setGroupDisbandedConversationId] =
-    useState<string>("");
+
+  // State phục vụ thông báo giải tán nhóm
+  const [groupDisbandedDialogOpen, setGroupDisbandedDialogOpen] =
+    useState(false);
+  const [, setGroupDisbandedConversationId] = useState<string>("");
+
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
   const socketRef = useRef<Socket | null>(null);
 
+  // --- HELPERS ---
+  const navigateHome = () => {
+    try {
+      window.history.pushState({}, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    } catch {
+      window.location.href = "/";
+    }
+  };
+
+  // --- SOCKET HANDLERS ---
+
+  // 1. Nhận hội thoại mới (Khi ai đó thêm mình vào nhóm hoặc nhắn tin lần đầu)
   const handleNewConversation = (data: any) => {
     dispatch(addConversationToTop(data));
   };
 
+  // 2. Cập nhật Sidebar khi có tin nhắn mới (Tin nhắn thường hoặc Cuộc gọi)
   const handleNewMessageSidebar = (data: any) => {
     if (!data?.conversationId) return;
 
-    // Backend thường emit object conversation đầy đủ cho sidebar,
-    // nhưng một số flow call-message có thể emit payload message.
     const senderName =
       data?.lastMessage?.senderName ??
-      (data?.senderId?._id === user?.userId ? "Bạn" : data?.senderId?.profile?.name || "");
+      (data?.senderId?._id === user?.userId
+        ? "Bạn"
+        : data?.senderId?.profile?.name || "");
 
     const lastMessage = data?.lastMessage
       ? data.lastMessage
@@ -69,6 +87,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
           senderName,
           content: data?.content ?? {},
           recalled: Boolean(data?.recalled),
+          type: data?.type,
         };
 
     dispatch(
@@ -82,6 +101,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     );
   };
 
+  // 3. Thu hồi tin nhắn
   const handleRecallMessageSidebar = (data: {
     conversationId: string;
     messageId: string;
@@ -89,93 +109,98 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     dispatch(updateRecallMessageInConversation(data));
   };
 
-  const handleRoleUpdated = () => {
-    dispatch(fetchConversations());
+  // 4. Cập nhật Cài đặt hội thoại (Ghim, Ẩn, Tắt thông báo)
+  const handleConversationUpdate = (data: any) => {
+    const patch: any = { conversationId: data.conversationId };
+
+    if ("pinned" in data) patch.pinned = data.pinned;
+    if ("hidden" in data) patch.hidden = data.hidden;
+    if ("mutedUntil" in data) {
+      patch.muted =
+        data.mutedUntil != null &&
+        new Date(data.mutedUntil).getTime() > Date.now();
+      patch.mutedUntil = data.mutedUntil;
+    }
+    if ("category" in data) patch.category = data.category;
+    if ("expireDuration" in data) patch.expireDuration = data.expireDuration;
+
+    dispatch(updateConversationSetting(patch));
   };
 
+  // 5. Xóa hội thoại từ phía Server/Thiết bị khác
+  const handleConversationDelete = (data: any) => {
+    dispatch(removeConversation({ conversationId: data.conversationId }));
+  };
+
+  // 6. Xử lý khi nhóm bị giải tán
   const handleGroupDisbanded = (payload: any) => {
     const conversationId =
-      (typeof payload?.conversationId === "string" && payload.conversationId) ||
-      (typeof payload?.id === "string" && payload.id) ||
+      payload?.conversationId ||
+      payload?.id ||
       (typeof payload === "string" ? payload : "");
-
     if (!conversationId) return;
 
     dispatch(removeConversation({ conversationId }));
 
     const path = window.location?.pathname || "";
-    const isOnThatConversation =
-      path === `/conversations/${conversationId}` ||
-      path === `/conversation/${conversationId}`;
-
-    if (isOnThatConversation) {
+    if (path.includes(conversationId)) {
       setGroupDisbandedConversationId(conversationId);
       setGroupDisbandedDialogOpen(true);
     }
   };
 
-  const navigateHome = () => {
-    try {
-      window.history.pushState({}, "", "/");
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    } catch {
-      window.location.href = "/";
-    }
-  };
-
+  // --- INITIALIZE SOCKET ---
   useEffect(() => {
-    // 🔥 chỉ connect khi có user
     if (!user?.userId) return;
-    // if (!currentUserId) return;
 
     if (!socketRef.current) {
       socketRef.current = io(apiUrl, {
-        auth: {
-          userId: user.userId,
-          // userId: currentUserId,
-        },
+        auth: { userId: user.userId },
       });
     }
 
     const socketInstance = socketRef.current;
     setSocket(socketInstance);
 
-    socketInstance.on("connect", () => {
-      console.log("Connected:", socketInstance.id);
-      setIsConnected(true);
-    });
+    socketInstance.on("connect", () => setIsConnected(true));
+    socketInstance.on("disconnect", () => setIsConnected(false));
 
-    socketInstance.on("disconnect", () => {
-      console.log("Disconnected");
-      setIsConnected(false);
-    });
-
+    // Đăng ký các Listener
     socketInstance.on("new_conversation", handleNewConversation);
     socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
     socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
-    socketInstance.on("role_updated", handleRoleUpdated);
+    socketInstance.on("conversation_setting:update", handleConversationUpdate);
+    socketInstance.on("conversation_setting:delete", handleConversationDelete);
+    socketInstance.on("role_updated", () => dispatch(fetchConversations()));
     socketInstance.on("group_disbanded", handleGroupDisbanded);
 
     return () => {
+      socketInstance.off("connect");
+      socketInstance.off("disconnect");
       socketInstance.off("new_conversation", handleNewConversation);
       socketInstance.off("new_message_sidebar", handleNewMessageSidebar);
       socketInstance.off(
         "message_recalled_sidebar",
         handleRecallMessageSidebar,
       );
-      socketInstance.off("role_updated", handleRoleUpdated);
+      socketInstance.off(
+        "conversation_setting:update",
+        handleConversationUpdate,
+      );
+      socketInstance.off(
+        "conversation_setting:delete",
+        handleConversationDelete,
+      );
+      socketInstance.off("role_updated");
       socketInstance.off("group_disbanded", handleGroupDisbanded);
     };
-  }, [
-    apiUrl,
-    dispatch,
-    user?.userId,
-    // currentUserId,
-  ]);
+  }, [apiUrl, dispatch, user?.userId]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected }}>
       {children}
+
+      {/* Dialog thông báo giải tán nhóm */}
       <AlertDialog
         open={groupDisbandedDialogOpen}
         onOpenChange={setGroupDisbandedDialogOpen}
@@ -193,7 +218,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
               onClick={(e) => {
                 e.preventDefault();
                 setGroupDisbandedDialogOpen(false);
-                setGroupDisbandedConversationId("");
                 navigateHome();
               }}
             >

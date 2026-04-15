@@ -51,10 +51,12 @@ export const ReactionPicker = ({ messageId, reactionMessage, messageReactions, i
               {EMOJI_MAP[emoji]}
             </button>
           ))}
+
+          {/* Hiện nút X để gỡ reaction nếu mình đã thả tim/emoji */}
           {currentUserId &&
             messageReactions.length > 0 &&
             messageReactions.some(
-              (r) => String(r.userId._id) === String(currentUserId),
+              (r) => String(r.userId?._id || r.userId) === String(currentUserId),
             ) && (
             <button
               onClick={() => removeReaction(messageId)}

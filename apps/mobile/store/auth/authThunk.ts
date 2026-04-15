@@ -23,6 +23,12 @@ export const signIn = createAsyncThunk(
 
       return data.user;
     } catch (err: any) {
+
+      if (!err.response) {
+        return thunkAPI.rejectWithValue({
+          message: "Không thể kết nối đến máy chủ!",
+        });
+      }
       return thunkAPI.rejectWithValue(err.response?.data);
     }
   },
