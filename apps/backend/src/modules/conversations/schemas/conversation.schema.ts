@@ -5,7 +5,7 @@ import { ConversationType } from 'src/common/types/enums/conversation-type';
 @Schema({ _id: false })
 export class Group {
   @Prop({ required: true })
-  name: string;
+  name: string ;
 
   @Prop()
   avatarUrl?: string;

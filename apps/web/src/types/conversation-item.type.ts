@@ -3,6 +3,7 @@ export interface ConversationItemType {
   type: string;
   name: string;
   avatar: string;
+  otherMemberId?: string | null;
   unreadCount?: number;
   lastMessage: {
     _id: string;

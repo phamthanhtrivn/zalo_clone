@@ -39,3 +39,18 @@ export interface ChangePassword {
   newPassword: string;
   confirmPassword: string;
 }
+
+export enum CallStatus {
+  INITIATED = "INITIATED", 
+  RINGING = "RINGING",     
+  ACCEPTED = "ACCEPTED",   
+  MISSED = "MISSED",       
+  REJECTED = "REJECTED",   
+  BUSY = "BUSY",           
+  ENDED = "ENDED",         
+}
+
+export enum CallType {
+  VOICE = "VOICE",
+  VIDEO = "VIDEO",
+}

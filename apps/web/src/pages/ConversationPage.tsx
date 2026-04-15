@@ -344,7 +344,11 @@ const ConversationPage = () => {
         return;
       }
 
-      if (typeof res === "object" && "success" in res && res.success === false) {
+      if (
+        typeof res === "object" &&
+        "success" in res &&
+        res.success === false
+      ) {
         toastAlert(
           typeof (res as { message?: string }).message === "string"
             ? (res as { message: string }).message
@@ -369,7 +373,12 @@ const ConversationPage = () => {
       const results = await Promise.all(promises);
 
       results.forEach((res, index) => {
-        if (!res || typeof res !== "object" || !("success" in res) || !res.success) {
+        if (
+          !res ||
+          typeof res !== "object" ||
+          !("success" in res) ||
+          !res.success
+        ) {
           console.error(`Lỗi file ${files[index].name}`);
         }
       });
@@ -495,6 +504,29 @@ const ConversationPage = () => {
 
     socket.emit("join_room", id);
 
+    const handleCallUpdated = (data: {
+      messageId: string;
+      status: string;
+      duration?: number;
+    }) => {
+      console.log(">>> NHẬN CẬP NHẬT CUỘC GỌI REALTIME:", data);
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg._id === data.messageId) {
+            return {
+              ...msg,
+              call: {
+                ...(msg.call || {}),
+                status: data.status,
+                duration: data.duration ?? msg.call?.duration ?? 0,
+              },
+            };
+          }
+          return msg;
+        }),
+      );
+    };
+
     const handleNewMessage = (newMessage: MessagesType) => {
       setMessages((prev) => {
         if (prev.some((m) => m._id === newMessage._id)) return prev;
@@ -581,6 +613,7 @@ const ConversationPage = () => {
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
     socket.on("read_receipt", handleReadReceipt);
+    socket.on("call_updated", handleCallUpdated);
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -588,6 +621,7 @@ const ConversationPage = () => {
       socket.off("message_recalled", handleMessageRecalled);
       socket.off("message_pinned", handleMessagePinned);
       socket.off("read_receipt", handleReadReceipt);
+      socket.off("call_updated", handleCallUpdated);
       socket.emit("leave_room", id);
     };
   }, [socket, id]);
@@ -596,45 +630,45 @@ const ConversationPage = () => {
     <div className="flex flex-1 h-full">
       {conversation ? (
         currentUserId ? (
-        <div className="flex-1 flex flex-col h-full bg-[#EBECF0] min-w-0">
-          <ChatHeader
-            conversation={conversation}
-            isInfoOpen={isInfoOpen}
-            toggleInfo={() => setIsInfoOpen(!isInfoOpen)}
-            pinnedMessages={pinnedMessages}
-            handlePinnedMessage={handlePinnedMessage}
-            handleJumpToMessage={handleJumpToMessage}
-          />
+          <div className="flex-1 flex flex-col h-full bg-[#EBECF0] min-w-0">
+            <ChatHeader
+              conversation={conversation}
+              isInfoOpen={isInfoOpen}
+              toggleInfo={() => setIsInfoOpen(!isInfoOpen)}
+              pinnedMessages={pinnedMessages}
+              handlePinnedMessage={handlePinnedMessage}
+              handleJumpToMessage={handleJumpToMessage}
+            />
 
-          <MessageList
-            messages={messages}
-            currentUserId={currentUserId}
-            containerRef={containerRef}
-            handleScrollToTop={handleScrollToTop}
-            handleScrollToBottom={handleScrollToBottom}
-            reactionMessage={reactionMessage}
-            removeReaction={removeReaction}
-            handleRecalledMessage={handleRecalledMessage}
-            handlePinnedMessage={handlePinnedMessage}
-            handleDeleteMessageForMe={handleDeleteMessageForMe}
-            isSelected={isSelected}
-            setIsSelected={setIsSelected}
-            selectedMessages={selectedMessages}
-            toggleSelectMessage={toggleSelectMessage}
-            onForwardMessages={handleForwardMessages}
-          />
+            <MessageList
+              messages={messages}
+              currentUserId={currentUserId}
+              containerRef={containerRef}
+              handleScrollToTop={handleScrollToTop}
+              handleScrollToBottom={handleScrollToBottom}
+              reactionMessage={reactionMessage}
+              removeReaction={removeReaction}
+              handleRecalledMessage={handleRecalledMessage}
+              handlePinnedMessage={handlePinnedMessage}
+              handleDeleteMessageForMe={handleDeleteMessageForMe}
+              isSelected={isSelected}
+              setIsSelected={setIsSelected}
+              selectedMessages={selectedMessages}
+              toggleSelectMessage={toggleSelectMessage}
+              onForwardMessages={handleForwardMessages}
+            />
 
-          <ChatInput
-            chatName={conversation.name}
-            onSendMessage={onSendMessage}
-            onSendFiles={onSendFiles}
-            isSelected={isSelected}
-            setIsSelected={setIsSelected}
-            selectedMessages={selectedMessages}
-            setSelectedMessages={setSelectedMessages}
-            onOpenForwardModal={() => setShowForwardModal(true)}
-          />
-        </div>
+            <ChatInput
+              chatName={conversation.name}
+              onSendMessage={onSendMessage}
+              onSendFiles={onSendFiles}
+              isSelected={isSelected}
+              setIsSelected={setIsSelected}
+              selectedMessages={selectedMessages}
+              setSelectedMessages={setSelectedMessages}
+              onOpenForwardModal={() => setShowForwardModal(true)}
+            />
+          </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-500">
             Đang tải thông tin tài khoản...

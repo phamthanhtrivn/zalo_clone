@@ -5,6 +5,7 @@ export class ConversationItemDto {
   type: string;
   name: string;
   avatar?: string;
+  otherMemberId?: string;
   lastMessage?: {
     senderName: string;
     content: Content;

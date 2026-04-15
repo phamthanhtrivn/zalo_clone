@@ -3,6 +3,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -46,7 +48,9 @@ export class MessagesService {
     @InjectModel(Conversation.name)
     private readonly conversationModel: Model<Conversation>,
     private readonly storageService: StorageService,
+    @Inject(forwardRef(() => ConversationsService))
     private readonly conversationService: ConversationsService,
+    @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
   ) {}
 
@@ -812,11 +816,11 @@ export class MessagesService {
       const updated = await this.messageModel.updateOne(
         {
           _id: objectMessageId,
-          'call.status': CallStatus.RINGING,
+          'call.status': { $in: [CallStatus.INITIATED, CallStatus.RINGING] },
         },
         {
           $set: {
-            'call.status': CallStatus.MISSED,
+            'call.status': CallStatus.REJECTED,
             'call.startedAt': null,
             'call.endedAt': null,
             'call.duration': 0,
@@ -899,7 +903,7 @@ export class MessagesService {
     } else if (status === CallStatus.ENDED) {
       const message = await this.messageModel.findOne({
         _id: objectMessageId,
-        'call.status': CallStatus.ACCEPTED,
+        'call.status': { $in: [CallStatus.ACCEPTED, CallStatus.RINGING] },
       });
 
       if (!message) {
@@ -912,9 +916,11 @@ export class MessagesService {
         throw new BadRequestException('Call has no start time');
       }
 
+      const startedAt = message.call?.startedAt;
       const now = new Date();
-      const duration =
-        (now.getTime() - message.call.startedAt.getTime()) / 1000;
+      const duration = startedAt
+        ? (now.getTime() - startedAt.getTime()) / 1000
+        : 0;
 
       const updated = await this.messageModel.updateOne(
         { _id: objectMessageId },

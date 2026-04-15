@@ -215,4 +215,22 @@ export const messageService = {
     });
     return response.data;
   },
+
+  createCallMessage: async (data: {
+    conversationId: string;
+    senderId: string;
+    type: "VIDEO" | "VOICE";
+  }) => {
+    const response = await apiClient.post(`/api/messages/call`, data);
+    return response.data;
+  },
+
+  updateCallStatus: async (data: {
+    messageId: string;
+    conversationId: string;
+    status: string;
+  }) => {
+    const response = await apiClient.patch(`/api/messages/call`, data);
+    return response.data;
+  },
 };

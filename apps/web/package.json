@@ -34,8 +34,10 @@
     "react-toastify": "^11.0.5",
     "shadcn-ui": "^0.9.5",
     "shared-types": "*",
+    "simple-peer": "^9.11.1",
     "socket.io-client": "^4.8.3",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "vite-plugin-node-polyfills": "^0.26.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -44,6 +46,7 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
+    "@types/simple-peer": "^9.11.9",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.27",
     "eslint": "^9.39.1",

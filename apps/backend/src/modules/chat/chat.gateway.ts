@@ -8,6 +8,9 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { MessagesService } from '../messages/messages.service';
+import { CallStatus } from 'src/common/types/enums/call-status';
+import { forwardRef, Inject } from '@nestjs/common';
 
 @WebSocketGateway({
   cors: {
@@ -17,6 +20,11 @@ import { Server, Socket } from 'socket.io';
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
+
+  constructor(
+    @Inject(forwardRef(() => MessagesService))
+    private readonly messageService: MessagesService,
+  ) {}
 
   handleConnection(socket: Socket) {
     const userId = socket.handshake.auth?.userId;
@@ -34,7 +42,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleDisconnect(socket: Socket) {
-    console.log(`User ${socket.data?.userId} disconnected (${socket.id})`);
+    const userId = socket.data?.userId;
+    if (userId) {
+      console.log(`User ${userId} disconnected`);
+      if (socket.data.currentCallId) {
+        this.server
+          .to(socket.data.currentCallId)
+          .emit('call:user_disconnected', { userId });
+      }
+    }
   }
 
   // Conversation room
@@ -46,5 +62,85 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     socket.join(conversationId);
 
     console.log(`User ${socket.data.userId} joined room: ${conversationId}`);
+  }
+
+  // Gửi tín hiệu WebRTC (Offer, Answer, ICE Candidates)
+  @SubscribeMessage('call:signal')
+  handleCallSignal(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody()
+    data: any,
+  ) {
+    console.log(`\n--- GIAO DỊCH TÍN HIỆU ---`);
+    console.log(`Từ: ${socket.data.userId}`);
+    console.log(`Tới UserID: ${data.to}`);
+
+    socket.data.currentCallId = data.conversationId;
+
+    // KIỂM TRA XEM ROOM CÓ AI KHÔNG
+    const room = this.server.sockets.adapter.rooms.get(data.to);
+    console.log(
+      `Số lượng socket trong room người nhận (${data.to}):`,
+      room ? room.size : 0,
+    );
+
+    this.server.to(data.to).emit('call:signal', {
+      ...data,
+      from: socket.data.userId,
+    });
+  }
+
+  // Thông báo khi người nghe bận hoặc từ chối từ phía UI
+  @SubscribeMessage('call:reject')
+  async handleCallReject(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody()
+    data: {
+      to: string;
+      conversationId: string;
+      reason: string;
+      messageId: string;
+    },
+  ) {
+    delete socket.data.currentCallId;
+    this.server.to(data.to).emit('call:rejected', {
+      from: socket.data.userId,
+      conversationId: data.conversationId,
+      reason: data.reason,
+    });
+    if (data.messageId) {
+      await this.messageService.updateCallMessage({
+        messageId: data.messageId,
+        conversationId: data.conversationId,
+        status: CallStatus.REJECTED,
+      });
+    }
+  }
+  // Cúp máy chủ động
+  @SubscribeMessage('call:end')
+  async handleCallEnd(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody()
+    data: {
+      to: string;
+      conversationId: string;
+      status: CallStatus;
+      messageId: string;
+    },
+  ) {
+    delete socket.data.currentCallId;
+    this.server.to(data.to).emit('call:ended', {
+      from: socket.data.userId,
+      conversationId: data.conversationId,
+    });
+
+    if (data.messageId) {
+      const finalStatus = data.status || CallStatus.ENDED;
+      await this.messageService.updateCallMessage({
+        messageId: data.messageId,
+        conversationId: data.conversationId,
+        status: finalStatus,
+      });
+    }
   }
 }

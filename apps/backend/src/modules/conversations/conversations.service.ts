@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -24,6 +26,8 @@ import { StorageService } from 'src/common/storage/storage.service';
 import { ConversationType } from 'src/common/types/enums/conversation-type';
 import { MemberRole } from 'src/common/types/enums/member-role';
 import { ChatGateway } from '../chat/chat.gateway';
+import { CallStatus } from 'src/common/types/enums/call-status';
+import { MessagesService } from '../messages/messages.service';
 
 @Injectable()
 export class ConversationsService {
@@ -37,6 +41,8 @@ export class ConversationsService {
     @InjectConnection() private connection: Connection,
     private readonly storageService: StorageService,
     private readonly chatGateway: ChatGateway,
+    @Inject(forwardRef(() => MessagesService))
+    private readonly messagesService: MessagesService,
   ) {}
 
   private async getFormattedConversationForUser(
@@ -862,6 +868,7 @@ export class ConversationsService {
               '$otherMemberInfo.userInfo.profile.avatarUrl',
             ],
           },
+          otherMemberId: '$otherMemberInfo.userId',
           lastMessage: {
             _id: '$lastMessage._id',
             senderName: {
@@ -883,6 +890,7 @@ export class ConversationsService {
 
     return conversations.map((c) => ({
       ...c,
+      otherMemberId: c?.otherMemberId?.toString?.() ?? c?.otherMemberId ?? null,
       avatar: c.avatar ? this.storageService.signFileUrl(c.avatar) : null,
     }));
   }
@@ -1097,5 +1105,40 @@ export class ConversationsService {
     } finally {
       await session.endSession();
     }
+  }
+
+  async updateCallStatus(
+    messageId: string,
+    status: CallStatus,
+    conversationId: string,
+  ) {
+    const updateFields: any = { 'call.status': status };
+    const now = new Date();
+
+    switch (status) {
+      case CallStatus.ACCEPTED:
+        updateFields['call.startedAt'] = now;
+        break;
+
+      case CallStatus.ENDED:
+        updateFields['call.endedAt'] = now;
+        break;
+
+      case CallStatus.REJECTED:
+      case CallStatus.MISSED:
+      case CallStatus.BUSY:
+        updateFields['call.endedAt'] = now;
+        updateFields['call.duration'] = 0;
+        break;
+
+      case CallStatus.RINGING:
+        break;
+    }
+
+    return await this.messageModel.findByIdAndUpdate(
+      messageId,
+      { $set: updateFields },
+      { new: true },
+    );
   }
 }
