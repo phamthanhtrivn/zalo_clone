@@ -14,6 +14,11 @@ import { ChatGateway } from './messages.gateway';
 import { ChatModule } from '../chat/chat.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 
+import { MessagesQueryService } from './services/query.service';
+import { MessagesActionService } from './services/action.service';
+import { MessagesCallService } from './services/call.service';
+import { MessagesTransformService } from './services/transform.service';
+
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -26,7 +31,14 @@ import { ConversationsModule } from '../conversations/conversations.module';
     ChatModule,
     ConversationsModule,
   ],
-  providers: [MessagesService, ChatGateway],
+  providers: [
+    MessagesService,
+    ChatGateway,
+    MessagesQueryService,
+    MessagesActionService,
+    MessagesCallService,
+    MessagesTransformService,
+  ],
   controllers: [MessagesController],
 })
 export class MessagesModule { }

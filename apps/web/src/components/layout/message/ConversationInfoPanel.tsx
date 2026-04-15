@@ -409,7 +409,7 @@ const ConversationInfoPanel = ({ isOpen, conversation, onClose }: ConversationIn
       </div>
 
       {preview.isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
+        <div className="fixed inset-0 z-100 bg-black/90 flex items-center justify-center">
           <button onClick={() => setPreview({ isOpen: false, index: 0 })} className="absolute top-5 right-5 text-white hover:opacity-70 cursor-pointer"><X size={28} /></button>
           <button onClick={() => handleDownload(medias[preview.index]?.content?.file)} className="absolute top-5 left-5 text-white hover:opacity-70 cursor-pointer"><Download size={24} /></button>
           {preview.index > 0 && (

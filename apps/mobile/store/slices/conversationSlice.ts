@@ -67,14 +67,12 @@ const conversationSlice = createSlice({
     },
 
     updateRecallMessageInConversation(state, action) {
-      const index = state.conversations.findIndex(
-        (c) => c.conversationId === action.payload.conversationId,
+      const { conversationId, messageId } = action.payload;
+      const conversation = state.conversations.find(
+        (c) => c.conversationId === conversationId,
       );
-      if (index !== -1) {
-        state.conversations[index] = {
-          ...state.conversations[index],
-          ...action.payload,
-        };
+      if (conversation && conversation.lastMessage?._id === messageId) {
+        conversation.lastMessage.recalled = true;
       }
     },
 

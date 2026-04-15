@@ -128,7 +128,27 @@ export default function MessageBubble({
           paddingHorizontal: 8,
         }}
       >
-        {!isMe && <View style={{ width: 32, marginRight: 6 }} />}
+        {!isMe && (
+          showAvatar ? (
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                overflow: "hidden",
+                backgroundColor: "#e5e7eb",
+                marginRight: 6,
+              }}
+            >
+              <Image
+                source={{ uri: (message.senderId as any)?.profile?.avatarUrl }}
+                style={{ width: 32, height: 32 }}
+              />
+            </View>
+          ) : (
+            <View style={{ width: 32, marginRight: 6 }} />
+          )
+        )}
 
         <View
           style={{

@@ -54,12 +54,12 @@ const ConversationItem: React.FC<Props> = ({
   const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
   const lastMessage = conversation.lastMessage;
+  const isRecall = lastMessage?.recalled;
 
   const preview = useMemo(() => {
     const content = lastMessage?.content;
-    const recalled = lastMessage?.recalled;
 
-    if (recalled) {
+    if (isRecall) {
       return {
         icon: null,
         text: "Tin nhắn đã được thu hồi",
@@ -229,10 +229,10 @@ const ConversationItem: React.FC<Props> = ({
         duration === 0
           ? await unmuteConversation(user?.userId, conversation.conversationId)
           : await muteConversation(
-              user?.userId,
-              conversation.conversationId,
-              duration,
-            );
+            user?.userId,
+            conversation.conversationId,
+            duration,
+          );
       } catch (err) {
         dispatch(
           updateConversationSetting({
@@ -405,7 +405,7 @@ const ConversationItem: React.FC<Props> = ({
 
           <View className="flex-row items-center mt-1">
             {/* sender */}
-            <Text className="text-[13px] text-gray-500">
+            <Text className="text-[13px] text-gray-400">
               {conversation.type === "PRIVATE" && !isOwn
                 ? ""
                 : `${isOwn ? "Bạn" : lastMessage?.senderName}: `}
@@ -497,12 +497,12 @@ const ConversationItem: React.FC<Props> = ({
               >
                 {conversation.name}
               </Text>
-              {preview ? (
+              {preview?.text ? (
                 <Text
                   numberOfLines={1}
                   style={{ fontSize: 12, color: "#9ca3af", marginTop: 1 }}
                 >
-                  {preview}
+                  {preview.text}
                 </Text>
               ) : null}
             </View>
