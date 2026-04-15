@@ -4,6 +4,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   InternalServerErrorException,
   Post,
   Request,
@@ -22,10 +23,14 @@ import { RequireTempPurpose } from 'src/common/decorator/temp_purpose.decorator'
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDTO } from './dto/change-password.dto';
 import type { Response } from 'express';
+import { RedisService } from 'src/common/redis/redis.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private redisService: RedisService,
+  ) {}
 
   @Post('sign-up')
   @Public()
@@ -47,13 +52,17 @@ export class AuthController {
   @Public()
   @RequireTempPurpose(Purpose.SignUp)
   @UseGuards(TempVerifyGuard)
-  async completeSignUp(@Request() req, @Body() signUpDto: SignUpDto) {
+  async completeSignUp(
+    @Request() req,
+    @Body() signUpDto: SignUpDto,
+    @Headers('authorization') authHeader: string,
+  ) {
     if (signUpDto.password !== signUpDto.repassword) {
       throw new BadRequestException('Mật khẩu xác nhận không khớp !');
     }
     const device = req.headers['user-agent'] as string;
     try {
-      return await this.authService.completeSignUp(
+      const session = await this.authService.completeSignUp(
         req.user.phone,
         signUpDto.name,
         signUpDto.gender,
@@ -61,6 +70,10 @@ export class AuthController {
         signUpDto.password,
         device,
       );
+      await this.redisService.del(
+        `tmp_token_valid:${authHeader.split(' ')[1]}`,
+      );
+      return session;
     } catch (err) {
       console.log(`Lỗi khi sign up: ${err}`);
       throw new InternalServerErrorException('Lỗi sign up');
@@ -78,26 +91,37 @@ export class AuthController {
   @Public()
   @RequireTempPurpose(Purpose.ForgotPassword)
   @UseGuards(TempVerifyGuard)
-  resetPassword(@Request() req, @Body() resetPasswordDto: ResetPasswordDto) {
+  async resetPassword(
+    @Request() req,
+    @Body() resetPasswordDto: ResetPasswordDto,
+    @Headers('authorization') authHeader: string,
+  ) {
     if (resetPasswordDto.confirmPassword !== resetPasswordDto.newPassword) {
       throw new BadRequestException('Mật khẩu xác nhận không khớp !');
     }
     const device = req.headers['user-agent'] as string;
-    return this.authService.resetPassword(
+
+    const session = await this.authService.resetPassword(
       req.user,
       resetPasswordDto.newPassword,
       device,
     );
+    await this.redisService.del(`tmp_token_valid:${authHeader.split(' ')[1]}`);
+
+    return session;
   }
 
   @Post('signin-with-temp')
   @Public()
   @RequireTempPurpose(Purpose.ForgotPassword)
   @UseGuards(TempVerifyGuard)
-  loginWithTemp(@Request() req) {
+  async loginWithTemp(
+    @Request() req,
+    @Headers('authorization') authHeader: string,
+  ) {
     const device = req.headers['user-agent'] as string;
 
-    return this.authService.signIn(
+    const session = this.authService.signIn(
       {
         userId: req.user.userId as string,
         phone: req.user.phone as string,
@@ -105,6 +129,10 @@ export class AuthController {
       },
       device,
     );
+
+    await this.redisService.del(`tmp_token_valid:${authHeader.split(' ')[1]}`);
+
+    return session;
   }
 
   @Post('sign-in')

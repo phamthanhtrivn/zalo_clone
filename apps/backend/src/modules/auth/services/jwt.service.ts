@@ -2,12 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { StringValue } from 'ms';
+import { RedisService } from 'src/common/redis/redis.service';
 
 @Injectable()
 export class TokenService {
   constructor(
     private jwt: JwtService,
     private configService: ConfigService,
+    private redisService: RedisService,
   ) {}
 
   async signAccess(payload: any) {
@@ -35,9 +37,18 @@ export class TokenService {
   }
 
   async signTempVerify(payload: any) {
-    return await this.jwt.signAsync(payload, {
+    const token = await this.jwt.signAsync(payload, {
       secret: this.configService.get<string>('tmp_secret'),
       expiresIn: this.configService.get<StringValue>('tmp_expires'),
     });
+
+    await this.redisService.set(
+      `tmp_token_valid:${token}`,
+      token,
+      'EX',
+      Number(this.configService.get<StringValue>('tmp_expires')),
+    );
+
+    return token;
   }
 }
