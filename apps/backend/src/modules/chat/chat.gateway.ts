@@ -163,4 +163,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.in(userId).socketsJoin(conversationId);
     console.log(`Socket: User ${userId} forced to join room ${conversationId}`);
   }
+
+  emitNewMessage(conversationId: string, message: any) {
+    this.server.to(conversationId).emit('new_message', message);
+  }
+
+  emitUpdateGroup(conversationId: string, updatedData: any) {
+    this.server.to(conversationId).emit('group_updated', updatedData);
+  }
 }

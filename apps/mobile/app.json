@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.htuan04.mobile"
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +21,12 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.htuan04.mobile"
+      "package": "com.htuan04.mobile",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "output": "static",
@@ -28,6 +34,13 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Ứng dụng cần truy cập thư viện ảnh của bạn để cập nhật ảnh đại diện nhóm.",
+          "cameraPermission": "Ứng dụng cần truy cập Máy ảnh để chụp ảnh đại diện nhóm trực tiếp."
+        }
+      ],
       [
         "expo-splash-screen",
         {

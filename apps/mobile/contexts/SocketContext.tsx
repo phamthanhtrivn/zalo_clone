@@ -150,6 +150,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       );
     };
 
+    const handleGroupUpdate = (data: any) => {
+      dispatch(
+        updateConversationSetting({
+          conversationId: data.conversationId,
+          name: data.name,
+          avatar: data.avatar,
+          group: data.group,
+        }),
+      );
+    };
+
     socketInstance.on("group_settings_updated", handleGroupSettingsUpdate);
 
     // --- REGISTER EVENTS ---
@@ -168,6 +179,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on("new_conversation", handleNewConversation);
     socketInstance.on("group_disbanded", handleGroupDisbanded);
     socketInstance.on("group_settings_updated", handleGroupSettingsUpdate);
+    socketInstance.on("group_updated", handleGroupUpdate);
 
     return () => {
       socketInstance.off("connect");
@@ -180,6 +192,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.off("new_conversation");
       socketInstance.off("group_disbanded");
       socketInstance.off("group_settings_updated", handleGroupSettingsUpdate);
+      socketInstance.off("group_updated", handleGroupUpdate);
     };
   }, [dispatch, user?.userId]);
 

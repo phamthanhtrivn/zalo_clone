@@ -100,6 +100,8 @@ const conversationSlice = createSlice({
       state,
       action: PayloadAction<{
         conversationId: string;
+        name?: string;
+        avatar?: string;
         pinned?: boolean;
         hidden?: boolean;
         muted?: boolean;
@@ -113,6 +115,9 @@ const conversationSlice = createSlice({
         (c) => c.conversationId === action.payload.conversationId,
       );
       if (!c) return;
+
+      if (action.payload.name !== undefined) c.name = action.payload.name;
+      if (action.payload.avatar !== undefined) c.avatar = action.payload.avatar;
 
       if (action.payload.pinned !== undefined) c.pinned = action.payload.pinned;
       if (action.payload.hidden !== undefined) c.hidden = action.payload.hidden;

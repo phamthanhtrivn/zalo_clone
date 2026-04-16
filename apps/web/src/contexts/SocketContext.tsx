@@ -174,6 +174,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     );
   };
 
+
   // --- INITIALIZE SOCKET ---
   useEffect(() => {
     if (!user?.userId) return;
@@ -207,6 +208,19 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on("member_updated", () => {
       dispatch(fetchConversations());
     });
+    socketInstance.on("group_updated", (data: any) => {
+      console.log("Nhận sự kiện group_updated:", data);
+
+      
+      dispatch(
+        updateConversationSetting({
+          conversationId: data.conversationId,
+          name: data.name, 
+          avatar: data.avatar, 
+          group: data.group, 
+        }),
+      );
+    });
 
     return () => {
       socketInstance.off("connect");
@@ -233,6 +247,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       );
       socketInstance.off("group_settings_updated");
       socketInstance.off("member_updated");
+      socketInstance.off("group_updated");
     };
   }, [apiUrl, dispatch, user?.userId]);
 

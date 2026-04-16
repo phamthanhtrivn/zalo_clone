@@ -53,4 +53,30 @@ export const conversationService = {
       `/conversations/${id}/join-requests/${requestId}/${method}`,
     );
   },
+
+  updateGroupMetadata: async (
+    id: string,
+    payload: { name?: string; avatar?: any },
+  ) => {
+    const formData = new FormData();
+
+    if (payload.name) {
+      formData.append("name", payload.name);
+    }
+
+    if (payload.avatar) {
+      const fileData = {
+        uri: payload.avatar.uri,
+        name: payload.avatar.fileName || "avatar.jpg",
+        type: payload.avatar.type || "image/jpeg",
+      };
+      formData.append("avatar", fileData as any);
+    }
+
+    return api.patch(`/conversations/${id}/group-info`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+  },
 };

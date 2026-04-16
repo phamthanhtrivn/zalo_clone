@@ -135,4 +135,24 @@ export const conversationService = {
     );
     return response.data;
   },
+  
+  updateGroupMetadata: async (
+    id: string,
+    payload: { name?: string; avatar?: File },
+  ) => {
+    const formData = new FormData();
+    if (payload.name) formData.append("name", payload.name);
+    if (payload.avatar) formData.append("avatar", payload.avatar);
+
+    const response = await apiClient.patch(
+      `/api/conversations/${id}/group-info`, 
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      },
+    );
+    return response.data;
+  },
 };

@@ -13,6 +13,7 @@ import {
   Pressable,
   Dimensions,
   Switch,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -26,6 +27,7 @@ import {
 import { conversationService } from "@/services/conversation.service";
 import { messageService } from "@/services/message.service";
 import CreateGroupModal from "./CreateGroupModal";
+import * as ImagePicker from "expo-image-picker";
 
 const { width, height } = Dimensions.get("window");
 
@@ -76,6 +78,9 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
   const [expandedRequests, setExpandedRequests] = useState(true);
   const [expandedManagement, setExpandedManagement] = useState(false);
   const [membersRefreshKey, setMembersRefreshKey] = useState(0);
+
+  const [editingName, setEditingName] = useState(false);
+  const [tempName, setTempName] = useState(conversation?.name || "");
 
   const isGroup = conversation?.type === "GROUP";
   const currentConversation =
@@ -434,6 +439,80 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
     }
   };
 
+  const uploadAvatar = async (selectedFile: ImagePicker.ImagePickerAsset) => {
+    try {
+      setLoading(true); // Nếu bạn có state loading
+      const res: any = await conversationService.updateGroupMetadata(
+        currentConversation.conversationId,
+        { avatar: selectedFile },
+      );
+      if (res.success) {
+        Alert.alert("Thành công", "Đã cập nhật ảnh nhóm mới");
+      }
+    } catch (err) {
+      Alert.alert("Lỗi", "Không thể tải ảnh lên server");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Quyền truy cập", "Bạn cần cấp quyền Camera để chụp ảnh");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      await uploadAvatar(result.assets[0]);
+    }
+  };
+
+  const handleChooseLibrary = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      await uploadAvatar(result.assets[0]);
+    }
+  };
+
+  const handleAvatarPress = () => {
+    Alert.alert("Ảnh đại diện nhóm", "Chọn phương thức cập nhật ảnh", [
+      { text: "Chụp ảnh mới", onPress: handleTakePhoto },
+      { text: "Chọn từ thư viện", onPress: handleChooseLibrary },
+      { text: "Hủy", style: "cancel" },
+    ]);
+  };
+
+  const handleSaveName = async () => {
+    if (!tempName.trim() || tempName === currentConversation?.name) {
+      setEditingName(false);
+      return;
+    }
+    try {
+      const res: any = await conversationService.updateGroupMetadata(
+        currentConversation.conversationId,
+        { name: tempName.trim() },
+      );
+      if (res.success) {
+        setEditingName(false);
+      }
+    } catch (err) {
+      Alert.alert("Lỗi", "Không thể đổi tên nhóm");
+    }
+  };
+
   // Kiểm tra quyền hiển thị Quick Actions
   const canInvite = localSettings.allowMembersInvite || isOwner || isAdmin;
 
@@ -458,11 +537,50 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
 
           <ScrollView showsVerticalScrollIndicator={false}>
             <View style={styles.profileSection}>
-              <Image
-                source={{ uri: conversation?.avatar }}
-                style={styles.largeAvatar}
-              />
-              <Text style={styles.profileName}>{conversation?.name}</Text>
+              <View style={styles.avatarContainer}>
+                <Image
+                  source={{ uri: currentConversation?.avatar }}
+                  style={styles.largeAvatar}
+                />
+                {isGroup && (isOwner || isAdmin) && (
+                  <TouchableOpacity
+                    style={styles.editAvatarBtn}
+                    onPress={handleAvatarPress}
+                  >
+                    <Ionicons name="camera" size={16} color="#4b5563" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.nameContainer}>
+                {editingName ? (
+                  <TextInput
+                    style={styles.nameInput}
+                    value={tempName}
+                    onChangeText={setTempName}
+                    autoFocus
+                    onBlur={handleSaveName}
+                    onSubmitEditing={handleSaveName}
+                  />
+                ) : (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={styles.profileName}>
+                      {currentConversation?.name}
+                    </Text>
+                    {isGroup && (isOwner || isAdmin) && (
+                      <TouchableOpacity onPress={() => setEditingName(true)}>
+                        <Ionicons name="pencil" size={16} color="#9ca3af" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
             </View>
 
             <View style={styles.quickActions}>
@@ -898,6 +1016,37 @@ const styles = StyleSheet.create({
   },
   settingTitle: { fontSize: 14, fontWeight: "500", color: "#333" },
   settingSub: { fontSize: 11, color: "#888", marginTop: 2 },
+  avatarContainer: {
+    position: "relative",
+    marginBottom: 12,
+  },
+  editAvatarBtn: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: "white",
+    padding: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    elevation: 2,
+  },
+  nameContainer: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 10,
+    paddingHorizontal: 20,
+  },
+  nameInput: {
+    fontSize: 18,
+    fontWeight: "bold",
+    borderBottomWidth: 2,
+    borderBottomColor: "#0068ff",
+    paddingHorizontal: 10,
+    textAlign: "center",
+    minWidth: 150,
+  },
 });
 
 export default ConversationInfoSheet;

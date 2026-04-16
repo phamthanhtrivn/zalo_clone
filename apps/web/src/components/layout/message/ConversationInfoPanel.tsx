@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { saveAs } from "file-saver";
 import {
@@ -166,6 +166,10 @@ const ConversationInfoPanel = ({
     isOpen: false,
     index: 0,
   });
+
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newName, setNewName] = useState(currentConversation?.name || "");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isGroup = currentConversation?.type === "GROUP";
   const isPinned = currentConversation?.pinned ?? false;
@@ -570,6 +574,56 @@ const ConversationInfoPanel = ({
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
+  const handleSaveName = async () => {
+    if (!newName.trim() || newName === currentConversation?.name) {
+      setIsEditingName(false);
+      return;
+    }
+    try {
+      const res = await conversationService.updateGroupMetadata(
+        currentConversation!.conversationId,
+        { name: newName.trim() },
+      );
+      if (res.success) {
+        toast.success("Đổi tên nhóm thành công");
+        setIsEditingName(false);
+      }
+    } catch (error) {
+      toast.error("Không thể đổi tên nhóm");
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) return toast.error("Ảnh quá lớn (<5MB)");
+
+    try {
+      toast.loading("Đang cập nhật ảnh nhóm...", { id: "upload-avatar" });
+
+      const res = await conversationService.updateGroupMetadata(
+        currentConversation!.conversationId,
+        { avatar: file },
+      );
+
+      if (res.success) {
+        toast.success("Cập nhật ảnh thành công", { id: "upload-avatar" });
+
+        dispatch(
+          updateConversationSetting({
+            conversationId: currentConversation!.conversationId,
+            avatar: res.data.group?.avatarUrl || res.data.avatar,
+          }),
+        );
+      }
+    } catch (error) {
+      toast.error("Lỗi khi tải ảnh lên", { id: "upload-avatar" });
+    } finally {
+      if (e.target) e.target.value = "";
+    }
+  };
+
   if (!isOpen) return <div className="w-0 overflow-hidden" />;
 
   return (
@@ -597,20 +651,48 @@ const ConversationInfoPanel = ({
               </AvatarFallback>
             </Avatar>
             {isGroup && canManageMembers && (
-              <div className="absolute bottom-3 right-0 p-1.5 bg-white rounded-full shadow-lg border cursor-pointer hover:bg-gray-50">
-                <Pencil size={12} className="text-gray-600" />
-              </div>
+              <>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute bottom-3 right-0 p-1.5 bg-white rounded-full shadow-lg border cursor-pointer hover:bg-gray-50"
+                >
+                  <Pencil size={12} className="text-gray-600" />
+                </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*"
+                  className="hidden"
+                />
+              </>
             )}
           </div>
-          <div className="flex items-center gap-2 px-4 text-center">
-            <h3 className="text-[17px] font-bold text-gray-900 leading-tight">
-              {currentConversation?.name}
-            </h3>
-            {isGroup && canManageMembers && (
-              <Pencil
-                size={14}
-                className="text-gray-400 cursor-pointer hover:text-blue-600"
-              />
+          <div className="flex flex-col items-center gap-2 px-4 w-full">
+            {isEditingName ? (
+              <div className="flex items-center gap-2 w-full px-4">
+                <input
+                  autoFocus
+                  className="border-b-2 border-blue-500 outline-none text-center font-bold w-full text-[17px]"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onBlur={handleSaveName}
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveName()}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-center group">
+                <h3 className="text-[17px] font-bold text-gray-900 leading-tight">
+                  {currentConversation?.name}
+                </h3>
+                {isGroup && canManageMembers && (
+                  <Pencil
+                    size={14}
+                    className="text-gray-400 cursor-pointer opacity-0 group-hover:opacity-100 hover:text-blue-600 transition-all"
+                    onClick={() => setIsEditingName(true)}
+                  />
+                )}
+              </div>
             )}
           </div>
         </div>

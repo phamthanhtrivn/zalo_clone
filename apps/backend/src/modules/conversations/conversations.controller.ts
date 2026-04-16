@@ -8,7 +8,9 @@ import {
   Patch,
   Post,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -17,6 +19,7 @@ import { TransferOwnerDto } from './dto/transfer-owner.dto';
 import { RemoveMemberDto } from './dto/remove-member.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { JwtAuthGuard } from '../auth/passport/jwt-auth.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('conversations')
 @UseGuards(JwtAuthGuard)
@@ -180,6 +183,22 @@ export class ConversationsController {
       requestId,
       actorId,
       'REJECTED',
+    );
+  }
+
+  @Patch(':id/group-info')
+  @UseInterceptors(FileInterceptor('avatar'))
+  async updateGroup(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() updateDto: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return await this.conversationsService.updateGroupInfo(
+      id,
+      req.user.userId,
+      updateDto,
+      file,
     );
   }
 }

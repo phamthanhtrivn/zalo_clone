@@ -28,6 +28,7 @@ import { MemberRole } from 'src/common/types/enums/member-role';
 import { ChatGateway } from '../chat/chat.gateway';
 import { CallStatus } from 'src/common/types/enums/call-status';
 import { MessagesService } from '../messages/messages.service';
+import { UpdateGroupDto } from './dto/udate-group.dto';
 
 @Injectable()
 export class ConversationsService {
@@ -1301,9 +1302,9 @@ export class ConversationsService {
     }
 
     if (!conversation.group) {
-      conversation.group = { name: '' } as any;
+      throw new BadRequestException('Hội thoại này không có dữ liệu nhóm');
     }
-    let systemMsgObj = null;
+    let systemMsgObj: any = null;
 
     if (
       dto.allowMembersSendMessages !== undefined &&
@@ -1511,6 +1512,104 @@ export class ConversationsService {
       throw error;
     } finally {
       await session.endSession();
+    }
+  }
+
+  async updateGroupInfo(
+    conversationId: string,
+    userId: string,
+    updateDto: any,
+    file?: Express.Multer.File,
+  ) {
+    try {
+      const convObjectId = new Types.ObjectId(conversationId.trim());
+      const userObjectId = new Types.ObjectId(userId.trim());
+
+      const conversation = await this.conversationModel.findById(convObjectId);
+      if (
+        !conversation ||
+        conversation.type !== ConversationType.GROUP ||
+        !conversation.group
+      ) {
+        throw new NotFoundException(
+          'Không tìm thấy nhóm hoặc hội thoại không phải là nhóm',
+        );
+      }
+
+      const member = await this.memberModel.findOne({
+        conversationId: convObjectId,
+        userId: userObjectId,
+        leftAt: null,
+      });
+
+      if (
+        !member ||
+        ![MemberRole.OWNER, MemberRole.ADMIN].includes(member.role as any)
+      ) {
+        throw new ForbiddenException(
+          'Bạn không có quyền chỉnh sửa thông tin nhóm',
+        );
+      }
+
+      const updateData: any = {};
+      const notifications: string[] = [];
+      const actorName = await this.getUserName(userId);
+
+      if (updateDto.name && updateDto.name !== conversation.group.name) {
+        updateData['group.name'] = updateDto.name;
+        notifications.push(
+          `${actorName} đã đổi tên nhóm thành "${updateDto.name}"`,
+        );
+      }
+
+      if (file) {
+        if (conversation.group.avatarUrl) {
+          await this.storageService
+            .deleteFile(conversation.group.avatarUrl)
+            .catch(() => {});
+        }
+
+        const upload = await this.storageService.uploadFile(file);
+        updateData['group.avatarUrl'] = upload.fileKey;
+        notifications.push(`${actorName} đã thay đổi ảnh đại diện nhóm`);
+      }
+      if (Object.keys(updateData).length === 0) return conversation;
+
+      const updatedDoc = await this.conversationModel.findByIdAndUpdate(
+        convObjectId,
+        { $set: updateData },
+        { new: true },
+      );
+
+      if (!updatedDoc) throw new Error('Cập nhật thất bại');
+
+      for (const text of notifications) {
+        const sysMsg = await this.createSystemMessage(conversationId, text);
+        this.chatGateway.server.to(conversationId).emit('new_message', sysMsg);
+      }
+
+      const result = updatedDoc.toObject();
+
+      if (result.group?.avatarUrl) {
+        result.group.avatarUrl =
+          this.storageService.signFileUrl(result.group.avatarUrl) ?? undefined;
+      }
+
+      this.chatGateway.server.to(conversationId).emit('group_updated', {
+        conversationId: conversationId,
+        name: result.group?.name,
+        avatar: result.group?.avatarUrl,
+        group: result.group,
+      });
+
+      return {
+        success: true,
+        message: 'Cập nhật thông tin nhóm thành công',
+        data: result,
+      };
+    } catch (error) {
+      console.error('--- LỖI TẠI updateGroupInfo ---', error);
+      throw error;
     }
   }
 }
