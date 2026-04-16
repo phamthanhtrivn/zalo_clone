@@ -83,7 +83,7 @@ const ConversationListItem = ({
   });
 
   const getPreviewContent = useMemo(() => {
-    const content = conversation.lastMessage?.content;
+    const content: any = conversation.lastMessage?.content;
     const recalled = conversation.lastMessage?.recalled;
     if (recalled) return "Tin nhắn đã được thu hồi";
 
@@ -98,8 +98,8 @@ const ConversationListItem = ({
     } else if (content.icon) {
       icon = <LuSticker />;
       text = "Sticker";
-    } else if (content.file) {
-      switch (content.file.type) {
+    } else if (content.files) {
+      switch (content.files[content.files.length - 1].type) {
         case "IMAGE":
           icon = <CiImageOn />;
           text = "Hình ảnh";
@@ -110,7 +110,7 @@ const ConversationListItem = ({
           break;
         case "FILE":
           icon = <GoFileSymlinkFile />;
-          text = content.file.fileName;
+          text = content.files[0].fileName;
           break;
         default:
           text = "";
@@ -120,10 +120,10 @@ const ConversationListItem = ({
     }
 
     return (
-      <div className="flex items-center gap-1 truncate">
+      <span className="flex items-center gap-1 truncate">
         {icon}
         <span className="truncate">{text}</span>
-      </div>
+      </span>
     );
   }, [conversation.lastMessage]);
 
@@ -197,10 +197,10 @@ const ConversationListItem = ({
       duration === 0
         ? await unmuteConversation(user?.userId, conversation.conversationId)
         : await muteConversation(
-            user?.userId,
-            conversation.conversationId,
-            duration,
-          );
+          user?.userId,
+          conversation.conversationId,
+          duration,
+        );
     } catch (error) {
       dispatch(
         updateConversationSetting({
@@ -278,9 +278,6 @@ const ConversationListItem = ({
   const expireDays = conversation.expireDuration
     ? conversation.expireDuration / (24 * 60 * 60 * 1000)
     : 0;
-
-    console.log(conversation);
-    
 
   return (
     <Link
@@ -571,9 +568,9 @@ const ConversationListItem = ({
           )}
           {conversation.type === "PRIVATE" &&
             conversation.lastMessage?.senderName !== "Bạn"
-              ? ""
-              : conversation.lastMessage?.senderName + ": "}
-            {getPreviewContent}
+            ? ""
+            : conversation.lastMessage?.senderName + ": "}
+          {getPreviewContent}
         </p>
       </div>
     </Link>

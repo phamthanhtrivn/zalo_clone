@@ -122,16 +122,13 @@ export const messageService = {
             const formData = new FormData();
             formData.append("conversationId", conversationId);
             formData.append("senderId", senderId);
-            if (content?.text) {
-                formData.append("content[text]", content.text);
-            }
-            if (content?.icon) {
-                formData.append("content[icon]", content.icon);
+            if (content) {
+                formData.append("content", JSON.stringify(content));
             }
             if (repliedId) {
                 formData.append("repliedId", repliedId);
             }
-            formData.append("file", file);
+            formData.append("files", file);
 
             const response = await api.post(`/messages`, formData, {
                 headers: {

@@ -176,11 +176,11 @@ const ConversationInfoPanel = ({ isOpen, conversation, onClose }: ConversationIn
       }
 
       if (data.type === "FILE") {
-        setFiles((prev) => [data.data, ...prev].slice(0, 6));
+        setFiles((prev) => [data.data, ...prev].slice(0, 3));
       }
 
       if (data.type === "LINK") {
-        setLinks((prev) => [data.data, ...prev].slice(0, 6));
+        setLinks((prev) => [data.data, ...prev].slice(0, 3));
       }
     };
 
@@ -294,7 +294,7 @@ const ConversationInfoPanel = ({ isOpen, conversation, onClose }: ConversationIn
           {expandedSections.media && (
             <div className="px-4 pb-4">
               {medias.length > 0 ? (
-                <div className="grid grid-cols-3 gap-0.5">
+                <div className="grid grid-cols-3 gap-1">
                   {medias.slice(0, 6).map((media, idx) => {
                     const file = media?.content?.file;
                     const isVideo = file?.type === "VIDEO";
@@ -302,7 +302,7 @@ const ConversationInfoPanel = ({ isOpen, conversation, onClose }: ConversationIn
                       <div key={idx} className="aspect-square bg-gray-100 overflow-hidden relative cursor-pointer" onClick={() => setPreview({ isOpen: true, index: idx })}>
                         {isVideo ? (
                           <>
-                            <video src={file?.fileKey} className="w-full h-full object-cover" muted />
+                            <video src={file?.fileKey} className="w-full h-full object-cover border-gray-300 rounded-md" muted />
                             <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                               <div className="w-7 h-7 rounded-full bg-black/50 flex items-center justify-center">
                                 <div className="ml-1 border-l-8 border-l-white border-y-6 border-y-transparent" />
@@ -310,7 +310,7 @@ const ConversationInfoPanel = ({ isOpen, conversation, onClose }: ConversationIn
                             </div>
                           </>
                         ) : (
-                          <img src={file?.fileKey} className="w-full h-full object-cover" />
+                          <img src={file?.fileKey} className="w-full h-full object-cover border border-gray-300 rounded-md  " />
                         )}
                       </div>
                     );

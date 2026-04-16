@@ -347,15 +347,46 @@ const ConversationPage = () => {
     if (!id || !files.length) return;
 
     try {
-      const promises = Array.from(files).map((file) =>
-        messageService.sendMessage(id, user?.userId || "", replyingMessage?._id, undefined, file),
+      const filesArray = Array.from(files);
+
+      const mediaFiles = filesArray.filter(
+        (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
       );
+      const documentFiles = filesArray.filter(
+        (file) => !file.type.startsWith("image/") && !file.type.startsWith("video/"),
+      );
+
+      const promises: Promise<any>[] = [];
+
+      if (mediaFiles.length > 0) {
+        promises.push(
+          messageService.sendMessage(
+            id,
+            user?.userId || "",
+            replyingMessage?._id,
+            undefined,
+            mediaFiles
+          )
+        );
+      }
+
+      documentFiles.forEach((file) => {
+        promises.push(
+          messageService.sendMessage(
+            id,
+            user?.userId || "",
+            replyingMessage?._id,
+            undefined,
+            [file]
+          )
+        );
+      });
 
       const results = await Promise.all(promises);
 
-      results.forEach((res, index) => {
+      results.forEach((res) => {
         if (!res.success) {
-          console.error(`Lỗi file ${files[index].name}`);
+          console.error("Gửi file thất bại");
         }
       });
 
@@ -492,8 +523,8 @@ const ConversationPage = () => {
       if (!container) return;
 
       const isMedia =
-        newMessage.content?.file?.type === "IMAGE" ||
-        newMessage.content?.file?.type === "VIDEO";
+        newMessage.content?.files?.type === "IMAGE" ||
+        newMessage.content?.files?.type === "VIDEO";
 
       const isNearBottom =
         container.scrollHeight - container.scrollTop - container.clientHeight <

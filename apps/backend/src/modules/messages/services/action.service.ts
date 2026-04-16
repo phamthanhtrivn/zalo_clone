@@ -40,138 +40,156 @@ export class MessagesActionService {
 
   async sendMessage(
     sendMessageDto: SendMessageDto,
-    file?: Express.Multer.File,
+    files?: Express.Multer.File[],
   ) {
-    const { senderId, conversationId, content, repliedId } = sendMessageDto;
+    try {
+      let { senderId, conversationId, content, repliedId } = sendMessageDto;
 
-    const conversation = await this.conversationModel.findById(conversationId);
-    if (!conversation) {
-      throw new NotFoundException('Conversation not found');
-    }
+      if (typeof content === 'string') {
+        try {
+          content = JSON.parse(content);
+        } catch (error) {
+          console.error('Failed to parse content JSON:', error);
+        }
+      }
 
-    const member = await this.memberModel.findOne({
-      userId: new Types.ObjectId(senderId),
-      conversationId: new Types.ObjectId(conversationId),
-      leftAt: null,
-    });
+      const conversation = await this.conversationModel.findById(conversationId);
+      if (!conversation) {
+        throw new NotFoundException('Conversation not found');
+      }
 
-    if (!member) {
-      throw new NotFoundException(
-        'User is not a participant in this conversation',
-      );
-    }
+      const member = await this.memberModel.findOne({
+        userId: new Types.ObjectId(senderId),
+        conversationId: new Types.ObjectId(conversationId),
+        leftAt: null,
+      });
 
-    if (
-      conversation.type === ConversationType.GROUP &&
-      member.role === MemberRole.MEMBER &&
-      !conversation.group?.allowMembersSendMessages
-    ) {
-      throw new BadRequestException(
-        'Members are not allowed to send messages in this group',
-      );
-    }
+      if (!member) {
+        throw new NotFoundException(
+          'User is not a participant in this conversation',
+        );
+      }
 
-    const formattedContent: any = {
-      text: content?.text ?? null,
-      icon: content?.icon ?? null,
-      file: null,
-    };
+      if (
+        conversation.type === ConversationType.GROUP &&
+        member.role === MemberRole.MEMBER &&
+        !conversation.group?.allowMembersSendMessages
+      ) {
+        throw new BadRequestException(
+          'Members are not allowed to send messages in this group',
+        );
+      }
 
-    if (file) {
-      formattedContent.file = await this.storageService.uploadFile(file);
-    }
+      const formattedContent: any = {
+        text: content?.text ?? null,
+        icon: content?.icon ?? null,
+        files: [],
+      };
 
-    if (
-      !formattedContent.text &&
-      !formattedContent.icon &&
-      !formattedContent.file
-    ) {
-      throw new BadRequestException(
-        'Message must contain at least text, icon, or file',
-      );
-    }
+      if (files && files.length > 0) {
+        formattedContent.files = await Promise.all(files.map((file) => this.storageService.uploadFile(file)));
+      }
 
-    const message = await this.messageModel.create({
-      senderId: new Types.ObjectId(senderId),
-      conversationId: new Types.ObjectId(conversationId),
-      content: formattedContent,
-      pinned: false,
-      recalled: false,
-      reactions: [],
-      readReceipts: [{ userId: new Types.ObjectId(senderId) }],
-      repliedId: repliedId ? new Types.ObjectId(repliedId) : null,
-    });
+      if (
+        !formattedContent.text &&
+        !formattedContent.icon &&
+        (!formattedContent.files || formattedContent.files.length === 0)
+      ) {
+        throw new BadRequestException(
+          'Message must contain at least text, icon, or file',
+        );
+      }
 
-    await this.conversationModel.findByIdAndUpdate(conversationId, {
-      lastMessageId: new Types.ObjectId(message._id),
-      lastMessageAt: (message as any).createdAt,
-    });
+      const message = await this.messageModel.create({
+        senderId: new Types.ObjectId(senderId),
+        conversationId: new Types.ObjectId(conversationId),
+        content: formattedContent,
+        pinned: false,
+        recalled: false,
+        reactions: [],
+        readReceipts: [{ userId: new Types.ObjectId(senderId) }],
+        repliedId: repliedId ? new Types.ObjectId(repliedId) : null,
+      });
 
-    const populatedMessage = (await this.messageModel
-      .findById(message._id)
-      .populate('senderId', 'profile.name profile.avatarUrl')
-      .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
-      .populate('reactions.userId', 'profile.name profile.avatarUrl')
-      .populate({
-        path: 'repliedId',
-        populate: {
-          path: 'senderId',
-          select: 'profile.name profile.avatarUrl',
-        },
-      })
-      .lean()) as any;
+      console.log(message);
 
-    if (populatedMessage) {
-      const conversationIdStr = conversationId.toString();
-      const transformedMessage =
-        this.transformService.transformMessage(populatedMessage);
 
-      this.chatGateway.server
-        .to(conversationIdStr)
-        .emit('new_message', transformedMessage);
+      await this.conversationModel.findByIdAndUpdate(conversationId, {
+        lastMessageId: new Types.ObjectId(message._id),
+        lastMessageAt: (message as any).createdAt,
+      });
 
-      this.transformService.emitMessageForMedias(
-        conversationIdStr,
-        transformedMessage,
-      );
+      const populatedMessage = (await this.messageModel
+        .findById(message._id)
+        .populate('senderId', 'profile.name profile.avatarUrl')
+        .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
+        .populate('reactions.userId', 'profile.name profile.avatarUrl')
+        .populate({
+          path: 'repliedId',
+          populate: {
+            path: 'senderId',
+            select: 'profile.name profile.avatarUrl',
+          },
+        })
+        .lean()) as any;
 
-      const room =
-        this.chatGateway.server.sockets.adapter.rooms.get(conversationIdStr);
-      if (room) {
-        for (const socketId of room) {
-          const socket: any =
-            this.chatGateway.server.sockets.sockets.get(socketId);
-          if (socket?.data?.userId !== senderId) {
-            await this.readReceiptMessage({
-              userId: socket.data.userId,
-              conversationId,
-            });
+      if (populatedMessage) {
+        const conversationIdStr = conversationId.toString();
+        const transformedMessage =
+          this.transformService.transformMessage(populatedMessage);
+
+        console.log(transformedMessage);
+
+
+        this.chatGateway.server
+          .to(conversationIdStr)
+          .emit('new_message', transformedMessage);
+
+        this.transformService.emitMessageForMedias(
+          conversationIdStr,
+          transformedMessage,
+        );
+
+        const room =
+          this.chatGateway.server.sockets.adapter.rooms.get(conversationIdStr);
+        if (room) {
+          for (const socketId of room) {
+            const socket: any =
+              this.chatGateway.server.sockets.sockets.get(socketId);
+            if (socket?.data?.userId !== senderId) {
+              await this.readReceiptMessage({
+                userId: socket.data.userId,
+                conversationId,
+              });
+            }
           }
         }
       }
-    }
 
-    const members = await this.memberModel.find({
-      conversationId: new Types.ObjectId(conversationId),
-      leftAt: null,
-    });
+      const members = await this.memberModel.find({
+        conversationId: new Types.ObjectId(conversationId),
+        leftAt: null,
+      });
 
-    for (const m of members) {
-      const conversations =
-        await this.conversationService.getConversationsFromUser(
-          m.userId.toString(),
+      for (const m of members) {
+        const conversations =
+          await this.conversationService.getConversationsFromUser(
+            m.userId.toString(),
+          );
+        const conv = conversations.find(
+          (c) => c.conversationId.toString() === conversationId,
         );
-      const conv = conversations.find(
-        (c) => c.conversationId.toString() === conversationId,
-      );
-      if (conv) {
-        this.chatGateway.server
-          .to(m.userId.toString())
-          .emit('new_message_sidebar', conv);
+        if (conv) {
+          this.chatGateway.server
+            .to(m.userId.toString())
+            .emit('new_message_sidebar', conv);
+        }
       }
-    }
 
-    return message;
+      return message;
+    } catch (error) {
+      console.log(error);
+    }
   }
 
   async recalledMessage(recalledMessageDto: RecalledMessageDto) {
@@ -193,13 +211,15 @@ export class MessagesActionService {
       );
     }
 
-    const message = await this.messageModel.findById(objectMessageId);
+    const message: any = await this.messageModel.findById(objectMessageId);
     if (!message) {
       throw new NotFoundException('Message not found');
     }
 
-    if (message.content?.file) {
-      await this.storageService.deleteFile(message.content.file.fileKey);
+    if (message.content?.files) {
+      await Promise.all(message.content.files.map(async (file) => {
+        await this.storageService.deleteFile(file.fileKey);
+      }))
     }
 
     const expireDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -213,7 +233,7 @@ export class MessagesActionService {
         createdAt: { $gte: expireDate },
       },
       {
-        $set: { recalled: true, 'content.file': null },
+        $set: { recalled: true, 'content.files': [] },
       },
     );
 
@@ -757,13 +777,7 @@ export class MessagesActionService {
         .populate('senderId', 'profile.name')
         .lean();
 
-      const transformedMessages = messages.map((m) => ({
-        ...m,
-        content: {
-          ...m.content,
-          file: this.transformService.signFile(m.content?.file),
-        },
-      }));
+      const transformedMessages = messages.map((m) => this.transformService.transformMessage(m));
 
       this.chatGateway.server
         .to(conversationId.toString())

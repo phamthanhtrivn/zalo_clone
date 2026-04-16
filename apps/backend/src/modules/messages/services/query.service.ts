@@ -25,7 +25,7 @@ export class MessagesQueryService {
     private readonly conversationModel: Model<Conversation>,
     private readonly transformService: MessagesTransformService,
     private readonly storageService: StorageService,
-  ) {}
+  ) { }
 
   async getMessagesFromConversation(
     conversationId: string,
@@ -272,13 +272,7 @@ export class MessagesQueryService {
       .populate('senderId', 'profile.name')
       .lean();
 
-    const transformedMessages = messages.map((message) => ({
-      ...message,
-      content: {
-        ...message.content,
-        file: this.transformService.signFile(message.content?.file),
-      },
-    }));
+    const transformedMessages = messages.map((message) => this.transformService.transformMessage(message));
 
     const finalMessages = transformedMessages.reverse();
 
@@ -305,53 +299,74 @@ export class MessagesQueryService {
       );
     }
 
-    const [images_videos, files, rawLinks] = await Promise.all([
+    const [imagesVideosRaw, filesRaw, rawLinks] = await Promise.all([
       this.messageModel
         .find({
           conversationId: new Types.ObjectId(conversationId),
-          'content.file.type': { $in: ['IMAGE', 'VIDEO'] },
+          'content.files.type': { $in: ['IMAGE', 'VIDEO'] },
         })
-        .select('_id content.file createdAt')
+        .select('_id content.files createdAt')
         .sort({ _id: -1 })
-        .limit(6)
         .lean(),
 
       this.messageModel
         .find({
           conversationId: new Types.ObjectId(conversationId),
-          'content.file.type': 'FILE',
+          'content.files.type': 'FILE',
         })
-        .select('_id content.file createdAt')
+        .select('_id content.files createdAt')
         .sort({ _id: -1 })
-        .limit(3)
         .lean(),
 
       this.messageModel
         .find({
           conversationId: new Types.ObjectId(conversationId),
           deletedFor: { $ne: new Types.ObjectId(userId) },
-          'content.text': { $regex: /(http|https):\/\// },
+          'content.text': { $regex: /(https?:\/\/[^\s]+)/ },
         })
         .select('_id content.text createdAt')
         .sort({ _id: -1 })
-        .limit(3)
         .lean(),
     ]);
 
-    const links = rawLinks.flatMap((msg) => {
+    const images_videos = imagesVideosRaw
+      .flatMap((msg: any) =>
+        (msg.content?.files || [])
+          .filter((f) => f.type === 'IMAGE' || f.type === 'VIDEO')
+          .map((file) => ({
+            _id: msg._id,
+            createdAt: msg.createdAt,
+            content: { file },
+          })),
+      )
+      .slice(0, 6);
+
+    const files = filesRaw
+      .flatMap((msg: any) =>
+        (msg.content?.files || [])
+          .filter((f) => f.type === 'FILE')
+          .map((file) => ({
+            _id: msg._id,
+            createdAt: msg.createdAt,
+            content: { file },
+          })),
+      )
+      .slice(0, 3);
+
+    const links = rawLinks.flatMap((msg: any) => {
       const matches = msg.content?.text?.match(/https?:\/\/[^\s]+/g) || [];
-      return matches.map((url) => ({
+
+      return matches.map((url: string) => ({
         _id: msg._id,
-        createdAt: (msg as any).createdAt,
+        createdAt: msg.createdAt,
         content: { text: url },
       }));
     });
 
     const signMessageFile = (message: any) => {
       if (message.content?.file) {
-        message.content.file.fileKey = this.storageService.signFileUrl(
-          message.content.file.fileKey,
-        );
+        message.content.file.fileKey =
+          this.storageService.signFileUrl(message.content.file.fileKey);
       }
       return message;
     };
@@ -377,60 +392,60 @@ export class MessagesQueryService {
       toDate,
     } = getMediasFileTypeDto;
 
-    const member = await this.memberModel.findOne({
-      userId: new Types.ObjectId(userId),
-      conversationId: new Types.ObjectId(conversationId),
-      leftAt: null,
-    });
+    // const member = await this.memberModel.findOne({
+    //   userId: new Types.ObjectId(userId),
+    //   conversationId: new Types.ObjectId(conversationId),
+    //   leftAt: null,
+    // });
 
-    if (!member) {
-      throw new NotFoundException(
-        'User is not a participant in this conversation',
-      );
-    }
+    // if (!member) {
+    //   throw new NotFoundException(
+    //     'User is not a participant in this conversation',
+    //   );
+    // }
 
-    const query: any = {
-      conversationId: new Types.ObjectId(conversationId),
-      deletedFor: { $ne: new Types.ObjectId(userId) },
-    };
+    // const query: any = {
+    //   conversationId: new Types.ObjectId(conversationId),
+    //   deletedFor: { $ne: new Types.ObjectId(userId) },
+    // };
 
-    if (type === FileType.IMAGE || type === FileType.VIDEO) {
-      query['content.file.type'] = { $in: ['IMAGE', 'VIDEO'] };
-    } else if (type === FileType.FILE) {
-      query['content.file.type'] = 'FILE';
-    } else if (type === 'LINK') {
-      query['content.text'] = { $regex: /(http|https):\/\// };
-    }
+    // if (type === FileType.IMAGE || type === FileType.VIDEO) {
+    //   query['content.file.type'] = { $in: ['IMAGE', 'VIDEO'] };
+    // } else if (type === FileType.FILE) {
+    //   query['content.file.type'] = 'FILE';
+    // } else if (type === 'LINK') {
+    //   query['content.text'] = { $regex: /(http|https):\/\// };
+    // }
 
-    if (senderId) query.senderId = new Types.ObjectId(senderId);
+    // if (senderId) query.senderId = new Types.ObjectId(senderId);
 
-    if (fromDate || toDate) {
-      query.createdAt = {};
-      if (fromDate) query.createdAt.$gte = new Date(fromDate);
-      if (toDate) query.createdAt.$lte = new Date(toDate);
-    }
+    // if (fromDate || toDate) {
+    //   query.createdAt = {};
+    //   if (fromDate) query.createdAt.$gte = new Date(fromDate);
+    //   if (toDate) query.createdAt.$lte = new Date(toDate);
+    // }
 
-    if (cursor) query._id = { $lt: new Types.ObjectId(cursor) };
+    // if (cursor) query._id = { $lt: new Types.ObjectId(cursor) };
 
-    const messages = await this.messageModel
-      .find(query)
-      .sort({ _id: -1 })
-      .limit(Number(limit))
-      .lean();
+    // const messages = await this.messageModel
+    //   .find(query)
+    //   .sort({ _id: -1 })
+    //   .limit(Number(limit))
+    //   .lean();
 
-    const signedMessages = messages.map((message) => {
-      if (message.content?.file) {
-        (message.content as any).file.fileKey = this.storageService.signFileUrl(
-          (message.content as any).file.fileKey,
-        );
-      }
-      return message;
-    });
+    // const signedMessages = messages.map((message) => {
+    //   if (message.content?.file) {
+    //     (message.content as any).file.fileKey = this.storageService.signFileUrl(
+    //       (message.content as any).file.fileKey,
+    //     );
+    //   }
+    //   return message;
+    // });
 
-    return {
-      messages: signedMessages,
-      nextCursor:
-        messages.length > 0 ? messages[messages.length - 1]._id : null,
-    };
+    // return {
+    //   messages: signedMessages,
+    //   nextCursor:
+    //     messages.length > 0 ? messages[messages.length - 1]._id : null,
+    // };
   }
 }

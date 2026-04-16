@@ -7,7 +7,7 @@ export class MessagesTransformService {
   constructor(
     private readonly storageService: StorageService,
     private readonly chatGateway: ChatGateway,
-  ) {}
+  ) { }
 
   signAvatar = (avatar?: string) =>
     avatar ? this.storageService.signFileUrl(avatar) : avatar;
@@ -15,24 +15,24 @@ export class MessagesTransformService {
   signUser = (user?: any) =>
     user
       ? {
-          ...user,
-          profile: user.profile
-            ? {
-                ...user.profile,
-                avatarUrl: this.signAvatar(user.profile.avatarUrl),
-              }
-            : user.profile,
-        }
+        ...user,
+        profile: user.profile
+          ? {
+            ...user.profile,
+            avatarUrl: this.signAvatar(user.profile.avatarUrl),
+          }
+          : user.profile,
+      }
       : user;
 
   signFile = (file?: any) =>
     file
       ? {
-          ...file,
-          fileKey: file.fileKey
-            ? this.storageService.signFileUrl(file.fileKey)
-            : file.fileKey,
-        }
+        ...file,
+        fileKey: file.fileKey
+          ? this.storageService.signFileUrl(file.fileKey)
+          : file.fileKey,
+      }
       : file;
 
   transformMessage(message: any) {
@@ -40,7 +40,7 @@ export class MessagesTransformService {
       ...message,
       content: {
         ...message.content,
-        file: this.signFile(message.content?.file),
+        files: message.content?.files?.map((file) => this.signFile(file)),
       },
       senderId: this.signUser(message.senderId),
       reactions: message.reactions?.map((r) => ({
@@ -53,9 +53,9 @@ export class MessagesTransformService {
       })),
       repliedId: message.repliedId
         ? {
-            ...message.repliedId,
-            senderId: this.signUser(message.repliedId.senderId),
-          }
+          ...message.repliedId,
+          senderId: this.signUser(message.repliedId.senderId),
+        }
         : null,
     };
   }
@@ -64,29 +64,37 @@ export class MessagesTransformService {
     conversationIdStr: string,
     transformedMessage: any,
   ) {
-    const file = transformedMessage.content?.file;
+    const files = transformedMessage.content?.files;
     const text = transformedMessage.content?.text;
 
-    if (file?.type === 'IMAGE' || file?.type === 'VIDEO') {
-      this.chatGateway.server.to(conversationIdStr).emit('new_media_preview', {
-        type: 'IMAGE_VIDEO',
-        data: {
-          _id: transformedMessage._id,
-          content: { file },
-          createdAt: transformedMessage.createdAt,
-        },
-      });
+    const mediasFile = files.filter(file => file?.type === 'IMAGE' || file?.type === 'VIDEO')
+
+    const documentsFile = files.filter(file => file?.type === 'FILE')
+
+    if (mediasFile.length > 0) {
+      mediasFile.forEach(file => (
+        this.chatGateway.server.to(conversationIdStr).emit('new_media_preview', {
+          type: 'IMAGE_VIDEO',
+          data: {
+            _id: transformedMessage._id,
+            content: { file },
+            createdAt: transformedMessage.createdAt,
+          },
+        })
+      ))
     }
 
-    if (file?.type === 'FILE') {
-      this.chatGateway.server.to(conversationIdStr).emit('new_media_preview', {
-        type: 'FILE',
-        data: {
-          _id: transformedMessage._id,
-          content: { file },
-          createdAt: transformedMessage.createdAt,
-        },
-      });
+    if (documentsFile.length > 0) {
+      documentsFile.forEach(file => (
+        this.chatGateway.server.to(conversationIdStr).emit('new_media_preview', {
+          type: 'FILE',
+          data: {
+            _id: transformedMessage._id,
+            content: { file },
+            createdAt: transformedMessage.createdAt,
+          },
+        })
+      ))
     }
 
     if (text && /(http|https):\/\/[^\s]+/.test(text)) {

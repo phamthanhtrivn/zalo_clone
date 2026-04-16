@@ -1,8 +1,9 @@
 import { formatTime } from "@/utils/format-message-time..util";
 import type { MessagesType } from "@/types/messages.type";
-import { Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import { getFileIcon } from "@/utils/file-icon.util";
 import { saveAs } from "file-saver";
+import { useState } from "react";
 
 interface Props {
   message: MessagesType;
@@ -46,9 +47,17 @@ export const MessageBubble = ({
   onJumpToMessage,
 }: Props) => {
   const content = message.content;
-  const file = content?.file;
+  const files = content?.files || [];
 
-  const handleDownload = async () => {
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+
+  const dispatchMediaLoaded = () => {
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("message-media-loaded"));
+    });
+  };
+
+  const handleDownload = async (file: any) => {
     try {
       const response = await fetch(file.fileKey);
 
@@ -64,12 +73,6 @@ export const MessageBubble = ({
     }
   };
 
-  const dispatchMediaLoaded = () => {
-    requestAnimationFrame(() => {
-      window.dispatchEvent(new Event("message-media-loaded"));
-    });
-  };
-
   if (message.recalled) {
     return (
       <div
@@ -79,7 +82,7 @@ export const MessageBubble = ({
         <p>Tin nhắn đã được thu hồi</p>
 
         {showTime && (
-          <div className="text-[12px] text-gray-400 mt-1 text-right not-italic">
+          <div className="text-[12px] text-gray-400 mt-1 text-right">
             {formatTime(message.createdAt)}
           </div>
         )}
@@ -92,23 +95,21 @@ export const MessageBubble = ({
       onClick={() => {
         if (isSelected) toggleSelectMessage(message._id);
       }}
-      className={`rounded-lg px-3 py-2 max-w-md border shadow-sm ${isSelected ? "cursor-pointer" : ""}  ${isMe
-        ? selectedMessages.includes(message._id)
-          ? "bg-[#B4CBE7]"
-          : "bg-[#E5F1FF]"
-        : selectedMessages.includes(message._id)
-          ? "bg-[#B4CBE7]"
-          : "bg-white"
+      className={`rounded-lg px-3 py-2 max-w-md border shadow-sm ${isSelected ? "cursor-pointer" : ""
+        } ${isMe
+          ? selectedMessages.includes(message._id)
+            ? "bg-[#B4CBE7]"
+            : "bg-[#E5F1FF]"
+          : selectedMessages.includes(message._id)
+            ? "bg-[#B4CBE7]"
+            : "bg-white"
         }`}
     >
       <div className="space-y-2 wrap-break-word">
+        {/* REPLY */}
         {message.repliedId && (
           <div
-            className={`
-              mb-2 p-2 rounded border-l-4 border-blue-400 bg-black/5 
-              flex flex-col gap-0.5 min-w-[120px] max-w-full
-              cursor-pointer hover:bg-black/10 transition-colors
-            `}
+            className="mb-2 p-2 rounded border-l-4 border-blue-400 bg-black/5 cursor-pointer hover:bg-black/10"
             onClick={(e) => {
               e.stopPropagation();
               if (onJumpToMessage && message.repliedId?._id) {
@@ -119,62 +120,138 @@ export const MessageBubble = ({
             <div className="text-[11px] font-bold text-blue-600 truncate">
               {message.repliedId.senderId?.profile?.name || "Người dùng"}
             </div>
+
             <div className="text-[12px] text-gray-600 truncate">
               {message.repliedId.content?.text ||
-                (message.repliedId.content?.file ? message.repliedId.content.file.fileName : "")}
+                (message.repliedId.content?.files?.length > 0
+                  ? message.repliedId.content.files[0].fileName
+                  : "")}
             </div>
           </div>
         )}
 
+        {/* TEXT */}
         {content?.text && <p>{renderTextWithLinks(content.text)}</p>}
 
+        {/* ICON */}
         {content?.icon && <p className="text-2xl">{content.icon}</p>}
 
-        {file?.type === "IMAGE" && (
-          <img
-            src={file.fileKey}
-            alt="image"
-            className="max-w-xs rounded-lg object-cover"
-            onLoad={dispatchMediaLoaded}
-          />
+        {files.length > 0 && (
+          <div
+            className={`
+                grid gap-1
+                ${files.length === 1 ? "grid-cols-1" : ""}
+                ${files.length === 2 ? "grid-cols-2" : ""}
+                ${files.length >= 3 ? "grid-cols-3" : ""}
+              `}
+          >
+            {files.map((file, index) => {
+
+              return (
+                <div
+                  key={index}
+                  className="relative overflow-hidden rounded-xl border bg-black group cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPreviewIndex(index);
+                  }}
+                >
+                  {file.type === "IMAGE" && (
+                    <img
+                      src={file.fileKey}
+                      className="w-full h-32 object-cover group-hover:scale-105 transition"
+                      onLoad={dispatchMediaLoaded}
+                    />
+                  )}
+
+                  {file.type === "VIDEO" && (
+                    <video
+                      src={file.fileKey}
+                      className="w-full h-32 object-cover"
+                      onLoadedMetadata={dispatchMediaLoaded}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
 
-        {file?.type === "VIDEO" && (
-          <video
-            src={file.fileKey}
-            controls
-            className="max-w-xs rounded-lg"
-            onLoadedMetadata={dispatchMediaLoaded}
-          />
-        )}
-
-        {file?.type === "FILE" && (
+        {files?.length === 1 && (
           <div className="flex items-center gap-3 p-2">
-            <div>{getFileIcon(file.fileName)}</div>
+            <div>{getFileIcon(files[0].fileName)}</div>
 
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{file.fileName}</p>
+              <p className="text-sm font-medium truncate">{files[0].fileName}</p>
               <p className="text-xs text-gray-500">
-                {(file.fileSize / 1024).toFixed(1)} KB
+                {(files[0].fileSize / 1024).toFixed(1)} KB
               </p>
             </div>
 
             <button
-              onClick={handleDownload}
+              onClick={() => handleDownload(files[0])}
               className={`p-1 border border-gray-300 rounded-md cursor-pointer  ${isMe ? "bg-white" : ""}`}
             >
               <Download className="w-4 h-4" />
             </button>
           </div>
         )}
-      </div>
 
-      {/* TIME */}
-      {showTime && (
-        <div className="text-[12px] text-gray-500 mt-1 text-right">
-          {formatTime(message.createdAt)}
-        </div>
-      )}
+        {/* TIME */}
+        {showTime && (
+          <div className="text-[12px] text-gray-500 mt-1 text-right">
+            {formatTime(message.createdAt)}
+          </div>
+        )}
+
+        {previewIndex !== null && (
+          <div className="fixed inset-0 z-100 bg-black/90 flex items-center justify-center">
+            {/* CLOSE */}
+            <button
+              className="absolute top-4 right-4 text-white cursor-pointer"
+              onClick={() => setPreviewIndex(null)}
+            >
+              <X size={28} />
+            </button>
+
+            {/* PREV */}
+            {previewIndex > 0 && (
+              <button
+                className="absolute left-4 text-white cursor-pointer"
+                onClick={() => setPreviewIndex(previewIndex - 1)}
+              >
+                <ChevronLeft size={32} />
+              </button>
+            )}
+
+            {/* NEXT */}
+            {previewIndex < files.length - 1 && (
+              <button
+                className="absolute right-4 text-white cursor-pointer"
+                onClick={() => setPreviewIndex(previewIndex + 1)}
+              >
+                <ChevronRight size={32} />
+              </button>
+            )}
+
+            {/* CONTENT */}
+            <div className="max-w-4xl w-full flex justify-center">
+              {files[previewIndex].type === "IMAGE" ? (
+                <img
+                  src={files[previewIndex].fileKey}
+                  className="max-h-[80vh] object-contain"
+                />
+              ) : (
+                <video
+                  src={files[previewIndex].fileKey}
+                  controls
+                  className="max-h-[80vh]"
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

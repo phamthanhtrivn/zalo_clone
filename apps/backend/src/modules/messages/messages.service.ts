@@ -91,9 +91,9 @@ export class MessagesService {
 
   async sendMessage(
     sendMessageDto: SendMessageDto,
-    file?: Express.Multer.File,
+    files?: Express.Multer.File[],
   ) {
-    return this.actionService.sendMessage(sendMessageDto, file);
+    return this.actionService.sendMessage(sendMessageDto, files);
   }
 
   async recalledMessage(recalledMessageDto: RecalledMessageDto) {
