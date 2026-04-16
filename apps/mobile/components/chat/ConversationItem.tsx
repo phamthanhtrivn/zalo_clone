@@ -29,6 +29,7 @@ import {
   hideConversationLocal,
   removeConversation,
 } from "@/store/slices/conversationSlice";
+import { Avatar } from "../common/ui/Avatar";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
@@ -239,9 +240,10 @@ const ConversationItem: React.FC<Props> = ({
           </View>
         )}
 
-        <Image
-          source={{ uri: conversation.avatar }}
-          style={{ width: 48, height: 48, borderRadius: 24 }}
+        <Avatar
+          uri={conversation.avatar}
+          name={conversation.name}
+          size={48}
         />
 
         <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>

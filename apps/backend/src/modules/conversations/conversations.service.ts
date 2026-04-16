@@ -581,7 +581,14 @@ export class ConversationsService {
             preserveNullAndEmptyArrays: true,
           },
         },
-
+        {
+          $match: {
+            $or: [
+              { 'settings.deletedAt': null },
+              { settings: null }
+            ]
+          }
+        },
         {
           $project: {
             _id: 0,

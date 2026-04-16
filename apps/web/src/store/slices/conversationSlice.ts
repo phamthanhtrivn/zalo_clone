@@ -76,6 +76,7 @@ const conversationSlice = createSlice({
       state.conversations = state.conversations.filter(
         (c) => c.conversationId !== action.payload
       );
+
     },
     removeExpiredMessages(state, action: PayloadAction<string[]>) {
       for (const c of state.conversations) {

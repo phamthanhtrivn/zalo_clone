@@ -133,13 +133,14 @@ export class ConversationSettingsService {
     async deleteConversation(userId: Types.ObjectId, conversationId: Types.ObjectId) {
         const setting = await this.model.findOneAndUpdate(
             { userId, conversationId },
-            { $set: { deletedAt: new Date() } },
+            { $set: { deletedAt: new Date(), clearAt: new Date() } },
             { new: true, upsert: true },
         );
 
         this.gateway.emitConversationDeleted(userId.toString(), {
             conversationId: conversationId.toString(),
             deletedAt: setting.deletedAt,
+            clearAt: setting.clearAt,
         });
 
         return { success: true };

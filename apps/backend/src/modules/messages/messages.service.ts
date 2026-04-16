@@ -74,13 +74,21 @@ export class MessagesService {
         'User is not a participant in this conversation',
       );
     }
-
-    const query = {
+    const setting = await this.conversationSettingModel.findOne({
+      userId: userObjectId,
+      conversationId: conversationObjectId,
+    });
+    const query: any = {
       conversationId: conversationObjectId,
       deletedFor: { $ne: userObjectId },
       ...(cursor && { _id: { $lt: new Types.ObjectId(cursor) } }),
     };
-
+    if (setting?.clearAt) {
+      query.createdAt = {
+        ...(query.createdAt || {}),
+        $gt: setting.clearAt,
+      };
+    }
     const messages = await this.messageModel
       .find(query)
       .sort({ _id: -1 })
@@ -657,7 +665,16 @@ export class MessagesService {
         }
       }
     }
-
+    await this.conversationSettingModel.updateMany(
+      {
+        conversationId: new Types.ObjectId(conversationId),
+        userId: { $ne: new Types.ObjectId(senderId) },
+        deletedAt: { $ne: null },
+      },
+      {
+        $set: { deletedAt: null },
+      },
+    );
     const members = await this.memberModel.find({
       conversationId: new Types.ObjectId(conversationId),
       leftAt: null,

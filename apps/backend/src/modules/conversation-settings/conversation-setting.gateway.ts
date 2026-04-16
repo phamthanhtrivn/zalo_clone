@@ -24,14 +24,14 @@ export class ConversationSettingGateway {
         console.log("JOIN ROOM:", userId);
         client.join(userId);
     }
-    
+
     emitConversationUpdated(userId: string, conversation: any) {
         this.server.to(userId).emit("conversation_setting:update", conversation);
     }
 
     emitConversationDeleted(
         userId: string,
-        payload: { conversationId: string; deletedAt: Date | null },
+        payload: { conversationId: string; deletedAt: Date | null, clearAt: Date | null },
     ) {
         console.log("EMIT DELETE:", userId, payload);
         this.server.to(userId).emit("conversation_setting:delete", payload);

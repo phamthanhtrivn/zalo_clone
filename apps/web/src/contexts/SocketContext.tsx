@@ -100,6 +100,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const handleConversationDelete = (data: any) => {
       dispatch(removeConversation(data.conversationId));
+
     };
 
     socketInstance.on("connect", onConnect);
