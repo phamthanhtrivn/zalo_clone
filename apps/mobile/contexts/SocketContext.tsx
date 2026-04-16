@@ -14,6 +14,7 @@ import {
   updateRecallMessageInConversation,
   removeConversation,
   removeExpiredMessages,
+  setUnreadCount,
 } from "@/store/slices/conversationSlice";
 
 interface SocketContextType {
@@ -63,6 +64,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     const handleNewMessageSidebar = (data: any) => {
+      console.log('sidebar data:', JSON.stringify(data)); // thêm dòng này
       dispatch(updateConversation(data));
     };
 

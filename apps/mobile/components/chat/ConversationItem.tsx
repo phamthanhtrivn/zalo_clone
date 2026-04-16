@@ -248,11 +248,17 @@ const ConversationItem: React.FC<Props> = ({
 
         <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+            {/* Tên */}
             <View style={{ flex: 1, flexDirection: "row", alignItems: "center", minWidth: 0, marginRight: 8 }}>
               {conversation.type === "GROUP" && (
                 <MaterialIcons name="group" size={14} color="#9ca3af" style={{ marginRight: 3, flexShrink: 0 }} />
               )}
-              <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, fontWeight: "600", color: "#111827" }}>
+              <Text numberOfLines={1} style={{
+                flex: 1,
+                fontSize: 14,
+                fontWeight: Number(conversation.unreadCount) > 0 ? "700" : "500",
+                color: Number(conversation.unreadCount) > 0 ? "#111827" : "#6b7280",
+              }}>
                 {conversation.name}
               </Text>
               {conversation.pinned && (
@@ -260,17 +266,45 @@ const ConversationItem: React.FC<Props> = ({
               )}
             </View>
 
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 0 }}>
-              {conversation.muted && (
-                <Ionicons name="notifications-off-outline" size={13} color="#9ca3af" />
+            {/* Time + Badge */}
+            <View style={{ alignItems: "flex-end", flexShrink: 0 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                {conversation.muted && (
+                  <Ionicons name="notifications-off-outline" size={13} color="#9ca3af" />
+                )}
+                <Text style={{ fontSize: 11, color: "#9ca3af" }}>
+                  {formatMessageTime(conversation.lastMessageAt)}
+                </Text>
+              </View>
+
+              {Number(conversation.unreadCount) > 0 && (
+                <View style={{
+                  marginTop: 4,
+                  backgroundColor: "#ef4444",
+                  paddingHorizontal: 6,
+                  paddingVertical: 1,
+                  borderRadius: 10,
+                  minWidth: 18,
+                  alignItems: "center",
+                }}>
+                  <Text style={{ color: "#fff", fontSize: 10, fontWeight: "600" }}>
+                    {Number(conversation.unreadCount) > 99 ? "99+" : conversation.unreadCount}
+                  </Text>
+                </View>
               )}
-              <Text style={{ fontSize: 11, color: "#9ca3af" }}>
-                {formatMessageTime(conversation.lastMessageAt)}
-              </Text>
             </View>
           </View>
 
-          <Text style={{ fontSize: 13, color: "#9ca3af", lineHeight: 17 }} numberOfLines={1}>
+          {/* Preview */}
+          <Text
+            style={{
+              fontSize: 13,
+              color: Number(conversation.unreadCount) > 0 ? "#111827" : "#9ca3af",
+              fontWeight: Number(conversation.unreadCount) > 0 ? "600" : "400",
+              lineHeight: 17,
+            }}
+            numberOfLines={1}
+          >
             {preview || " "}
           </Text>
         </View>

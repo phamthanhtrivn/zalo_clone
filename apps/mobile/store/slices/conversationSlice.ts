@@ -103,6 +103,17 @@ const conversationSlice = createSlice({
         c => c.conversationId !== action.payload
       );
     },
+    setUnreadCount(
+      state,
+      action: PayloadAction<{ conversationId: string; unreadCount: number }>
+    ) {
+      const c = state.conversations.find(
+        (c) => c.conversationId === action.payload.conversationId
+      );
+      if (c) {
+        c.unreadCount = action.payload.unreadCount;
+      }
+    }
   },
 });
 
@@ -115,6 +126,7 @@ export const {
   setCategoryLocal,
   removeConversation,
   removeExpiredMessages,
+  setUnreadCount
 } = conversationSlice.actions;
 
 export default conversationSlice.reducer;

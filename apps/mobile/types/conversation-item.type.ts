@@ -21,6 +21,7 @@ export interface ConversationItemType {
     recalled: boolean;
     expired?: boolean;
   };
+  unreadCount: number;
   lastMessageAt: string;
 }
 

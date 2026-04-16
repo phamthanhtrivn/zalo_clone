@@ -406,7 +406,6 @@ export class ConversationsService {
 
   async getConversationsFromUser(userId: string) {
     const userObjectId = new Types.ObjectId(userId);
-
     const conversations: ConversationItemDto[] =
       await this.memberModel.aggregate([
         {
@@ -546,13 +545,6 @@ export class ConversationsService {
             as: 'otherUser',
           },
         },
-
-        {
-          $unwind: {
-            path: '$otherUser',
-            preserveNullAndEmptyArrays: true,
-          },
-        },
         {
           $lookup: {
             from: 'conversationsettings',
@@ -573,6 +565,79 @@ export class ConversationsService {
               },
             ],
             as: 'settings',
+          },
+        },
+        {
+          $lookup: {
+            from: 'messages',
+            let: {
+              conversationId: '$conversation._id',
+              lastReadMessageId: '$lastReadMessageId',
+              currentUser: '$userId',
+              clearAt: '$settings.clearAt',
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$conversationId', '$$conversationId'] },
+
+                      // unread
+                      {
+                        $gt: [
+                          '$_id',
+                          {
+                            $ifNull: [
+                              '$$lastReadMessageId',
+                              new Types.ObjectId("000000000000000000000000"),
+                            ],
+                          },
+                        ],
+                      },
+
+                      { $ne: ['$senderId', '$$currentUser'] },
+                      {
+                        $not: {
+                          $in: [
+                            '$$currentUser',
+                            { $ifNull: ['$deletedFor', []] },
+                          ],
+                        },
+                      },
+                      { $ne: ['$recalled', true] },
+
+                      { $ne: ['$expired', true] },
+
+                      {
+                        $or: [
+                          { $eq: ['$$clearAt', null] },
+                          { $gt: ['$createdAt', '$$clearAt'] }
+                        ]
+                      },
+
+                      {
+                        $or: [
+                          { $eq: ['$expiresAt', null] },
+                          { $gt: ['$expiresAt', '$$NOW'] }
+                        ]
+                      }
+                    ]
+                  }
+                },
+              },
+              {
+                $count: 'count',
+              },
+            ],
+            as: 'unreadData',
+          },
+        },
+
+        {
+          $unwind: {
+            path: '$otherUser',
+            preserveNullAndEmptyArrays: true,
           },
         },
         {
@@ -640,13 +705,16 @@ export class ConversationsService {
               content: '$lastMessage.content',
               recalled: '$lastMessage.recalled',
             },
-
+            unreadCount: {
+              $ifNull: [{ $arrayElemAt: ['$unreadData.count', 0] }, 0],
+            },
             lastMessageAt: '$conversation.lastMessageAt',
           },
         },
 
         {
           $sort: {
+            unreadCount: -1,
             lastMessageAt: -1,
           },
         },

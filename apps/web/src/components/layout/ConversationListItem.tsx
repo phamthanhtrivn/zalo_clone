@@ -208,20 +208,33 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-0.5">
           <h4 className={cn(
-            "text-sm font-medium truncate flex gap-2 items-center",
-            isActive ? "text-black" : "text-gray-900",
+            "text-sm truncate flex gap-2 items-center",
+            conversation.unreadCount > 0 ? "font-semibold text-black" : "font-normal text-gray-900",
+            isActive ? "text-black" : ""
           )}>
             {conversation.type === "GROUP" && <MdGroups size={18} color="gray" />}
-            {conversation.name}
+            <h4 className="flex items-center gap-2">
+              {conversation.name}
+
+
+            </h4>
             {conversation.pinned && <PiPushPinFill className="text-blue-500 w-3 h-3 ml-1" />}
           </h4>
 
           <div className="relative flex items-center">
             {conversation.muted && <MdNotificationsOff className="text-gray-400 w-5 h-5" />}
 
-            <span className="text-[11px] text-gray-400 transition-opacity group-hover:opacity-0">
-              {formatMessageTime(conversation.lastMessageAt)}
-            </span>
+            <div className="flex flex-col items-end">
+              <span className="text-[11px] text-gray-400 transition-opacity group-hover:opacity-0">
+                {formatMessageTime(conversation.lastMessageAt)}
+              </span>
+
+              {conversation.unreadCount > 0 && (
+                <span className="mt-1 bg-red-500 text-white text-[10px] px-2 py-[1px] rounded-full">
+                  {conversation.unreadCount}
+                </span>
+              )}
+            </div>
 
             <div ref={refs.setReference}>
               <MoreHorizontal
@@ -415,7 +428,12 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
               {{ customer: "KH", family: "GĐ", work: "CV", friends: "BB", later: "Sau", colleague: "ĐN" }[conversation.category]}
             </span>
           )}
-          <span className="truncate">
+          <span
+            className={cn(
+              "truncate",
+              conversation.unreadCount > 0 ? "font-semibold text-gray-900" : "text-gray-500"
+            )}
+          >
             {conversation.type === "PRIVATE" && conversation.lastMessage?.senderName !== "Bạn"
               ? ""
               : conversation.lastMessage?.senderName + ": "}
