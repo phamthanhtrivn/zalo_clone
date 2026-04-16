@@ -23,6 +23,8 @@ export interface MessagesType {
   call: string | null;
   createdAt: string;
   updatedAt: string;
+  expired?: boolean;
+
 }
 
 export interface ReactionType {

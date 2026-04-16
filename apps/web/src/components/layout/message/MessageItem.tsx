@@ -64,7 +64,7 @@ export const MessageItem = ({
   }, []);
 
   return (
-    <div className={`flex items-end gap-2 ${isMe ? "justify-end" : ""}`}>
+    <div className={`flex items-end gap-2 ${isMe || message.expired ? "justify-end" : ""}`}>
       {!isMe &&
         (showAvatar ? (
           <Avatar className="w-8 h-8">

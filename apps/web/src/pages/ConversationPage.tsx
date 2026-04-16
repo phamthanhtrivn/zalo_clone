@@ -340,7 +340,7 @@ const ConversationPage = () => {
 
   const onSendMessage = async (text: string) => {
     if (!id || !text.trim()) return;
-
+    // console.log("Sending message:", { conversationId: id, userId: user?.userId, text });
     try {
 
       await messageService.sendMessage(id, user?.userId || "", {
@@ -573,12 +573,19 @@ const ConversationPage = () => {
         });
       }
     };
-
+    const handleMessagesExpired = (data: { messageIds: string[] }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          data.messageIds.includes(m._id) ? { ...m, expired: true } : m,
+        ),
+      );
+    };
     socket.on("new_message", handleNewMessage);
     socket.on("message_reacted", handleMessageReacted);
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
     socket.on("read_receipt", handleReadReceipt);
+    socket.on("messages_expired", handleMessagesExpired);
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -586,6 +593,7 @@ const ConversationPage = () => {
       socket.off("message_recalled", handleMessageRecalled);
       socket.off("message_pinned", handleMessagePinned);
       socket.off("read_receipt", handleReadReceipt);
+      socket.off("messages_expired", handleMessagesExpired);
       socket.emit("leave_room", id);
     };
   }, [socket, id]);

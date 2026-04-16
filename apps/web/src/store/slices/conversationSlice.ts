@@ -25,7 +25,10 @@ const conversationSlice = createSlice({
         (c) => c.conversationId === action.payload.conversationId
       );
       if (index !== -1) {
-        const updated = { ...state.conversations[index], ...action.payload };
+        const updated = {
+          ...state.conversations[index],
+          ...action.payload
+        };
         state.conversations.splice(index, 1);
         state.conversations.unshift(updated);
       }
@@ -74,7 +77,19 @@ const conversationSlice = createSlice({
         (c) => c.conversationId !== action.payload
       );
     },
-
+    removeExpiredMessages(state, action: PayloadAction<string[]>) {
+      for (const c of state.conversations) {
+        if (c.lastMessage && action.payload.includes(c.lastMessage._id)) {
+          c.lastMessage = {
+            ...c.lastMessage,
+            expired: true,
+            content: {
+              text: "Tin nhắn đã hết hạn",
+            },
+          };
+        }
+      }
+    },
     updateRecallMessageInConversation(
       state,
       action: PayloadAction<{ conversationId: string; messageId: string }>
@@ -85,6 +100,7 @@ const conversationSlice = createSlice({
       );
       if (conversation && conversation.lastMessage?._id === messageId) {
         conversation.lastMessage.recalled = true;
+        conversation.lastMessage.content.text = "Tin nhắn đã bị thu hồi";
       }
     },
   },
@@ -97,6 +113,7 @@ export const {
   setCategoryLocal,
   removeConversation,
   updateRecallMessageInConversation,
+  removeExpiredMessages
 } = conversationSlice.actions;
 
 export default conversationSlice.reducer;

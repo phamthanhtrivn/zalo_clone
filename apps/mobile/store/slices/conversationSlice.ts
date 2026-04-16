@@ -58,7 +58,19 @@ const conversationSlice = createSlice({
       if (action.payload.category !== undefined) c.category = action.payload.category;
       if (action.payload.expireDuration !== undefined) c.expireDuration = action.payload.expireDuration;
     },
-
+    removeExpiredMessages(state, action: PayloadAction<string[]>) {
+      for (const c of state.conversations) {
+        if (c.lastMessage && action.payload.includes(c.lastMessage._id)) {
+          c.lastMessage = {
+            ...c.lastMessage,
+            expired: true,
+            content: {
+              text: "Tin nhắn đã hết hạn",
+            },
+          };
+        }
+      }
+    },
     updateRecallMessageInConversation(state, action) {
       const index = state.conversations.findIndex(
         (c) => c.conversationId === action.payload.conversationId
@@ -102,6 +114,7 @@ export const {
   hideConversationLocal,
   setCategoryLocal,
   removeConversation,
+  removeExpiredMessages,
 } = conversationSlice.actions;
 
 export default conversationSlice.reducer;

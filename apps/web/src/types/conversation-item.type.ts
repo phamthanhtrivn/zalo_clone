@@ -9,6 +9,7 @@ export interface ConversationItemType {
   category?: ConversationCategory;
   deletedAt: Date | null;
   expireDuration: number;
+  mutedUntil: Number | null;
   lastMessage: {
     _id: string;
     senderName: string;
@@ -18,6 +19,7 @@ export interface ConversationItemType {
       file: File;
     };
     recalled: boolean;
+    expired?: boolean;
   };
   lastMessageAt: string;
 }

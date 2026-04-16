@@ -117,7 +117,57 @@ export default function MessageBubble({
       : isMe
         ? "#E5F1FF"
         : "white";
-
+  if (message.expired) {
+    return (
+      <View
+        style={{
+          flexDirection: isMe ? "row-reverse" : "row",
+          alignItems: "flex-end",
+          paddingHorizontal: 8,
+          marginBottom: 2,
+        }}
+      >
+        {!isMe && (
+          showAvatar ? (
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                overflow: "hidden",
+                backgroundColor: "#e5e7eb",
+                marginRight: 6,
+              }}
+            >
+              <Image
+                source={{ uri: message.senderId?.profile.avatarUrl }}
+                style={{ width: 32, height: 32 }}
+              />
+            </View>
+          ) : (
+            <View style={{ width: 32, marginRight: 6 }} />
+          )
+        )}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            backgroundColor: "#f0f0f0",
+            borderRadius: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            maxWidth: "75%",
+          }}
+        >
+          <Ionicons name="information-circle-outline" size={14} color="#9ca3af" />
+          <Text style={{ fontSize: 13, color: "#9ca3af", fontStyle: "italic" }}>
+            Tin nhắn đã hết hạn
+          </Text>
+        </View>
+      </View>
+    );
+  }
   if (message.recalled) {
     return (
       <View
@@ -128,7 +178,27 @@ export default function MessageBubble({
           paddingHorizontal: 8,
         }}
       >
-        {!isMe && <View style={{ width: 32, marginRight: 6 }} />}
+        {!isMe && (
+          showAvatar ? (
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                overflow: "hidden",
+                backgroundColor: "#e5e7eb",
+                marginRight: 6,
+              }}
+            >
+              <Image
+                source={{ uri: message.senderId?.profile.avatarUrl }}
+                style={{ width: 32, height: 32 }}
+              />
+            </View>
+          ) : (
+            <View style={{ width: 32, marginRight: 6 }} />
+          )
+        )}
 
         <View
           style={{

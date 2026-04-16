@@ -24,6 +24,7 @@ export class ConversationSettingGateway {
         console.log("JOIN ROOM:", userId);
         client.join(userId);
     }
+    
     emitConversationUpdated(userId: string, conversation: any) {
         this.server.to(userId).emit("conversation_setting:update", conversation);
     }

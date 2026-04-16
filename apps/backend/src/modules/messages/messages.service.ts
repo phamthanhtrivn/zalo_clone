@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   BadRequestException,
@@ -39,6 +37,7 @@ import { MemberRole } from 'src/common/types/enums/member-role';
 import { CallStatus } from 'src/common/types/enums/call-status';
 import { FileType } from 'src/common/types/enums/file-type';
 import { ForwardMessageDto } from './dto/forward-message.dto';
+import { ConversationSetting } from '../conversation-settings/schemas/conversation-setting.schema';
 @Injectable()
 export class MessagesService {
   constructor(
@@ -49,7 +48,8 @@ export class MessagesService {
     @InjectModel(Conversation.name)
     private readonly conversationModel: Model<Conversation>,
     private readonly storageService: StorageService,
-
+    @InjectModel(ConversationSetting.name)
+    private readonly conversationSettingModel: Model<ConversationSetting>,
     private readonly conversationService: ConversationsService,
     private readonly chatGateway: ChatGateway,
   ) { }
@@ -531,9 +531,15 @@ export class MessagesService {
     file?: Express.Multer.File,
   ) {
     const { senderId, conversationId, content, repliedId } = sendMessageDto;
-
     const conversation = await this.conversationModel.findById(conversationId);
+    const conversationSetting = await this.conversationSettingModel.findOne({
+      userId: new Types.ObjectId(senderId),
+      conversationId: new Types.ObjectId(conversationId),
+    });
     let expiresAt: Date | undefined;
+    if (conversationSetting?.expireDuration && conversationSetting.expireDuration > 0) {
+      expiresAt = new Date(Date.now() + conversationSetting.expireDuration);
+    }
     if (sendMessageDto.expireDuration) {
       expiresAt = new Date(Date.now() + sendMessageDto.expireDuration);
     }
@@ -1724,26 +1730,32 @@ export class MessagesService {
       { _id: { $in: ids } },
       { $set: { expired: true } },
     );
-    expiredMessages.forEach(m => {
-      this.chatGateway.server.to(m.conversationId.toString()).emit('messages_expired', { messageIds: [m._id.toString()] });
-    });
+    const grouped = expiredMessages.reduce((acc, m) => {
+      const key = m.conversationId.toString();
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(m._id.toString());
+      return acc;
+    }, {} as Record<string, string[]>);
+
+    for (const [convId, messageIds] of Object.entries(grouped)) {
+      this.chatGateway.server
+        .to(convId)
+        .emit('messages_expired', { conversationId: convId, messageIds });
+    }
   }
-  async checkExpiredMessages() {
-    const now = new Date();
+  // async checkExpiredMessages() {
+  //   const now = new Date();
 
-    const expiredMessages = await this.messageModel.find({
-      expiresAt: { $lte: now, $ne: null },
-    });
+  //   const expiredMessages = await this.messageModel.find({
+  //     expiresAt: { $lte: now, $ne: null },
+  //   });
 
-    if (!expiredMessages.length) return;
+  //   if (!expiredMessages.length) return;
 
-    const ids = expiredMessages.map((m) => m._id.toString());
-
-    // 🔥 emit realtime
-    expiredMessages.forEach(m => {
-      this.chatGateway.server.to(m.conversationId.toString()).emit('messages_expired', { messageIds: [m._id.toString()] });
-    });
-    console.log('Expired messages:', ids);
-  }
-
+  //   const ids = expiredMessages.map((m) => m._id.toString());
+  //   expiredMessages.forEach(m => {
+  //     this.chatGateway.server.to(m.conversationId.toString()).emit('messages_expired', { messageIds: [m._id.toString()] });
+  //   });
+  //   console.log('Expired messages:', ids);
+  // }
 }

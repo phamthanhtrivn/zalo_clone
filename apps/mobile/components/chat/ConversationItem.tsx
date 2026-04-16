@@ -98,7 +98,12 @@ const ConversationItem: React.FC<Props> = ({
   ).current;
 
   const preview = useMemo(() => {
-    const content = conversation.lastMessage?.content;
+    // const content = conversation.lastMessage?.content;
+    const lastMsg = conversation.lastMessage;
+    if (!lastMsg) return "";
+    if (lastMsg.recalled) return "Tin nhắn đã bị thu hồi";
+    if (lastMsg.expired) return "Tin nhắn đã hết hạn";
+    const content = lastMsg.content;
     if (!content) return "";
     if (content.text) return content.text;
     if (content.icon) return "[Sticker]";

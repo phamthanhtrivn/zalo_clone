@@ -68,6 +68,24 @@ export const MessageBubble = ({
     });
   };
 
+  if (message.expired) {
+    return (
+      <div className="flex items-center gap-1.5 bg-[#f0f0f0] rounded-xl px-3 py-2 max-w-xs">
+        <svg
+          width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          className="shrink-0"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span className="text-[13px] text-gray-400 italic">
+          Tin nhắn đã hết hạn
+        </span>
+      </div>
+    );
+  }
   if (message.recalled) {
     return (
       <div

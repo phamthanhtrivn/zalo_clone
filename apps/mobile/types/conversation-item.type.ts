@@ -19,6 +19,7 @@ export interface ConversationItemType {
       file: File;
     };
     recalled: boolean;
+    expired?: boolean;
   };
   lastMessageAt: string;
 }

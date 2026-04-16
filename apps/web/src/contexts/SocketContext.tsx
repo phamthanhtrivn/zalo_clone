@@ -9,6 +9,7 @@ import { io, Socket } from "socket.io-client";
 import { useAppDispatch, useAppSelector } from "@/store";
 import {
   removeConversation,
+  removeExpiredMessages,
   updateConversation,
   updateConversationSetting,
   updateRecallMessageInConversation,
@@ -75,7 +76,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       dispatch(updateRecallMessageInConversation(data));
     };
 
-    // ================= CONVERSATION SETTINGS =================
+    const handleMessagesExpired = (data: { conversationId: string, messageIds: string[] }) => {
+      dispatch(removeExpiredMessages(data.messageIds));
+      dispatch(updateConversation({
+        conversationId: data.conversationId
+      }))
+    };
     const handleConversationUpdate = (data: any) => {
       const patch: any = { conversationId: data.conversationId };
 
@@ -89,19 +95,19 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       if ("category" in data) patch.category = data.category;
       if ("expireDuration" in data) patch.expireDuration = data.expireDuration;
 
-      dispatch(updateConversationSetting(patch)); // ✅ dùng đúng action
+      dispatch(updateConversationSetting(patch));
     };
 
     const handleConversationDelete = (data: any) => {
       dispatch(removeConversation(data.conversationId));
     };
 
-    // register
     socketInstance.on("connect", onConnect);
     socketInstance.on("disconnect", onDisconnect);
 
     socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
     socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
+    socketInstance.on('messages_expired', handleMessagesExpired);
 
     socketInstance.on(
       "conversation_setting:update",
@@ -130,6 +136,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         "conversation_setting:delete",
         handleConversationDelete,
       );
+      socketInstance.off('messages_expired', handleMessagesExpired);
+
     };
   }, [apiUrl, user?.userId, dispatch]);
 

@@ -13,6 +13,7 @@ import {
   updateConversationSetting,
   updateRecallMessageInConversation,
   removeConversation,
+  removeExpiredMessages,
 } from "@/store/slices/conversationSlice";
 
 interface SocketContextType {
@@ -68,7 +69,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     const handleRecallMessageSidebar = (data: any) => {
       dispatch(updateRecallMessageInConversation(data));
     };
+    const handleMessagesExpired = (data: { conversationId: string, messageIds: string[] }) => {
+      dispatch(removeExpiredMessages(data.messageIds));
 
+    };
     const handleConversationUpdate = (data: any) => {
       const patch: Parameters<typeof updateConversationSetting>[0] = {
         conversationId: data.conversationId,
@@ -98,6 +102,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
     socketInstance.on("conversation_setting:update", handleConversationUpdate);
     socketInstance.on("conversation_setting:delete", handleConversationDelete);
+    socketInstance.on('messages_expired', handleMessagesExpired);
 
     return () => {
       socketInstance.off("connect", onConnect);
@@ -106,6 +111,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.off("message_recalled_sidebar", handleRecallMessageSidebar);
       socketInstance.off("conversation_setting:update", handleConversationUpdate);
       socketInstance.off("conversation_setting:delete", handleConversationDelete);
+      socketInstance.off('messages_expired', handleMessagesExpired);
+
     };
   }, [apiUrl, user?.userId, dispatch]);
 

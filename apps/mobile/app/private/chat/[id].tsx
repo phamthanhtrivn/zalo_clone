@@ -104,11 +104,11 @@ export default function ChatWindow() {
         // API usually returns newest-first. For normal list we want oldest-first.
         const isOldestFirst = msgs.length >= 2 && new Date(msgs[0].createdAt) < new Date(msgs[msgs.length - 1].createdAt);
         const sorted = isOldestFirst ? msgs : [...msgs].reverse();
-        
+
         setMessages(sorted);
         setNextCursor(res.data.nextCursor);
         // If we just loaded history, we are at the end of known history
-        setPrevCursor(null); 
+        setPrevCursor(null);
       }
       const pinRes: any = await messageService.getPinnedMessages(id, user.userId);
       if (pinRes.success) setPinnedMessages(pinRes.data.messages);
@@ -280,19 +280,19 @@ export default function ChatWindow() {
       setMessages(msgs);
       setNextCursor(res.data.nextCursor);
       setPrevCursor(res.data.prevCursor);
-      
+
       const index = msgs.findIndex((m: any) => m._id === messageId);
       if (index !== -1) {
         // Clear previous highlight
         setHighlightedMessageId(null);
-        
+
         setTimeout(() => {
           flatListRef.current?.scrollToIndex({
             index,
             animated: true,
             viewPosition: 0.5, // Center it
           });
-          
+
           setHighlightedMessageId(messageId);
           setTimeout(() => setHighlightedMessageId(null), 2500);
         }, 300);
@@ -377,7 +377,7 @@ export default function ChatWindow() {
         return [...prev, newMessage];
       });
       messageService.readReceipt(user.userId, id);
-      
+
       // Auto scroll if user is already at the bottom
       if (!showScrollToBottom) {
         setTimeout(() => scrollToBottom(true), 100);
@@ -415,12 +415,21 @@ export default function ChatWindow() {
         });
       }
     };
+    const handleMessagesExpired = (data: { messageIds: string[] }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          data.messageIds.includes(m._id) ? { ...m, expired: true } : m
+        )
+      );
+    };
 
+    socket.on("messages_expired", handleMessagesExpired);
     socket.on("new_message", handleNewMessage);
     socket.on("message_reacted", handleMessageReacted);
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
     socket.on("read_receipt", handleReadReceipt);
+
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -428,6 +437,7 @@ export default function ChatWindow() {
       socket.off("message_recalled", handleMessageRecalled);
       socket.off("message_pinned", handleMessagePinned);
       socket.off("read_receipt", handleReadReceipt);
+      socket.off("messages_expired", handleMessagesExpired);
       socket.emit("leave_room", id);
     };
   }, [socket, id, user?.userId]);
@@ -571,7 +581,7 @@ export default function ChatWindow() {
                 const { y } = e.nativeEvent.contentOffset;
                 const { height: contentHeight } = e.nativeEvent.contentSize;
                 const { height: layoutHeight } = e.nativeEvent.layoutMeasurement;
-                
+
                 // Show button if scrolled up or if in historical mode
                 const isBottom = y >= contentHeight - layoutHeight - 100;
                 setShowScrollToBottom(!isBottom || !!prevCursor);
@@ -641,44 +651,44 @@ export default function ChatWindow() {
             </View>
           )}
 
-            <ChatInput
-              chatName={conversation?.name}
-              onSendMessage={handleSendMessage}
-              onSendFile={handleSendFile}
-              isSelectMode={isSelectMode}
-              selectedMessages={selectedMessages}
-              onOpenForwardModal={() => setShowForwardModal(true)}
-              onCancelSelect={() => {
-                setIsSelectMode(false);
-                setSelectedMessages([]);
-              }}
-            />
+          <ChatInput
+            chatName={conversation?.name}
+            onSendMessage={handleSendMessage}
+            onSendFile={handleSendFile}
+            isSelectMode={isSelectMode}
+            selectedMessages={selectedMessages}
+            onOpenForwardModal={() => setShowForwardModal(true)}
+            onCancelSelect={() => {
+              setIsSelectMode(false);
+              setSelectedMessages([]);
+            }}
+          />
 
-            {/* Floating Jump to Newest Button */}
-            {showScrollToBottom && (
-              <TouchableOpacity
-                onPress={handleGoToNewest}
-                style={{
-                  position: "absolute",
-                  bottom: 100,
-                  right: 16,
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  backgroundColor: "white",
-                  elevation: 4,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 3,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  zIndex: 10,
-                }}
-              >
-                <Ionicons name="chevron-down" size={24} color="#0068ff" />
-              </TouchableOpacity>
-            )}
+          {/* Floating Jump to Newest Button */}
+          {showScrollToBottom && (
+            <TouchableOpacity
+              onPress={handleGoToNewest}
+              style={{
+                position: "absolute",
+                bottom: 100,
+                right: 16,
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: "white",
+                elevation: 4,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 3,
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 10,
+              }}
+            >
+              <Ionicons name="chevron-down" size={24} color="#0068ff" />
+            </TouchableOpacity>
+          )}
         </View>
       </KeyboardAvoidingView>
 

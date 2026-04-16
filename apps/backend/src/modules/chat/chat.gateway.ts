@@ -60,4 +60,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     socket.leave(coversationId);
     console.log(`User ${socket.data.userId} left room: ${coversationId}`);
   }
+
+
 }
