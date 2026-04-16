@@ -21,7 +21,7 @@ import { JwtAuthGuard } from '../auth/passport/jwt-auth.guard';
 @Controller('conversations')
 @UseGuards(JwtAuthGuard)
 export class ConversationsController {
-  constructor(private readonly conversationsService: ConversationsService) { }
+  constructor(private readonly conversationsService: ConversationsService) {}
 
   @Get()
   async getMyConversations(@Req() req) {
@@ -79,15 +79,15 @@ export class ConversationsController {
     return this.conversationsService.transferOwner(id, currentOwnerId, dto);
   }
 
-  @Delete(':id/remove-member')
+  @Delete(':id/members/:memberId')
   async removeMember(
     @Param('id') id: string,
+    @Param('memberId') memberId: string,
     @Req() req,
-    @Body() dto: RemoveMemberDto,
   ) {
     const actorId = req.user.userId;
 
-    return this.conversationsService.removeMember(id, actorId, dto);
+    return this.conversationsService.removeMember(id, actorId, memberId);
   }
 
   @Post(':id/add-members')
@@ -104,7 +104,13 @@ export class ConversationsController {
   }
 
   @Get('/user/:userId')
-  async getConversationsFromUserId(@Param('userId') userId: string) {
+  async getConversationsFromUserId(
+    @Param('userId') userId: string,
+    @Req() req,
+  ) {
+    if (req.user.userId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền xem danh sách này');
+    }
     return this.conversationsService.getConversationsFromUser(userId);
   }
 
@@ -124,5 +130,56 @@ export class ConversationsController {
   async leaveGroup(@Param('id') id: string, @Req() req) {
     const userId = req.user.userId;
     return this.conversationsService.leaveGroup(id, userId);
+  }
+
+  @Patch(':id/settings')
+  async updateGroupSettings(
+    @Param('id') id: string,
+    @Req() req,
+    @Body()
+    dto: {
+      allowMembersInvite?: boolean;
+      approvalRequired?: boolean;
+      allowMembersSendMessages?: boolean;
+    },
+  ) {
+    const userId = req.user.userId;
+    return this.conversationsService.updateGroupSettings(id, userId, dto);
+  }
+
+  @Get(':id/join-requests')
+  async getJoinRequests(@Param('id') id: string, @Req() req) {
+    const userId = req.user.userId;
+    return this.conversationsService.getJoinRequests(id, userId);
+  }
+
+  @Post(':id/join-requests/:requestId/approve')
+  async approveRequest(
+    @Param('id') id: string,
+    @Param('requestId') requestId: string,
+    @Req() req,
+  ) {
+    const actorId = req.user.userId;
+    return this.conversationsService.handleJoinRequest(
+      id,
+      requestId,
+      actorId,
+      'APPROVED',
+    );
+  }
+
+  @Post(':id/join-requests/:requestId/reject')
+  async rejectRequest(
+    @Param('id') id: string,
+    @Param('requestId') requestId: string,
+    @Req() req,
+  ) {
+    const actorId = req.user.userId;
+    return this.conversationsService.handleJoinRequest(
+      id,
+      requestId,
+      actorId,
+      'REJECTED',
+    );
   }
 }

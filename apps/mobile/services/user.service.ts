@@ -1,8 +1,5 @@
 import { api } from "./api";
 
-
-
-
 export const userService = {
   getProfile: async () => {
     const response = await api.get(`/users/user-information`);
@@ -10,15 +7,11 @@ export const userService = {
   },
 
   updateProfile: async (data: any) => {
-    const response = await api.patch(
-      `/users/update-information-user`,
-      data,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+    const response = await api.patch(`/users/update-information-user`, data, {
+      headers: {
+        "Content-Type": "multipart/form-data",
       },
-    );
+    });
     return response.data;
   },
 
@@ -30,5 +23,10 @@ export const userService = {
   updateSettings: async (settings: any) => {
     const response = await api.patch("/users/settings", settings);
     return response.data;
+  },
+
+  getFriends: async () => {
+    const res = await api.get("/users/list-friends");
+    return res;
   },
 };

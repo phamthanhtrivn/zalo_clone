@@ -20,6 +20,8 @@ import {
   type ConversationItem,
 } from "@/store/slices/conversationSlice";
 
+import CreateGroupModal from "@/components/chat/CreateGroupModal";
+
 // --- HELPERS ---
 function formatConversationTime(value?: string) {
   if (!value) return "";
@@ -69,6 +71,8 @@ export default function ChatTabScreen() {
   const user = useAppSelector((state) => state.auth.user);
 
   const [activeTab, setActiveTab] = useState<"PRIORITY" | "OTHER">("PRIORITY");
+
+  const [isCreateGroupVisible, setIsCreateGroupVisible] = useState(false);
 
   // Logic Sắp xếp & Lọc: Ưu tiên ghim -> Tin nhắn mới nhất
   const visibleConversations = useMemo(() => {
@@ -203,7 +207,10 @@ export default function ChatTabScreen() {
           <Ionicons name="search-outline" size={18} color="white" />
           <Text className="text-white/70 ml-2 text-[13px]">Tìm kiếm</Text>
         </View>
-        <TouchableOpacity className="w-9 h-9 items-center justify-center">
+        <TouchableOpacity
+          className="w-9 h-9 items-center justify-center"
+          onPress={() => setIsCreateGroupVisible(true)}
+        >
           <Ionicons name="add" size={28} color="white" />
         </TouchableOpacity>
       </View>
@@ -263,6 +270,11 @@ export default function ChatTabScreen() {
           contentContainerStyle={{ paddingBottom: 20 }}
         />
       )}
+      <CreateGroupModal
+        visible={isCreateGroupVisible}
+        onClose={() => setIsCreateGroupVisible(false)}
+        navigation={router}
+      />
     </Container>
   );
 }

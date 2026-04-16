@@ -22,17 +22,23 @@ export const messageService = {
     cursor?: string | null,
     limit: number = 20,
   ) => {
-    const res = await api.get(`/messages/conversation/${conversationId}/newer`, {
-      params: { userId, cursor, limit },
-    });
+    const res = await api.get(
+      `/messages/conversation/${conversationId}/newer`,
+      {
+        params: { userId, cursor, limit },
+      },
+    );
     return res;
   },
 
   // Lấy danh sách tin nhắn đã ghim
   getPinnedMessages: async (conversationId: string, userId: string) => {
-    const res = await api.get(`/messages/conversation/${conversationId}/pinned`, {
-      params: { userId },
-    });
+    const res = await api.get(
+      `/messages/conversation/${conversationId}/pinned`,
+      {
+        params: { userId },
+      },
+    );
     return res;
   },
 
@@ -43,9 +49,12 @@ export const messageService = {
     messageId: string,
     limit: number = 20,
   ) => {
-    const res = await api.get(`/messages/conversation/${conversationId}/around`, {
-      params: { userId, messageId, limit },
-    });
+    const res = await api.get(
+      `/messages/conversation/${conversationId}/around`,
+      {
+        params: { userId, messageId, limit },
+      },
+    );
     return res;
   },
 
@@ -120,7 +129,7 @@ export const messageService = {
       formData.append("senderId", senderId);
       if (content?.text) formData.append("content[text]", content.text);
       if (content?.icon) formData.append("content[icon]", content.icon);
-      
+
       // Chú ý: React Native yêu cầu object đặc biệt cho File trong FormData
       formData.append("file", file);
 
@@ -163,9 +172,12 @@ export const messageService = {
 
   // Lấy xem trước các file đa phương tiện trong hội thoại
   getMediasPreview: async (userId: string, conversationId: string) => {
-    const res = await api.get(`/messages/conversation/${conversationId}/medias/preview`, {
-      params: { userId },
-    });
+    const res = await api.get(
+      `/messages/conversation/${conversationId}/medias/preview`,
+      {
+        params: { userId },
+      },
+    );
     return res;
   },
 
@@ -180,6 +192,21 @@ export const messageService = {
       messageIds,
       targetConversationIds,
     });
+    return res;
+  },
+
+  async updateCallStatus(
+    messageId: string,
+    status: string,
+    conversationId: string,
+  ) {
+    const res = await api.patch(
+      `/messages/conversation/${conversationId}/call-status`,
+      {
+        messageId,
+        status,
+      },
+    );
     return res;
   },
 };

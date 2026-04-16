@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   BadRequestException,
+  ForbiddenException,
   forwardRef,
   Inject,
   Injectable,
@@ -558,10 +559,10 @@ export class MessagesService {
     if (conversation.type === ConversationType.GROUP) {
       if (
         member.role === MemberRole.MEMBER &&
-        !conversation.group?.allowMembersSendMessages
+        conversation.group?.allowMembersSendMessages === false
       ) {
-        throw new BadRequestException(
-          'Members are not allowed to send messages in this group',
+        throw new ForbiddenException(
+          'Chỉ Trưởng/Phó nhóm mới được gửi tin nhắn trong nhóm này',
         );
       }
     }

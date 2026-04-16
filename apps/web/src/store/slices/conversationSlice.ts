@@ -106,6 +106,7 @@ const conversationSlice = createSlice({
         mutedUntil?: string | null;
         category?: ConversationCategory | null;
         expireDuration?: number;
+        group?: any;
       }>,
     ) {
       const c = state.conversations.find(
@@ -122,6 +123,9 @@ const conversationSlice = createSlice({
         c.category = action.payload.category;
       if (action.payload.expireDuration !== undefined)
         c.expireDuration = action.payload.expireDuration;
+      if (action.payload.group !== undefined) {
+        c.group = { ...c.group, ...action.payload.group };
+      }
     },
 
     setCategoryLocal(

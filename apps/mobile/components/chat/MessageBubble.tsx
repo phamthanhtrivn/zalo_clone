@@ -1,16 +1,19 @@
 import React from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Linking,
-} from "react-native";
+import { View, Text, TouchableOpacity, Linking } from "react-native";
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import { formatTime } from "@/utils/format-message-time..util";
 import type { MessagesType, ReactionType } from "@/types/messages.type";
 import ReactionSummary from "./ReactionSummary";
+
+// --- HELPERS ---
+const formatDuration = (seconds: number | null) => {
+  if (!seconds || seconds <= 0) return "00:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+};
 
 type Props = {
   message: MessagesType;
@@ -26,72 +29,6 @@ type Props = {
   renderReadReceipts?: boolean;
   isHighlighted?: boolean;
 };
-
-const TextWithLinks = ({ text }: { text: string }) => {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = text.split(urlRegex);
-
-  return (
-    <Text style={{ fontSize: 14, lineHeight: 20, color: "#111" }}>
-      {parts.map((part, i) =>
-        urlRegex.test(part) ? (
-          <Text
-            key={i}
-            onPress={() => Linking.openURL(part)}
-            style={{ color: "#0068ff", textDecorationLine: "underline" }}
-          >
-            {part}
-          </Text>
-        ) : (
-          <Text key={i}>{part}</Text>
-        )
-      )}
-    </Text>
-  );
-};
-
-const getFileIcon = (fileName: string) => {
-  const lower = fileName.toLowerCase();
-
-  const iconStyle = {
-    width: 24,
-    height: 24,
-  };
-
-  if (lower.endsWith(".pdf")) {
-    return (
-      <Image
-        source="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/pdf/default.svg"
-        style={iconStyle}
-      />
-    );
-  }
-
-  if (lower.endsWith(".doc") || lower.endsWith(".docx")) {
-    return (
-      <Image
-        source="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/microsoft-word/default.svg"
-        style={iconStyle}
-      />
-    );
-  }
-
-  if (lower.endsWith(".xls") || lower.endsWith(".xlsx")) {
-    return (
-      <Image
-        source="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/microsoft-excel/default.svg"
-        style={iconStyle}
-      />
-    );
-  }
-
-  return (
-    <Image
-      source="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/files/default.svg"
-      style={iconStyle}
-    />
-  );
-}
 
 export default function MessageBubble({
   message,
@@ -109,6 +46,7 @@ export default function MessageBubble({
 }: Props) {
   const content = message.content;
   const file = content?.file;
+  const call = message.call;
 
   const bubbleBg = isHighlighted
     ? "#FFF9C4"
@@ -118,6 +56,68 @@ export default function MessageBubble({
         ? "#E5F1FF"
         : "white";
 
+  // --- 1. RENDER LOGIC: TIN NHẮN CUỘC GỌI ---
+  const renderCallContent = () => {
+    if (!call) return null;
+    const isVideo = call.type === "VIDEO";
+    let statusText = "";
+    let iconName: any = isVideo ? "videocam" : "call";
+    let iconColor = isMe ? "#0068ff" : "#4b5563";
+
+    switch (call.status) {
+      case "ENDED":
+      case "ACCEPTED":
+        statusText = `Cuộc gọi ${isVideo ? "video" : "thoại"} (${formatDuration(call.duration)})`;
+        break;
+      case "MISSED":
+        statusText = isMe ? "Đối phương đã lỡ" : "Cuộc gọi nhỡ";
+        iconColor = "#ef4444";
+        iconName = "call-outline";
+        break;
+      case "REJECTED":
+        statusText = isMe ? "Cuộc gọi bị từ chối" : "Cuộc gọi nhỡ";
+        iconColor = "#ef4444";
+        break;
+      case "BUSY":
+        statusText = "Máy bận";
+        iconColor = "#f59e0b";
+        break;
+      default:
+        statusText = "Đang thiết lập...";
+    }
+
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          paddingVertical: 4,
+        }}
+      >
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: "rgba(255,255,255,0.8)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name={iconName} size={20} color={iconColor} />
+        </View>
+        <View>
+          <Text style={{ fontSize: 14, fontWeight: "600" }}>{statusText}</Text>
+          <Text style={{ fontSize: 11, color: "#666" }}>
+            {isMe ? "Cuộc gọi đi" : "Cuộc gọi đến"}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
+  // --- 2. RENDER LOGIC: THU HỒI ---
   if (message.recalled) {
     return (
       <View
@@ -129,7 +129,6 @@ export default function MessageBubble({
         }}
       >
         {!isMe && <View style={{ width: 32, marginRight: 6 }} />}
-
         <View
           style={{
             maxWidth: "75%",
@@ -144,9 +143,15 @@ export default function MessageBubble({
           <Text style={{ color: "#9ca3af", fontStyle: "italic", fontSize: 13 }}>
             Tin nhắn đã được thu hồi
           </Text>
-
           {showTime && (
-            <Text style={{ fontSize: 10, color: "#9ca3af", marginTop: 4, textAlign: "right" }}>
+            <Text
+              style={{
+                fontSize: 10,
+                color: "#9ca3af",
+                marginTop: 4,
+                textAlign: "right",
+              }}
+            >
               {formatTime(message.createdAt)}
             </Text>
           )}
@@ -164,9 +169,9 @@ export default function MessageBubble({
         paddingHorizontal: 8,
       }}
     >
-      {/* AVATAR */}
-      {!isMe && (
-        showAvatar ? (
+      {/* AVATAR NGƯỜI GỬI */}
+      {!isMe &&
+        (showAvatar ? (
           <View
             style={{
               width: 32,
@@ -178,44 +183,32 @@ export default function MessageBubble({
             }}
           >
             <Image
-              source={{ uri: message.senderId?.profile.avatarUrl }}
+              source={{ uri: message.senderId?.profile?.avatarUrl }}
               style={{ width: 32, height: 32 }}
             />
           </View>
         ) : (
           <View style={{ width: 32, marginRight: 6 }} />
-        )
-      )}
+        ))}
 
-      {/* BUBBLE */}
-      <View style={{ maxWidth: "75%", alignItems: isMe ? "flex-end" : "flex-start" }}>
-        {/* NAME */}
+      <View
+        style={{
+          maxWidth: "75%",
+          alignItems: isMe ? "flex-end" : "flex-start",
+        }}
+      >
+        {/* TÊN NGƯỜI GỬI */}
         {!isMe && showName && (
-          <Text style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>
-            {message.senderId?.profile.name}
+          <Text
+            style={{
+              fontSize: 11,
+              color: "#6b7280",
+              marginBottom: 2,
+              marginLeft: 4,
+            }}
+          >
+            {message.senderId?.profile?.name || "Người dùng"}
           </Text>
-        )}
-
-        {/* SELECT MODE */}
-        {isSelectMode && (
-          <View style={{ marginBottom: 4 }}>
-            <View
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 10,
-                borderWidth: 2,
-                borderColor: isSelected ? "#0068ff" : "#d1d5db",
-                backgroundColor: isSelected ? "#0068ff" : "white",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {isSelected && (
-                <Text style={{ color: "white", fontSize: 11 }}>✓</Text>
-              )}
-            </View>
-          </View>
         )}
 
         <TouchableOpacity
@@ -228,95 +221,55 @@ export default function MessageBubble({
             paddingHorizontal: 12,
             paddingVertical: 8,
             borderWidth: 1,
-            borderColor: "#e5e7eb",
+            borderColor: isMe ? "transparent" : "#e5e7eb",
           }}
         >
-          {/* TEXT */}
-          {content?.text && <TextWithLinks text={content.text} />}
-
-          {/* ICON */}
-          {content?.icon && (
-            <Text style={{ fontSize: 32 }}>{content.icon}</Text>
-          )}
-
-          {/* IMAGE */}
-          {file?.type === "IMAGE" && (
-            <Image
-              source={{ uri: file.fileKey }}
-              style={{
-                width: 200,
-                height: 200,
-                borderRadius: 10,
-                marginTop: content?.text ? 6 : 0,
-              }}
-              contentFit="cover"
-            />
-          )}
-
-          {/* VIDEO */}
-          {file?.type === "VIDEO" && (
-            <Video
-              source={{ uri: file.fileKey }}
-              style={{
-                width: 220,
-                height: 140,
-                borderRadius: 10,
-                marginTop: content?.text ? 6 : 0,
-              }}
-              useNativeControls
-              resizeMode={ResizeMode.CONTAIN}
-            />
-          )}
-
-          {/* FILE */}
-          {file?.type === "FILE" && (
-            <TouchableOpacity
-              onPress={() => Linking.openURL(file.fileKey)}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                padding: 10,
-                borderRadius: 12,
-                backgroundColor: isMe ? "#E5F1FF" : "#F3F4F6",
-                alignSelf: isMe ? "flex-end" : "flex-start",
-              }}
-            >
-              {/* ICON giống web */}
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  backgroundColor: "#fff",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {getFileIcon(file.fileName)}
-              </View>
-
-              {/* INFO */}
-              <View style={{ flex: 1 }}>
-                <Text numberOfLines={2} style={{ fontSize: 13, fontWeight: "600" }}>
-                  {file.fileName}
+          {/* NỘI DUNG CHÍNH */}
+          {call ? (
+            renderCallContent()
+          ) : (
+            <>
+              {content?.text && (
+                <Text style={{ fontSize: 15, color: "#111" }}>
+                  {content.text}
                 </Text>
+              )}
 
-                <Text style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
-                  {(file.fileSize / 1024).toFixed(1)} KB
-                </Text>
-              </View>
+              {file?.type === "IMAGE" && (
+                <Image
+                  source={{ uri: file.fileKey }}
+                  style={{
+                    width: 200,
+                    height: 200,
+                    borderRadius: 10,
+                    marginTop: content?.text ? 6 : 0,
+                  }}
+                  contentFit="cover"
+                />
+              )}
 
-              {/* ICON DOWNLOAD */}
-              <Ionicons name="download-outline" size={18} color="#6b7280" />
-            </TouchableOpacity>
+              {file?.type === "VIDEO" && (
+                <Video
+                  source={{ uri: file.fileKey }}
+                  style={{
+                    width: 220,
+                    height: 140,
+                    borderRadius: 10,
+                    marginTop: content?.text ? 6 : 0,
+                  }}
+                  useNativeControls
+                  resizeMode={ResizeMode.CONTAIN}
+                />
+              )}
+            </>
           )}
 
-          {/* TIME */}
+          {/* THỜI GIAN TRONG BUBBLE */}
           {showTime && (
             <Text
               style={{
                 fontSize: 10,
-                color: "#9ca3af",
+                color: isMe ? "#0068ff" : "#9ca3af",
                 marginTop: 4,
                 textAlign: "right",
               }}
@@ -336,14 +289,31 @@ export default function MessageBubble({
           </View>
         )}
 
-        {/* READ RECEIPTS */}
+        {/* READ RECEIPTS (FIX CRASH TẠI ĐÂY) */}
         {renderReadReceipts && message.readReceipts?.length > 0 && (
-          <View style={{ flexDirection: "row", gap: -8, marginTop: 4 }}>
-            {message.readReceipts.slice(0, 3).map((rr) => (
+          <View
+            style={{
+              flexDirection: "row",
+              marginTop: 4,
+              marginLeft: isMe ? 0 : 4,
+            }}
+          >
+            {message.readReceipts.slice(0, 3).map((rr: any, idx: number) => (
               <Image
-                key={rr.userId._id}
-                source={{ uri: rr.userId.profile.avatarUrl }}
-                style={{ width: 14, height: 14, borderRadius: 7 }}
+                key={rr.userId?._id || idx}
+                source={{
+                  uri:
+                    rr.userId?.profile?.avatarUrl ||
+                    "https://via.placeholder.com/150",
+                }}
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 7,
+                  borderSize: 1,
+                  borderColor: "white",
+                  marginLeft: idx > 0 ? -4 : 0,
+                }}
               />
             ))}
           </View>

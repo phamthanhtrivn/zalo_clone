@@ -153,4 +153,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     }
   }
+  handleKickUserFromRoom(userId: string, conversationId: string) {
+    this.server.in(userId).socketsLeave(conversationId);
+    console.log(
+      `Socket: User ${userId} forced to leave room ${conversationId}`,
+    );
+  }
+  handleUserJoinRoom(userId: string, conversationId: string) {
+    this.server.in(userId).socketsJoin(conversationId);
+    console.log(`Socket: User ${userId} forced to join room ${conversationId}`);
+  }
 }

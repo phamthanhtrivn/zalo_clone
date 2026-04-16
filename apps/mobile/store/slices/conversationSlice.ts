@@ -84,6 +84,7 @@ const conversationSlice = createSlice({
         mutedUntil?: string | null;
         category?: ConversationCategory | null;
         expireDuration?: number;
+        group?: any;
       }>,
     ) {
       const c = state.items.find(
@@ -100,6 +101,12 @@ const conversationSlice = createSlice({
         c.category = action.payload.category;
       if (action.payload.expireDuration !== undefined)
         c.expireDuration = action.payload.expireDuration;
+      if (action.payload.group !== undefined) {
+        c.group = {
+          ...(c.group || {}),
+          ...action.payload.group,
+        };
+      }
     },
 
     // 4. Thu hồi tin nhắn cuối cùng (Cập nhật text ở Sidebar)
@@ -146,6 +153,18 @@ const conversationSlice = createSlice({
       const c = state.items.find((i) => i.conversationId === action.payload);
       if (c) c.unreadCount = 0;
     },
+    addConversationToTop: (state, action: PayloadAction<any>) => {
+      const newConv = action.payload;
+      const index = state.items.findIndex(
+        (c) => c.conversationId === newConv.conversationId,
+      );
+
+      if (index !== -1) {
+        state.items.splice(index, 1);
+      }
+
+      state.items = [newConv, ...state.items];
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -172,6 +191,7 @@ export const {
   removeConversation,
   setCategoryLocal,
   resetUnreadCount,
+  addConversationToTop,
 } = conversationSlice.actions;
 
 export default conversationSlice.reducer;

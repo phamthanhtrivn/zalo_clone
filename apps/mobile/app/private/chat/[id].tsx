@@ -37,6 +37,7 @@ import { Image } from "expo-image";
 import MenuItem from "@/components/chat/MenuItem";
 import { conversationService } from "@/services/conversation.service";
 import { setConversations } from "@/store/slices/conversationSlice";
+import { useVideoCall } from "@/contexts/VideoCallContext";
 
 export default function ChatWindow() {
   const { items: conversations } = useAppSelector(
@@ -52,6 +53,8 @@ export default function ChatWindow() {
   const [contextMenuMsg, setContextMenuMsg] = useState<MessagesType | null>(
     null,
   );
+
+  const { startCall } = useVideoCall();
 
   // ===== STATE =====
   const [messages, setMessages] = useState<MessagesType[]>([]);
@@ -372,6 +375,40 @@ export default function ChatWindow() {
     }
   };
 
+  const handleVideoCall = async () => {
+    if (!id || !user?.userId || !conversation?.otherMemberId) {
+      Alert.alert(
+        "Lỗi",
+        "Không thể khởi tạo cuộc gọi. Thiếu thông tin người nhận.",
+      );
+      return;
+    }
+
+    try {
+      console.log("1. Đang tạo bản ghi cuộc gọi trong DB (Mobile)");
+
+      const res: any = await messageService.sendMessage(
+        id,
+        user.userId,
+        { text: "Cuộc gọi video" },
+        null,
+        "VIDEO",
+      );
+
+      const messageId = res.data?._id || res?._id;
+
+      if (!messageId) throw new Error("Không nhận được messageId");
+
+      console.log("2. Đã có messageId:", messageId, ". Bắt đầu signaling...");
+
+      // 2. Kích hoạt Context cuộc gọi
+      startCall(conversation.otherMemberId, id, "VIDEO", messageId);
+    } catch (error) {
+      console.error("Lỗi khởi tạo cuộc gọi:", error);
+      Alert.alert("Lỗi", "Không thể thực hiện cuộc gọi lúc này.");
+    }
+  };
+
   // ================= EFFECTS =================
   useEffect(() => {
     if (id && user?.userId) {
@@ -442,11 +479,37 @@ export default function ChatWindow() {
       }
     };
 
+    const handleCallUpdated = (data: {
+      messageId: string;
+      status: string;
+      duration?: number;
+    }) => {
+      console.log(
+        ">>> [Mobile Realtime] Cập nhật tin nhắn cuộc gọi:",
+        data.status,
+      );
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === data.messageId
+            ? {
+                ...msg,
+                call: {
+                  ...(msg.call || {}),
+                  status: data.status,
+                  duration: data.duration ?? msg.call?.duration ?? 0,
+                },
+              }
+            : msg,
+        ),
+      );
+    };
+
     socket.on("new_message", handleNewMessage);
     socket.on("message_reacted", handleMessageReacted);
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
     socket.on("read_receipt", handleReadReceipt);
+    socket.on("call_updated", handleCallUpdated);
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -454,6 +517,7 @@ export default function ChatWindow() {
       socket.off("message_recalled", handleMessageRecalled);
       socket.off("message_pinned", handleMessagePinned);
       socket.off("read_receipt", handleReadReceipt);
+      socket.off("call_updated", handleCallUpdated);
       socket.emit("leave_room", id);
     };
   }, [socket, id, user?.userId]);
@@ -589,7 +653,7 @@ export default function ChatWindow() {
         <TouchableOpacity>
           <Ionicons name="person-add-outline" size={22} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity style={{ padding: 4 }}>
+        <TouchableOpacity style={{ padding: 4 }} onPress={handleVideoCall}>
           <Ionicons name="videocam-outline" size={24} color="white" />
         </TouchableOpacity>
         <TouchableOpacity style={{ padding: 4 }}>
@@ -734,6 +798,7 @@ export default function ChatWindow() {
           )}
 
           <ChatInput
+            conversationId={conversation?.conversationId}
             chatName={conversation?.name}
             onSendMessage={handleSendMessage}
             onSendFile={handleSendFile}

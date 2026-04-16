@@ -8,7 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
-import { Conversation } from './schemas/conversation.schema';
+import { Conversation, JoinRequest } from './schemas/conversation.schema';
 import { Connection, Model, Types } from 'mongoose';
 import { Member } from '../members/schemas/member.schema';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -44,6 +44,8 @@ export class ConversationsService {
     private readonly chatGateway: ChatGateway,
     @Inject(forwardRef(() => MessagesService))
     private readonly messagesService: MessagesService,
+    @InjectModel(JoinRequest.name)
+    private readonly joinRequestModel: Model<JoinRequest>,
   ) {}
 
   private async getFormattedConversationForUser(
@@ -58,87 +60,117 @@ export class ConversationsService {
 
   async createGroup(creatorId: string, dto: CreateGroupDto) {
     const uniqueMemberIds = [...new Set(dto.memberIds)];
+    let groupName = dto.name?.trim();
+    if (!groupName) {
+      const idsToFetch = [creatorId, ...uniqueMemberIds.slice(0, 2)];
+      const usersForName = await this.userModel
+        .find({ _id: { $in: idsToFetch } })
+        .select('profile.name')
+        .lean();
+
+      const sortedUsers = idsToFetch
+        .map((id) =>
+          usersForName.find((u) => u._id.toString() === id.toString()),
+        )
+        .filter((u) => u && u.profile?.name);
+
+      groupName = sortedUsers.map((u) => u?.profile?.name).join(', ');
+      if (uniqueMemberIds.length > 2) {
+        groupName += ` và ${uniqueMemberIds.length - 2} người khác`;
+      }
+    }
     if (uniqueMemberIds.includes(creatorId)) {
       throw new BadRequestException(
         'Danh sách thành viên không được chứa người tạo',
       );
     }
 
+    const avatarUrl =
+      dto.avatarUrl || 'https://your-cdn.com/default-group-avatar.png';
+
     const session = await this.connection.startSession();
     session.startTransaction();
 
     try {
-      // Tạo Conversation
+      // 1. Tạo Conversation
       const newConversation = new this.conversationModel({
         type: ConversationType.GROUP,
         group: {
-          name: dto.name,
-          avatarUrl: dto.avatarUrl || '',
+          name: groupName,
+          avatarUrl: avatarUrl,
           allowMembersInvite: true,
           allowMembersSendMessages: true,
         },
         lastMessageAt: new Date(),
       });
-
       const savedConversation = await newConversation.save({ session });
+      const conversationId = savedConversation._id;
 
-      // Tạo thành viên
-      const creatorMember = {
-        conversationId: savedConversation._id,
-        userId: new Types.ObjectId(creatorId),
-        role: MemberRole.OWNER,
-        joinedAt: new Date(),
-      };
-
-      const otherMembers = uniqueMemberIds.map((memberId) => ({
-        conversationId: savedConversation._id,
-        userId: new Types.ObjectId(memberId),
-        role: MemberRole.MEMBER,
+      // 2. Tạo tất cả thành viên (Dùng insertMany để tối ưu)
+      const allMembersData = [
+        { userId: new Types.ObjectId(creatorId), role: MemberRole.OWNER },
+        ...uniqueMemberIds.map((id) => ({
+          userId: new Types.ObjectId(id),
+          role: MemberRole.MEMBER,
+        })),
+      ].map((m) => ({
+        ...m,
+        conversationId,
         joinedAt: new Date(),
       }));
 
-      const allMembers = [creatorMember, ...otherMembers];
-      await this.memberModel.insertMany(allMembers, { session });
+      await this.memberModel.insertMany(allMembersData, { session });
 
-      // Tạo tin nhắn hệ thống
+      // 3. Tạo tin nhắn hệ thống
       const creatorName = await this.getUserName(creatorId);
-      await this.createSystemMessage(
-        savedConversation._id.toString(),
-        `${creatorName} đã tạo nhóm`,
+      const systemMsg = await this.createSystemMessage(
+        conversationId.toString(),
+        `${creatorName} đã tạo nhóm ${groupName}`,
         session,
       );
 
       await session.commitTransaction();
 
-      const finalConversation = await this.conversationModel.findById(
-        savedConversation._id,
-      );
+      const fullConversation = await this.conversationModel
+        .findById(conversationId)
+        .lean();
 
-      const conversationId = savedConversation._id.toString();
-      const allMemberIds = [creatorId, ...uniqueMemberIds];
+      const socketData = {
+        conversationId: conversationId.toString(),
+        name: fullConversation?.group?.name,
+        avatar: fullConversation?.group?.avatarUrl,
+        type: fullConversation?.type,
+        lastMessage: {
+          _id: systemMsg._id,
+          content: systemMsg.content,
+          type: systemMsg.type,
+          senderName: '',
+          createdAt: systemMsg.createdAt,
+        },
+        lastMessageAt: fullConversation?.lastMessageAt,
+        unreadCount: 0,
+        pinned: false,
+      };
 
-      for (const memberId of allMemberIds) {
-        const formattedConv = await this.getFormattedConversationForUser(
-          conversationId,
-          memberId,
-        );
+      const allMemberIdsStrings = [creatorId, ...uniqueMemberIds];
+
+      allMemberIdsStrings.forEach((memberId) => {
         this.chatGateway.server
-          .to(memberId)
-          .emit('new_conversation', formattedConv);
-      }
+          .to(memberId.toString())
+          .emit('new_conversation', socketData);
+      });
 
       return {
         success: true,
         message: 'Tạo nhóm thành công',
         data: {
-          conversation: finalConversation,
-          totalMembers: allMembers.length,
+          conversation: fullConversation,
+          totalMembers: allMembersData.length,
         },
       };
     } catch (error) {
       await session.abortTransaction();
-      console.log(error);
-
+      console.error('Create Group Error:', error);
       throw new InternalServerErrorException('Lỗi khi tạo nhóm.');
     } finally {
       await session.endSession();
@@ -444,61 +476,45 @@ export class ConversationsService {
   async removeMember(
     conversationId: string,
     actorId: string,
-    dto: RemoveMemberDto,
+    targetUserId: string,
   ) {
     const convObjectId = new Types.ObjectId(conversationId.trim());
     const actorObjectId = new Types.ObjectId(actorId.trim());
-    const targetObjectId = new Types.ObjectId(dto.targetUserId.trim());
-
-    const conversation = await this.conversationModel.findById(convObjectId);
-    if (!conversation) {
-      throw new NotFoundException('Nhóm trò chuyện không tồn tại');
-    }
-
-    if (conversation.type !== ConversationType.GROUP) {
-      throw new BadRequestException('Chỉ áp dụng cho nhóm chat');
-    }
-
-    if (actorId === dto.targetUserId) {
-      throw new BadRequestException('Vui lòng sử dụng tính năng rời nhóm');
-    }
-
-    const actorMember = await this.memberModel.findOne({
-      conversationId: conversation._id,
-      userId: actorObjectId,
-      leftAt: null,
-    });
-
-    console.log('Dữ liệu Member tìm thấy:', actorMember);
-
-    if (!actorMember || actorMember.role === MemberRole.MEMBER) {
-      throw new ForbiddenException('Bạn không có quyền xóa thành viên');
-    }
+    const targetObjectId = new Types.ObjectId(targetUserId.trim());
 
     const session = await this.connection.startSession();
     session.startTransaction();
-
     try {
+      const actorMember = await this.memberModel
+        .findOne({
+          conversationId: convObjectId,
+          userId: actorObjectId,
+          leftAt: null,
+        })
+        .session(session);
+
+      if (!actorMember || actorMember.role === MemberRole.MEMBER) {
+        throw new ForbiddenException('Bạn không có quyền xóa thành viên');
+      }
+
       const targetMember = await this.memberModel
         .findOne({
-          conversationId: conversation._id,
+          conversationId: convObjectId,
           userId: targetObjectId,
           leftAt: null,
         })
         .session(session);
 
-      if (!targetMember) {
-        throw new NotFoundException(
-          'Thành viên muốn xóa không tồn tại hoặc đã rời nhóm',
-        );
-      }
+      if (!targetMember)
+        throw new NotFoundException('Thành viên không tồn tại trong nhóm');
 
+      // Logic: Phó nhóm không được xóa Trưởng nhóm hoặc Phó nhóm khác
       if (
         actorMember.role === MemberRole.ADMIN &&
         targetMember.role !== MemberRole.MEMBER
       ) {
         throw new ForbiddenException(
-          'Nhóm phó chỉ được phép xóa thành viên thường',
+          'Phó nhóm chỉ có thể xóa thành viên thường',
         );
       }
 
@@ -507,8 +523,7 @@ export class ConversationsService {
         .session(session);
 
       const actorName = await this.getUserName(actorId);
-      const targetName = await this.getUserName(dto.targetUserId);
-
+      const targetName = await this.getUserName(targetUserId);
       const systemMsg = await this.createSystemMessage(
         conversationId,
         `${actorName} đã mời ${targetName} rời khỏi nhóm`,
@@ -519,34 +534,32 @@ export class ConversationsService {
 
       const convIdStr = conversationId.toString();
 
+      // 1. Thông báo tin nhắn hệ thống cho cả nhóm
       this.chatGateway.server.to(convIdStr).emit('new_message', {
         ...systemMsg.toObject(),
         conversationId: convIdStr,
       });
 
-      this.chatGateway.server.to(convIdStr).emit('new_message_sidebar', {
-        conversationId: convIdStr,
-        lastMessage: {
-          content: systemMsg.content,
-          senderName: null,
-          type: 'SYSTEM',
-          createdAt: systemMsg.createdAt,
-        },
-      });
-
+      // 2. Thông báo riêng cho người bị xóa để họ xóa UI
       this.chatGateway.server
-        .to(dto.targetUserId)
-        .emit('removed_from_conversation', { conversationId: convIdStr });
+        .to(targetUserId)
+        .emit('removed_from_conversation', {
+          conversationId: convIdStr,
+        });
 
+      // 3. Thông báo cho mọi người trong nhóm update list thành viên
       this.chatGateway.server.to(convIdStr).emit('member_removed', {
         conversationId: convIdStr,
-        removedUserId: dto.targetUserId,
+        removedUserId: targetUserId,
       });
+
+      // 4. QUAN TRỌNG: Đuổi socket ra khỏi room
+      this.chatGateway.handleKickUserFromRoom(targetUserId, convIdStr);
 
       return {
         success: true,
         message: 'Đã xóa thành viên khỏi nhóm (xóa mềm)',
-        data: { removeUserId: dto.targetUserId },
+        data: { removeUserId: targetUserId },
       };
     } catch (error) {
       await session.abortTransaction();
@@ -559,54 +572,11 @@ export class ConversationsService {
   async addMember(conversationId: string, actorId: string, dto: AddMemberDto) {
     const convObjectId = new Types.ObjectId(conversationId.trim());
     const actorObjectId = new Types.ObjectId(actorId.trim());
-
     const uniqueUserIds = [...new Set(dto.userIds.map((id) => id.trim()))];
 
-    const conversation = await this.conversationModel.findById(convObjectId);
-    if (!conversation)
-      throw new NotFoundException('Nhóm trò chuyện không tồn tại');
-
-    const actorMember = await this.memberModel.findOne({
-      conversationId: convObjectId,
-      userId: actorObjectId,
-      leftAt: null,
-    });
-
-    if (!actorMember)
-      throw new ForbiddenException('Bạn không phải là thành viên của nhóm này');
-
-    const membersCanInvite = conversation.group?.allowMembersInvite !== false;
-    const isManager = [MemberRole.OWNER, MemberRole.ADMIN].includes(
-      actorMember.role,
-    );
-    if (!isManager && !membersCanInvite) {
-      throw new ForbiddenException(
-        'Chỉ cho phép trưởng nhóm và phó nhóm thêm thành viên',
-      );
-    }
-
-    const allMemberRecords = await this.memberModel.find({
-      conversationId: convObjectId,
-      userId: { $in: uniqueUserIds.map((id) => new Types.ObjectId(id)) },
-    });
-
-    const activeUserIds = allMemberRecords
-      .filter((m) => m.leftAt === null)
-      .map((m) => m.userId.toString());
-
-    const removedUserIds = allMemberRecords
-      .filter((m) => m.leftAt !== null)
-      .map((m) => m.userId.toString());
-
-    const brandNewUserIds = uniqueUserIds.filter(
-      (uid) => !allMemberRecords.some((m) => m.userId.toString() === uid),
-    );
-
-    const finalAddIds = [...brandNewUserIds, ...removedUserIds];
-
-    if (finalAddIds.length === 0) {
+    if (uniqueUserIds.length > 100) {
       throw new BadRequestException(
-        'Tất cả thành viên này hiện đang ở trong nhóm rồi',
+        'Mỗi lần chỉ có thể thêm tối đa 100 thành viên',
       );
     }
 
@@ -614,45 +584,190 @@ export class ConversationsService {
     session.startTransaction();
 
     try {
-      if (removedUserIds.length > 0) {
+      // 1. Kiểm tra sự tồn tại của Nhóm và Quyền của người mời
+      const conversation = await this.conversationModel
+        .findById(convObjectId)
+        .session(session);
+      if (!conversation) throw new NotFoundException('Nhóm không tồn tại');
+
+      const actorMember = await this.memberModel
+        .findOne({
+          conversationId: convObjectId,
+          userId: actorObjectId,
+          leftAt: null,
+        })
+        .session(session);
+
+      if (!actorMember)
+        throw new ForbiddenException('Bạn không thuộc nhóm này');
+
+      // 2. Kiểm tra 3 chế độ mời
+      const isManager = [MemberRole.OWNER, MemberRole.ADMIN].includes(
+        actorMember.role as MemberRole,
+      );
+      const allowInvite = conversation.group?.allowMembersInvite !== false;
+      const approvalRequired = conversation.group?.approvalRequired === true;
+
+      // Chế độ 1: Chỉ quản lý mới được mời
+      if (!isManager && !allowInvite) {
+        throw new ForbiddenException(
+          'Trưởng/Phó nhóm đã tắt tính năng thêm thành viên cho người thường',
+        );
+      }
+
+      // 3. Lọc danh sách người dùng thực sự cần xử lý (loại bỏ người đang ở trong nhóm)
+      const existingMembers = await this.memberModel
+        .find({
+          conversationId: convObjectId,
+          userId: { $in: uniqueUserIds.map((id) => new Types.ObjectId(id)) },
+          leftAt: null,
+        })
+        .session(session);
+
+      const alreadyInGroupIds = existingMembers.map((m) => m.userId.toString());
+      const finalIdsToProcess = uniqueUserIds.filter(
+        (uid) => !alreadyInGroupIds.includes(uid),
+      );
+
+      if (finalIdsToProcess.length === 0) {
+        throw new BadRequestException('Tất cả người này đã là thành viên nhóm');
+      }
+
+      // --- XỬ LÝ CHẾ ĐỘ 3: PHÊ DUYỆT THÀNH VIÊN ---
+      if (approvalRequired && !isManager) {
+        // 1. TÌM NHỮNG YÊU CẦU ĐÃ TỒN TẠI VÀ ĐANG CHỜ DUYỆT
+        const existingRequests = await this.joinRequestModel
+          .find({
+            conversationId: convObjectId,
+            userId: {
+              $in: finalIdsToProcess.map((id) => new Types.ObjectId(id)),
+            },
+            status: 'PENDING',
+          })
+          .session(session);
+
+        // 2. LẤY RA DANH SÁCH ID ĐÃ ĐƯỢC GỬI YÊU CẦU
+        const alreadyRequestedIds = existingRequests.map((req) =>
+          req.userId.toString(),
+        );
+
+        // 3. LỌC RA NHỮNG NGƯỜI CHƯA TỪNG ĐƯỢC GỬI YÊU CẦU
+        const trulyNewIdsToProcess = finalIdsToProcess.filter(
+          (uid) => !alreadyRequestedIds.includes(uid),
+        );
+
+        // 4. CHẶN SPAM: Nếu tất cả đều đã được gửi lời mời rồi
+        if (trulyNewIdsToProcess.length === 0) {
+          throw new BadRequestException(
+            'Lời mời tham gia nhóm đã được gửi trước đó và đang chờ quản trị viên duyệt.',
+          );
+        }
+
+        // 5. CHỈ TẠO REQUEST MỚI CHO NHỮNG NGƯỜI CHƯA CÓ TRONG HÀNG CHỜ
+        const joinRequests = trulyNewIdsToProcess.map((uid) => ({
+          conversationId: convObjectId,
+          userId: new Types.ObjectId(uid),
+          invitedBy: actorObjectId,
+          status: 'PENDING',
+        }));
+
+        await this.joinRequestModel.insertMany(joinRequests, { session });
+
+        await session.commitTransaction();
+
+        // Socket thông báo (Chỉ đếm số lượng người THỰC SỰ mới được tạo request)
+        this.chatGateway.server
+          .to(convObjectId.toString())
+          .emit('new_approval_request', {
+            conversationId: convObjectId.toString(),
+            count: trulyNewIdsToProcess.length,
+          });
+
+        return {
+          success: true,
+          message: 'Yêu cầu tham gia đã được gửi tới quản trị viên',
+          isPending: true,
+        };
+      }
+
+      // --- XỬ LÝ CHẾ ĐỘ 1 & 2: THÊM TRỰC TIẾP ---
+
+      // Tìm những người từng ở trong nhóm nhưng đã rời (để update leftAt = null)
+      const oldMemberRecords = await this.memberModel
+        .find({
+          conversationId: convObjectId,
+          userId: {
+            $in: finalIdsToProcess.map((id) => new Types.ObjectId(id)),
+          },
+          leftAt: { $ne: null },
+        })
+        .session(session);
+
+      const oldUserIds = oldMemberRecords.map((m) => m.userId.toString());
+      const brandNewUserIds = finalIdsToProcess.filter(
+        (uid) => !oldUserIds.includes(uid),
+      );
+
+      // Update người cũ quay lại
+      if (oldUserIds.length > 0) {
         await this.memberModel.updateMany(
           {
             conversationId: convObjectId,
-            userId: { $in: removedUserIds.map((id) => new Types.ObjectId(id)) },
+            userId: { $in: oldUserIds.map((id) => new Types.ObjectId(id)) },
           },
           {
             $set: {
               leftAt: null,
               joinedAt: new Date(),
               role: MemberRole.MEMBER,
+              unreadCount: 0,
             },
           },
           { session },
         );
       }
 
+      // Insert người mới tinh
       if (brandNewUserIds.length > 0) {
         const newMembersData = brandNewUserIds.map((uid) => ({
           conversationId: convObjectId,
           userId: new Types.ObjectId(uid),
           role: MemberRole.MEMBER,
           joinedAt: new Date(),
-          unreadCount: 0,
         }));
         await this.memberModel.insertMany(newMembersData, { session });
       }
+      const allAddedIds = [
+        ...brandNewUserIds.map((uid) => new Types.ObjectId(uid)),
+        ...oldUserIds.map((uid) => new Types.ObjectId(uid)),
+      ];
 
+      if (allAddedIds.length > 0) {
+        // Cập nhật mảng participants để đồng bộ danh sách chat
+        await this.conversationModel.findByIdAndUpdate(
+          convObjectId,
+          { $addToSet: { participants: { $each: allAddedIds } } },
+          { session },
+        );
+      }
+      // 4. Tạo tin nhắn hệ thống
       const actorName = await this.getUserName(actorId);
-      const users = await this.userModel
-        .find({ _id: { $in: finalAddIds.map((id) => new Types.ObjectId(id)) } })
+      const sampleUsers = await this.userModel
+        .find({
+          _id: {
+            $in: finalIdsToProcess
+              .slice(0, 3)
+              .map((id) => new Types.ObjectId(id)),
+          },
+        })
         .select('profile.name')
-        .limit(3)
+        .session(session)
         .lean();
 
-      const names = users.map((u) => u.profile?.name).join(', ');
+      const names = sampleUsers.map((u) => u.profile?.name).join(', ');
       const suffix =
-        finalAddIds.length > 3
-          ? ` và ${finalAddIds.length - 3} người khác`
+        finalIdsToProcess.length > 3
+          ? ` và ${finalIdsToProcess.length - 3} người khác`
           : '';
 
       const systemMsg = await this.createSystemMessage(
@@ -663,42 +778,35 @@ export class ConversationsService {
 
       await session.commitTransaction();
 
+      // 5. Socket thông báo Real-time
       const convIdStr = convObjectId.toString();
 
+      // Thông báo cho mọi người hiện tại (Tin nhắn hệ thống)
       this.chatGateway.server.to(convIdStr).emit('new_message', {
         ...systemMsg.toObject(),
         conversationId: convIdStr,
       });
 
-      this.chatGateway.server.to(convIdStr).emit('new_message_sidebar', {
-        conversationId: convIdStr,
-        lastMessage: {
-          content: systemMsg.content,
-          senderName: null,
-          type: 'SYSTEM',
-          createdAt: systemMsg.createdAt,
-        },
-      });
-
-      for (const uid of finalAddIds) {
+      // Thông báo cho từng người mới (Hội thoại mới hiện lên sidebar)
+      for (const uid of finalIdsToProcess) {
         const formattedConv = await this.getFormattedConversationForUser(
           convIdStr,
           uid,
         );
-        if (formattedConv) {
-          this.chatGateway.server
-            .to(uid)
-            .emit('new_conversation', formattedConv);
-        }
+        this.chatGateway.server.to(uid).emit('new_conversation', formattedConv);
+        this.chatGateway.handleUserJoinRoom(uid, convIdStr);
       }
+      this.chatGateway.server.to(convIdStr).emit('member_updated', {
+        conversationId: convIdStr,
+        type: 'ADD',
+      });
 
       return {
         success: true,
-        message: `Đã thêm ${finalAddIds.length} thành viên`,
+        message: `Đã thêm ${finalIdsToProcess.length} thành viên`,
       };
     } catch (error) {
       await session.abortTransaction();
-      console.error('Lỗi thực sự tại addMember:', error);
       throw error;
     } finally {
       await session.endSession();
@@ -857,6 +965,8 @@ export class ConversationsService {
           _id: 0,
           conversationId: '$conversation._id',
           type: '$conversation.type',
+
+          group: '$conversation.group',
           unreadCount: { $ifNull: ['$unreadCount', 0] },
           pinned: { $ifNull: ['$settings.pinned', false] },
           hidden: { $ifNull: ['$settings.hidden', false] },
@@ -1058,43 +1168,51 @@ export class ConversationsService {
     const convObjectId = new Types.ObjectId(conversationId.trim());
     const userObjectId = new Types.ObjectId(userId.trim());
 
-    const member = await this.memberModel.findOne({
-      conversationId: convObjectId,
-      userId: userObjectId,
-      leftAt: null,
-    });
-
-    if (!member) {
-      throw new NotFoundException(
-        'Bạn không phải là thành viên của nhóm này hoặc đã rời nhóm rồi',
-      );
-    }
-
-    if (member.role === MemberRole.OWNER) {
-      const activeMembersCount = await this.memberModel.countDocuments({
-        conversationId: convObjectId,
-        leftAt: null,
-      });
-
-      if (activeMembersCount > 1) {
-        throw new BadRequestException(
-          'Bạn phải chuyển quyền Trưởng nhóm cho người khác trước khi rời nhóm',
-        );
-      }
-    }
-
     const session = await this.connection.startSession();
     session.startTransaction();
 
     try {
+      const member = await this.memberModel
+        .findOne({
+          conversationId: convObjectId,
+          userId: userObjectId,
+          leftAt: null,
+        })
+        .session(session);
+
+      if (!member) {
+        throw new NotFoundException(
+          'Bạn không phải là thành viên hoặc đã rời nhóm rồi',
+        );
+      }
+
+      const activeMembersCount = await this.memberModel
+        .countDocuments({
+          conversationId: convObjectId,
+          leftAt: null,
+        })
+        .session(session);
+
+      if (member.role === MemberRole.OWNER && activeMembersCount > 1) {
+        throw new BadRequestException(
+          'Bạn phải chuyển quyền Trưởng nhóm cho người khác trước khi rời nhóm',
+        );
+      }
+
       await this.memberModel
         .updateOne({ _id: member._id }, { $set: { leftAt: new Date() } })
         .session(session);
 
       const userName = await this.getUserName(userId);
+      let systemMsgContent = `${userName} đã rời khỏi nhóm`;
+
+      if (activeMembersCount === 1) {
+        systemMsgContent = `Người cuối cùng đã rời đi, nhóm không còn hoạt động.`;
+      }
+
       const systemMsg = await this.createSystemMessage(
         conversationId,
-        `${userName} đã rời khỏi nhóm`,
+        systemMsgContent,
         session,
       );
 
@@ -1105,16 +1223,17 @@ export class ConversationsService {
       this.chatGateway.server
         .to(userId)
         .emit('removed_from_conversation', { conversationId: convIdStr });
+      if (activeMembersCount > 1) {
+        this.chatGateway.server.to(convIdStr).emit('new_message', {
+          ...systemMsg.toObject(),
+          conversationId: convIdStr,
+        });
 
-      this.chatGateway.server.to(convIdStr).emit('new_message', {
-        ...systemMsg.toObject(),
-        conversationId: convIdStr,
-      });
-
-      this.chatGateway.server.to(convIdStr).emit('member_removed', {
-        conversationId: convIdStr,
-        removedUserId: userId,
-      });
+        this.chatGateway.server.to(convIdStr).emit('member_removed', {
+          conversationId: convIdStr,
+          removedUserId: userId,
+        });
+      }
 
       return { success: true, message: 'Rời nhóm thành công' };
     } catch (error) {
@@ -1158,5 +1277,240 @@ export class ConversationsService {
       { $set: updateFields },
       { new: true },
     );
+  }
+
+  async updateGroupSettings(conversationId: string, userId: string, dto: any) {
+    const convObjectId = new Types.ObjectId(conversationId.trim());
+    const userObjectId = new Types.ObjectId(userId.trim());
+
+    const conversation = await this.conversationModel.findById(convObjectId);
+    if (!conversation) throw new NotFoundException('Không tìm thấy nhóm');
+
+    // 1. Kiểm tra quyền (giữ nguyên)
+    const member = await this.memberModel.findOne({
+      conversationId: convObjectId,
+      userId: userObjectId,
+      leftAt: null,
+    });
+
+    if (
+      !member ||
+      ![MemberRole.OWNER, MemberRole.ADMIN].includes(member.role as any)
+    ) {
+      throw new ForbiddenException('Bạn không có quyền');
+    }
+
+    if (!conversation.group) {
+      conversation.group = { name: '' } as any;
+    }
+    let systemMsgObj = null;
+
+    if (
+      dto.allowMembersSendMessages !== undefined &&
+      conversation.group.allowMembersSendMessages !==
+        dto.allowMembersSendMessages
+    ) {
+      const actorName = await this.getUserName(userId);
+      const actionText = dto.allowMembersSendMessages
+        ? 'mở quyền gửi tin nhắn cho thành viên'
+        : 'tắt quyền gửi tin nhắn của thành viên';
+
+      systemMsgObj = await this.createSystemMessage(
+        conversationId,
+        `${actorName} đã ${actionText}`,
+      );
+    }
+    // ----------------------------------------
+
+    if (dto.allowMembersInvite !== undefined) {
+      conversation.group!.allowMembersInvite = dto.allowMembersInvite;
+    }
+    if (dto.approvalRequired !== undefined) {
+      conversation.group!.approvalRequired = dto.approvalRequired;
+    }
+    if (dto.allowMembersSendMessages !== undefined) {
+      conversation.group!.allowMembersSendMessages =
+        dto.allowMembersSendMessages;
+    }
+
+    conversation.markModified('group');
+    const savedConversation = await conversation.save();
+
+    // Emit cập nhật settings
+    this.chatGateway.server.to(conversationId).emit('group_settings_updated', {
+      conversationId,
+      group: savedConversation.group,
+    });
+
+    // Bắn emit tin nhắn hệ thống ra room nếu có
+    if (systemMsgObj) {
+      this.chatGateway.server
+        .to(conversationId)
+        .emit('new_message', systemMsgObj);
+    }
+
+    return {
+      success: true,
+      message: 'Cập nhật cài đặt thành công',
+      data: savedConversation.group,
+    };
+  }
+
+  async getJoinRequests(conversationId: string, userId: string) {
+    const convObjectId = new Types.ObjectId(conversationId.trim());
+    const userObjectId = new Types.ObjectId(userId.trim());
+
+    const member = await this.memberModel.findOne({
+      conversationId: convObjectId,
+      userId: userObjectId,
+      leftAt: null,
+    });
+
+    if (
+      !member ||
+      ![MemberRole.OWNER, MemberRole.ADMIN].includes(member.role as any)
+    ) {
+      throw new ForbiddenException('Bạn không có quyền xem danh sách chờ');
+    }
+
+    const requests = await this.joinRequestModel
+      .find({ conversationId: convObjectId, status: 'PENDING' })
+      .populate('userId', 'profile.name profile.avatarUrl')
+      .populate('invitedBy', 'profile.name')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const formattedRequests = await Promise.all(
+      requests.map(async (req: any) => {
+        let fullAvatarUrl = req.userId?.profile?.avatarUrl;
+
+        if (fullAvatarUrl && !fullAvatarUrl.startsWith('http')) {
+          fullAvatarUrl = await this.storageService.signFileUrl(fullAvatarUrl);
+        }
+
+        return {
+          ...req,
+          userId: {
+            ...req.userId,
+            profile: {
+              ...req.userId.profile,
+              avatarUrl: fullAvatarUrl,
+            },
+          },
+        };
+      }),
+    );
+
+    return { success: true, data: formattedRequests };
+  }
+
+  async handleJoinRequest(
+    conversationId: string,
+    requestId: string,
+    actorId: string,
+    action: 'APPROVED' | 'REJECTED',
+  ) {
+    const convObjectId = new Types.ObjectId(conversationId.trim());
+    const actorObjectId = new Types.ObjectId(actorId.trim());
+    const requestObjectId = new Types.ObjectId(requestId.trim());
+
+    const session = await this.connection.startSession();
+    session.startTransaction();
+
+    try {
+      // 1. Kiểm tra quyền của người duyệt
+      const actorMember = await this.memberModel
+        .findOne({
+          conversationId: convObjectId,
+          userId: actorObjectId,
+          leftAt: null,
+        })
+        .session(session);
+
+      if (
+        !actorMember ||
+        ![MemberRole.OWNER, MemberRole.ADMIN].includes(actorMember.role as any)
+      ) {
+        throw new ForbiddenException(
+          'Bạn không có quyền thực hiện thao tác này',
+        );
+      }
+
+      const request = await this.joinRequestModel
+        .findById(requestObjectId)
+        .session(session);
+
+      if (!request || request.status !== 'PENDING')
+        throw new NotFoundException('Yêu cầu không còn tồn tại');
+
+      if (action === 'REJECTED') {
+        await this.joinRequestModel
+          .findByIdAndUpdate(requestObjectId, { status: 'REJECTED' })
+          .session(session);
+        await session.commitTransaction();
+        return { success: true, message: 'Đã từ chối yêu cầu' };
+      }
+
+      // --- LOGIC PHÊ DUYỆT ---
+      const targetUserId = request.userId;
+
+      // Thêm vào bảng Member
+      await this.memberModel.findOneAndUpdate(
+        { conversationId: convObjectId, userId: targetUserId },
+        {
+          $set: {
+            leftAt: null,
+            joinedAt: new Date(),
+            role: MemberRole.MEMBER,
+            unreadCount: 0,
+          },
+        },
+        { upsert: true, session },
+      );
+
+      await this.conversationModel.findByIdAndUpdate(
+        convObjectId,
+        { $addToSet: { participants: targetUserId } },
+        { session },
+      );
+
+      request.status = 'APPROVED';
+      await request.save({ session });
+
+      // Tin nhắn hệ thống
+      const actorName = await this.getUserName(actorId);
+      const targetName = await this.getUserName(targetUserId.toString());
+      const systemMsg = await this.createSystemMessage(
+        conversationId,
+        `${actorName} đã duyệt ${targetName} vào nhóm`,
+        session,
+      );
+
+      await session.commitTransaction();
+
+      // Socket thông báo
+      const convIdStr = conversationId.toString();
+      const formattedConv = await this.getFormattedConversationForUser(
+        convIdStr,
+        targetUserId.toString(),
+      );
+
+      this.chatGateway.server
+        .to(targetUserId.toString())
+        .emit('new_conversation', formattedConv);
+      this.chatGateway.handleUserJoinRoom(targetUserId.toString(), convIdStr);
+      this.chatGateway.server.to(convIdStr).emit('new_message', systemMsg);
+
+      this.chatGateway.server.to(convIdStr).emit('member_updated', {
+        conversationId: convIdStr,
+      });
+
+      return { success: true, message: 'Đã duyệt thành viên vào nhóm' };
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      await session.endSession();
+    }
   }
 }

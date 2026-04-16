@@ -356,6 +356,7 @@ const ConversationPage = () => {
           selectedMessages={selectedMessages}
           setSelectedMessages={setSelectedMessages}
           onOpenForwardModal={() => setShowForwardModal(true)}
+          conversationId={conversation.conversationId}
         />
       </div>
 

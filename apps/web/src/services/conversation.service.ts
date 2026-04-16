@@ -59,11 +59,9 @@ export const conversationService = {
   removeMember: async (conversationId: string, targetUserId: string) => {
     const id = String(conversationId ?? "").trim();
     const targetId = String(targetUserId ?? "").trim();
+
     const response = await apiClient.delete(
-      `/api/conversations/${id}/remove-member`,
-      {
-        data: { targetUserId: targetId },
-      },
+      `/api/conversations/${id}/members/${targetId}`,
     );
     return response?.data ?? null;
   },
@@ -103,5 +101,38 @@ export const conversationService = {
     const id = String(conversationId ?? "").trim();
     const response = await apiClient.delete(`/api/conversations/${id}`);
     return response?.data ?? null;
+  },
+
+  updateGroupSettings: async (
+    id: string,
+    payload: {
+      allowMembersInvite?: boolean;
+      approvalRequired?: boolean;
+      allowMembersSendMessages?: boolean;
+    },
+  ) => {
+    const response = await apiClient.patch(
+      `/api/conversations/${id}/settings`,
+      payload,
+    );
+    return response.data;
+  },
+
+  getJoinRequests: async (id: string) => {
+    const response = await apiClient.get(
+      `/api/conversations/${id}/join-requests`,
+    );
+    return response.data;
+  },
+
+  handleJoinRequest: async (
+    id: string,
+    requestId: string,
+    action: "approve" | "reject",
+  ) => {
+    const response = await apiClient.post(
+      `/api/conversations/${id}/join-requests/${requestId}/${action}`,
+    );
+    return response.data;
   },
 };

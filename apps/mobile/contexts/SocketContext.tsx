@@ -14,6 +14,7 @@ import {
   updateConversationFromSocket,
   updateConversationSetting,
   updateRecallMessageInConversation,
+  addConversationToTop,
 } from "@/store/slices/conversationSlice";
 
 interface SocketContextType {
@@ -125,6 +126,32 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       dispatch(removeConversation(data.conversationId));
     };
 
+    const handleNewConversation = (conversation: any) => {
+      if (!conversation?.conversationId) return;
+
+      socketRef.current?.emit("join_room", conversation.conversationId);
+
+      dispatch(addConversationToTop(conversation));
+    };
+
+    const handleGroupDisbanded = (payload: any) => {
+      const convId = payload?.conversationId || payload?.id;
+      if (convId) {
+        dispatch(removeConversation(convId));
+      }
+    };
+
+    const handleGroupSettingsUpdate = (data: any) => {
+      dispatch(
+        updateConversationSetting({
+          conversationId: data.conversationId,
+          group: data.group,
+        }),
+      );
+    };
+
+    socketInstance.on("group_settings_updated", handleGroupSettingsUpdate);
+
     // --- REGISTER EVENTS ---
     socketInstance.on("connect", () => setIsConnected(true));
     socketInstance.on("disconnect", () => setIsConnected(false));
@@ -134,11 +161,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on("conversation_setting:delete", (data) =>
       dispatch(removeConversation(data.conversationId)),
     );
-    socketInstance.on("new_conversation", () => dispatch(fetchConversations()));
     socketInstance.on(
       "removed_from_conversation",
       handleRemoveFromConversation,
     );
+    socketInstance.on("new_conversation", handleNewConversation);
+    socketInstance.on("group_disbanded", handleGroupDisbanded);
+    socketInstance.on("group_settings_updated", handleGroupSettingsUpdate);
 
     return () => {
       socketInstance.off("connect");
@@ -147,8 +176,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.off("message_recalled_sidebar");
       socketInstance.off("conversation_setting:update");
       socketInstance.off("conversation_setting:delete");
-      socketInstance.off("new_conversation");
       socketInstance.off("removed_from_conversation");
+      socketInstance.off("new_conversation");
+      socketInstance.off("group_disbanded");
+      socketInstance.off("group_settings_updated", handleGroupSettingsUpdate);
     };
   }, [dispatch, user?.userId]);
 

@@ -66,8 +66,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   // --- SOCKET HANDLERS ---
 
   // 1. Nhận hội thoại mới (Khi ai đó thêm mình vào nhóm hoặc nhắn tin lần đầu)
-  const handleNewConversation = (data: any) => {
-    dispatch(addConversationToTop(data));
+  const handleNewConversation = (conversation: any) => {
+    if (!conversation?.conversationId) return;
+    if (socketRef.current) {
+      socketRef.current.emit("join_room", conversation.conversationId);
+    }
+    dispatch(addConversationToTop(conversation));
   };
 
   // 2. Cập nhật Sidebar khi có tin nhắn mới (Tin nhắn thường hoặc Cuộc gọi)
@@ -148,6 +152,27 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       setGroupDisbandedDialogOpen(true);
     }
   };
+  const handleRemovedFromConversation = (payload: any) => {
+    const { conversationId } = payload;
+    if (!conversationId) return;
+
+    dispatch(removeConversation({ conversationId }));
+
+    const path = window.location?.pathname || "";
+    if (path.includes(conversationId)) {
+      alert("Bạn đã bị mời ra khỏi nhóm này.");
+      navigateHome();
+    }
+  };
+
+  const handleGroupSettingsUpdate = (data: any) => {
+    dispatch(
+      updateConversationSetting({
+        conversationId: data.conversationId,
+        group: data.group,
+      }),
+    );
+  };
 
   // --- INITIALIZE SOCKET ---
   useEffect(() => {
@@ -174,6 +199,15 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on("role_updated", () => dispatch(fetchConversations()));
     socketInstance.on("group_disbanded", handleGroupDisbanded);
 
+    socketInstance.on(
+      "removed_from_conversation",
+      handleRemovedFromConversation,
+    );
+    socketInstance.on("group_settings_updated", handleGroupSettingsUpdate);
+    socketInstance.on("member_updated", () => {
+      dispatch(fetchConversations());
+    });
+
     return () => {
       socketInstance.off("connect");
       socketInstance.off("disconnect");
@@ -193,6 +227,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       );
       socketInstance.off("role_updated");
       socketInstance.off("group_disbanded", handleGroupDisbanded);
+      socketInstance.off(
+        "removed_from_conversation",
+        handleRemovedFromConversation,
+      );
+      socketInstance.off("group_settings_updated");
+      socketInstance.off("member_updated");
     };
   }, [apiUrl, dispatch, user?.userId]);
 

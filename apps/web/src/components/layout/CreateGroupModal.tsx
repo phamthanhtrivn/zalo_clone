@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Search } from "lucide-react";
 
 type Friend = {
   friendId: string;
@@ -47,6 +48,7 @@ const CreateGroupModal = ({
   onMembersAdded,
 }: Props) => {
   const [groupName, setGroupName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [friends, setFriends] = useState<Friend[]>([]);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [isLoadingFriends, setIsLoadingFriends] = useState(false);
@@ -57,10 +59,15 @@ const CreateGroupModal = ({
     [excludeUserIds],
   );
 
-  const visibleFriends = useMemo(
-    () => friends.filter((f) => !excludeSet.has(f.friendId)),
-    [friends, excludeSet],
-  );
+  const filteredFriends = useMemo(() => {
+    return friends.filter((f) => {
+      const isNotExcluded = !excludeSet.has(f.friendId);
+      const matchesSearch = f.name
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      return isNotExcluded && matchesSearch;
+    });
+  }, [friends, excludeSet, searchQuery]);
 
   useEffect(() => {
     if (!open) return;
@@ -86,8 +93,8 @@ const CreateGroupModal = ({
     if (mode === "ADD_MEMBER") {
       return selectedMemberIds.length >= 1;
     }
-    return groupName.trim().length > 0 && selectedMemberIds.length >= 2;
-  }, [mode, groupName, selectedMemberIds.length]);
+    return selectedMemberIds.length >= 2;
+  }, [mode, selectedMemberIds.length]);
 
   const toggleMember = (friendId: string) => {
     setSelectedMemberIds((prev) =>
@@ -127,9 +134,7 @@ const CreateGroupModal = ({
         memberIds: selectedMemberIds,
       });
 
-      setGroupName("");
-      setSelectedMemberIds([]);
-      onOpenChange(false);
+      handleOpenChange(false);
       onCreated?.();
     } catch (error) {
       console.log(error);
@@ -142,6 +147,7 @@ const CreateGroupModal = ({
     onOpenChange(nextOpen);
     if (!nextOpen) {
       setGroupName("");
+      setSearchQuery("");
       setSelectedMemberIds([]);
     }
   };
@@ -153,80 +159,92 @@ const CreateGroupModal = ({
       <DialogContent className="sm:max-w-[540px]">
         <DialogHeader>
           <DialogTitle>
-            {isAddMember ? "Thêm thành viên vào nhóm" : "Tạo nhóm mới"}
+            {isAddMember ? "Thêm thành viên" : "Tạo nhóm mới"}
           </DialogTitle>
           <DialogDescription>
             {isAddMember
-              ? "Chọn ít nhất một bạn bè để thêm vào nhóm."
-              : "Nhập tên nhóm và chọn ít nhất 2 bạn bè để tạo nhóm."}
+              ? "Chọn bạn bè để thêm vào cuộc hội thoại này."
+              : "Chọn ít nhất 2 bạn bè để bắt đầu nhóm chat."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           {!isAddMember && (
             <div className="space-y-2">
-              <label className="text-sm font-medium">Tên nhóm</label>
               <Input
-                placeholder="Nhập tên nhóm"
+                placeholder="Nhập tên nhóm (không bắt buộc)"
                 value={groupName}
+                className="h-10 border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-[#0091ff]"
                 onChange={(e) => setGroupName(e.target.value)}
               />
             </div>
           )}
 
+          {/* THANH TÌM KIẾM BẠN BÈ */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="Tìm kiếm bạn bè..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-9 bg-gray-50 border-none"
+            />
+          </div>
+
           <div className="space-y-2">
-            <div className="text-sm font-medium">Danh sách bạn bè</div>
-            <div className="max-h-72 overflow-y-auto rounded-md border p-2">
-              {isLoadingFriends && (
-                <p className="p-2 text-sm text-gray-500">
-                  Đang tải danh sách bạn bè...
-                </p>
-              )}
+            <div className="text-sm font-medium flex justify-between">
+              <span>Danh sách bạn bè</span>
+              <span className="text-[#0091ff]">
+                Đã chọn: {selectedMemberIds.length}
+              </span>
+            </div>
 
-              {!isLoadingFriends && visibleFriends.length === 0 && (
-                <p className="p-2 text-sm text-gray-500">
-                  {friends.length === 0
-                    ? "Không có bạn bè để chọn."
-                    : "Không còn bạn bè nào có thể thêm (đã tham gia nhóm)."}
+            <div className="max-h-64 overflow-y-auto rounded-md border p-1 space-y-1">
+              {isLoadingFriends ? (
+                <p className="p-4 text-center text-sm text-gray-500">
+                  Đang tải...
                 </p>
-              )}
-
-              {!isLoadingFriends &&
-                visibleFriends.map((friend) => (
+              ) : filteredFriends.length === 0 ? (
+                <p className="p-4 text-center text-sm text-gray-500">
+                  {searchQuery
+                    ? "Không tìm thấy kết quả"
+                    : "Không có bạn bè nào khả dụng"}
+                </p>
+              ) : (
+                filteredFriends.map((friend) => (
                   <label
                     key={friend.friendId}
-                    className="flex items-center gap-3 rounded-md p-2 hover:bg-gray-50 cursor-pointer"
+                    className="flex items-center gap-3 rounded-md p-2 hover:bg-gray-100 cursor-pointer transition-colors"
                   >
                     <input
                       type="checkbox"
+                      className="w-4 h-4 rounded-full border-gray-300 accent-[#0091ff]"
                       checked={selectedMemberIds.includes(friend.friendId)}
                       onChange={() => toggleMember(friend.friendId)}
                     />
                     <img
-                      src={friend.avatarUrl || ""}
+                      src={friend.avatarUrl || "/default-avatar.png"}
                       alt={friend.name}
-                      className="h-8 w-8 rounded-full object-cover bg-gray-100"
+                      className="h-9 w-9 rounded-full object-cover border"
                     />
-                    <span className="text-sm">{friend.name}</span>
+                    <span className="text-sm font-medium">{friend.name}</span>
                   </label>
-                ))}
+                ))
+              )}
             </div>
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="ghost" onClick={() => handleOpenChange(false)}>
+            Hủy
+          </Button>
           <Button
             onClick={handleSubmit}
             disabled={!canSubmit || isSubmitting}
-            className="w-full sm:w-auto"
+            className="bg-[#0091ff] hover:bg-[#007edb] text-white px-8"
           >
-            {isSubmitting
-              ? isAddMember
-                ? "Đang thêm..."
-                : "Đang tạo..."
-              : isAddMember
-                ? "Thêm"
-                : "Tạo nhóm"}
+            {isSubmitting ? "Đang xử lý..." : isAddMember ? "Thêm" : "Tạo nhóm"}
           </Button>
         </DialogFooter>
       </DialogContent>

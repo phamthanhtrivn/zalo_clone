@@ -5,6 +5,8 @@ import { MongooseModule } from '@nestjs/mongoose';
 import {
   Conversation,
   ConversationSchema,
+  JoinRequest,
+  JoinRequestSchema,
 } from './schemas/conversation.schema';
 import { Member, MemberSchema } from '../members/schemas/member.schema';
 import { Message, MessageSchema } from '../messages/schemas/message.schema';
@@ -23,6 +25,7 @@ import { MessagesModule } from '../messages/messages.module';
       { name: Member.name, schema: MemberSchema },
       { name: Message.name, schema: MessageSchema },
       { name: 'User', schema: UserSchema },
+      { name: JoinRequest.name, schema: JoinRequestSchema },
     ]),
     forwardRef(() => MessagesModule),
     StorageModule,
