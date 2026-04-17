@@ -48,4 +48,12 @@ export const authService = {
     const res = await apiClient.post("/api/auth/change-password", payload);
     return res.data.data;
   },
+  getSessions: async () => {
+    const res = await apiClient.get("/api/auth/sessions");
+    return res.data.data;
+  },
+  logOutDevice: async (deviceId: string) => {
+    const res = await apiClient.post("/api/auth/logout-device", { deviceId });
+    return res.data.data;
+  },
 };

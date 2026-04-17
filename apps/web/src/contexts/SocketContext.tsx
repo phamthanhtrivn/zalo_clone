@@ -11,6 +11,8 @@ import {
   updateConversation,
   updateRecallMessageInConversation,
 } from "@/store/slices/conversationSlice";
+import { getDeviceId } from "@/utils/device.util";
+import { clearAuth } from "@/store/auth/authSlice";
 
 interface SocketContextType {
   socket: Socket | null;
@@ -30,8 +32,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const apiUrl = import.meta.env.VITE_API_URL;
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+
   const dispatch = useAppDispatch();
-  const user = useAppSelector((state) => state.auth.user);
+  const token = useAppSelector((state) => state.auth.accessToken);
   const socketRef = useRef<Socket | null>(null);
 
   const handleNewMessageSidebar = (data: any) => {
@@ -45,14 +48,28 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     dispatch(updateRecallMessageInConversation(data));
   };
 
+  // Tự động đăng xuất khi bị cưỡng ép
+  const handleForceLogout = (data: { message: string }) => {
+    alert(
+      data.message ||
+        "Phiên đăng nhập đã hết hạn hoặc bạn bị đăng xuất từ nơi khác.",
+    );
+    dispatch(clearAuth());
+
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+  };
+
   useEffect(() => {
     // 🔥 chỉ connect khi có user
-    if (!user?.userId) return;
+    if (!token) return;
 
     if (!socketRef.current) {
       socketRef.current = io(apiUrl, {
         auth: {
-          userId: user.userId,
+          token,
+          deviceId: getDeviceId(),
         },
       });
     }
@@ -72,6 +89,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
     socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
     socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
+    socketInstance.on("force_logout", handleForceLogout);
 
     return () => {
       socketInstance.off("new_message_sidebar", handleNewMessageSidebar);
@@ -79,12 +97,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         "message_recalled_sidebar",
         handleRecallMessageSidebar,
       );
+      socketInstance.off("force_logout", handleForceLogout);
     };
-  }, [
-    apiUrl,
-    dispatch,
-    user?.userId
-  ]);
+  }, [apiUrl, dispatch, token]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected }}>

@@ -3,7 +3,9 @@ import axios from "axios";
 const API_URL = import.meta.env.VITE_API_URL;
 import { store } from "@/store";
 import { clearAuth, updateToken } from "@/store/auth/authSlice";
+import { getDeviceId } from "@/utils/device.util";
 
+//1. api chính
 export const apiClient = axios.create({
   baseURL: API_URL,
   headers: {
@@ -12,14 +14,22 @@ export const apiClient = axios.create({
   withCredentials: true,
 });
 
-// Dùng riêng cho refresh token
+//2. api dùng riêng cho refresh token
 const refreshApi = axios.create({
   baseURL: `${API_URL}`,
   timeout: 10000,
   withCredentials: true,
 });
 
+refreshApi.interceptors.request.use((config) => {
+  config.headers["x-device-id"] = getDeviceId();
+  return config;
+});
+
+//3.
 apiClient.interceptors.request.use((config) => {
+  //gắn device id vào headers
+  config.headers["x-device-id"] = getDeviceId();
   const state = store.getState();
   const token = state.auth.accessToken;
   if (token) {

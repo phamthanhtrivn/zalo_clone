@@ -3,7 +3,9 @@ import type { PayloadAction } from "@reduxjs/toolkit";
 import {
   changePassword,
   completeSignUp,
+  getSessions,
   logOut,
+  logOutDevice,
   resetPassword,
   restoreSession,
   signIn,
@@ -35,6 +37,7 @@ const authSlice = createSlice({
     clearAuth(state) {
       state.error = {};
       state.user = null;
+      state.accessToken = "";
       state.loading = false;
     },
     updateToken(state, action: PayloadAction<string>) {
@@ -65,6 +68,7 @@ const authSlice = createSlice({
         state.loading = false;
         state.user = action.payload?.user;
         state.error = {};
+        console.log(state.user);
       })
       .addCase(restoreSession.rejected, (state) => {
         state.loading = false;
@@ -128,6 +132,28 @@ const authSlice = createSlice({
         state.loading = false;
       })
       .addCase(changePassword.rejected, (state, action) => {
+        state.error = action.payload;
+        state.loading = false;
+      })
+      .addCase(getSessions.pending, (state, action) => {
+        state.error = {};
+        state.loading = true;
+      })
+      .addCase(getSessions.fulfilled, (state, action) => {
+        state.loading = false;
+      })
+      .addCase(getSessions.rejected, (state, action) => {
+        state.error = action.payload;
+        state.loading = false;
+      })
+      .addCase(logOutDevice.pending, (state, action) => {
+        state.error = {};
+        state.loading = true;
+      })
+      .addCase(logOutDevice.fulfilled, (state, action) => {
+        state.loading = false;
+      })
+      .addCase(logOutDevice.rejected, (state, action) => {
         state.error = action.payload;
         state.loading = false;
       });

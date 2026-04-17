@@ -1,10 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAppDispatch } from "@/store";
+import { useAppDispatch, useAppSelector } from "@/store";
 import { signIn } from "@/store/auth/authThunk";
 import { Smartphone, Lock } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
 const LoginPage = () => {
@@ -12,6 +12,11 @@ const LoginPage = () => {
   const dispatch = useAppDispatch();
   const [phone, setPhone] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  const { accessToken } = useAppSelector((state) => state.auth);
+
+  if (accessToken) {
+    return <Navigate to="/" replace />;
+  }
 
   const handleOnLogin = async () => {
     try {
@@ -19,9 +24,7 @@ const LoginPage = () => {
       toast.success("Đăng nhập thành công");
       navigate("/", { replace: true });
     } catch (err: any) {
-      toast.error(
-        err.message || err.message?.error || "Đăng nhập không thành công!",
-      );
+      toast.error(err.message || "Đăng nhập không thành công!");
     }
   };
 

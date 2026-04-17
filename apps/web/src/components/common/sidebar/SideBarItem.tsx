@@ -28,7 +28,7 @@ export default function SideBarItem({
         <div
           onClick={onClick}
           className={cn(
-            "group relative flex  w-full cursor-pointer items-center justify-center transition-all duration-200",
+            "rounded-md p-3 group relative flex  w-full cursor-pointer items-center justify-center transition-all duration-200",
             // Hiệu ứng background khi hover hoặc active
             isActive ? "bg-blue-700" : "hover:bg-blue-800/50",
             className,
@@ -36,7 +36,7 @@ export default function SideBarItem({
         >
           {/* Icon chính */}
           <Icon
-            size={24}
+            size={26}
             strokeWidth={1.5}
             className={cn(
               "transition-colors",
