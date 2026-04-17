@@ -243,13 +243,27 @@ export class AuthService {
   }
 
   async signOutOtherDevices(userId: string, currentDeviceId: string) {
-    const count = await this.sessionService.removeAllOtherDevices(
+    const sessionsToKill = await this.sessionService.findOtherSessions(
       userId,
       currentDeviceId,
     );
+
+    if (sessionsToKill.length === 0) {
+      return { message: 'Không có thiết bị nào khác để đăng xuất.' };
+    }
+
+    const deletedCount = await this.sessionService.removeAllOtherDevices(
+      userId,
+      currentDeviceId,
+    );
+
+    for (const session of sessionsToKill) {
+      this.chatGateway.forceLogoutDevice(session.deviceId);
+    }
+
     return {
-      message: `Đã đăng xuất khỏi ${count} thiết bị khác thành công.`,
-      deletedCount: count,
+      message: `Đã đăng xuất thành công khỏi ${deletedCount.deletedCount} thiết bị khác!`,
+      deletedCount: deletedCount.deletedCount,
     };
   }
 

@@ -68,12 +68,20 @@ export class SessionService {
     return result.deletedCount > 0;
   }
 
+  async findOtherSessions(userId: string, currentDeviceId: string) {
+    // Tìm tất cả session của user này, NGOẠI TRỪ máy đang dùng
+    return this.sessionModel.find({
+      userId: new Types.ObjectId(userId),
+      deviceId: { $ne: currentDeviceId },
+    });
+  }
+
   async removeAllOtherDevices(userId: string, currentDeviceId: string) {
     const result = await this.sessionModel.deleteMany({
       userId: new Types.ObjectId(userId),
       deviceId: { $ne: currentDeviceId }, // $ne = Not Equal (không bằng id hiện tại)
     });
-    return result.deletedCount;
+    return result;
   }
 
   async getAll(userId: string): Promise<SessionResponseDTO[]> {
