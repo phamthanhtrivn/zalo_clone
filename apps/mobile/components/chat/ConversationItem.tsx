@@ -82,8 +82,8 @@ const ConversationItem: React.FC<Props> = ({
       };
     }
 
-    if (content.file) {
-      switch (content.file.type) {
+    if (Array.isArray(content.files) && content.files.length > 0) {
+      switch (content.files[content.files.length - 1].type) {
         case "IMAGE":
           return {
             icon: <MaterialIcons name="image" size={14} color="#6b7280" />,
@@ -99,7 +99,7 @@ const ConversationItem: React.FC<Props> = ({
             icon: (
               <MaterialIcons name="attach-file" size={14} color="#6b7280" />
             ),
-            text: content.file.fileName,
+            text: content.files[0].fileName,
           };
         default:
           return { icon: null, text: "" };

@@ -183,7 +183,7 @@ export default function ChatWindow() {
   const handleSendMessage = async (text: string) => {
     if (!id || !user?.userId) return;
     try {
-      await messageService.sendMessage(id, user.userId, { text }, null, replyingMessage?._id);
+      await messageService.sendMessage(id, user.userId, replyingMessage?._id, { text }, null);
       if (replyingMessage) dispatch(clearReplyingMessage());
       scrollToBottom();
     } catch (err) {
@@ -191,14 +191,60 @@ export default function ChatWindow() {
     }
   };
 
-  const handleSendFile = async (file: any) => {
-    if (!id || !user?.userId) return;
+  const handleSendFile = async (files: Array<{ uri: string; name: string; type: string }>) => {
+    if (!id || !user?.userId || files.length === 0) return;
     try {
-      await messageService.sendMessage(id, user.userId, undefined, file, replyingMessage?._id);
+      const mediaFiles = files.filter(
+        (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
+      );
+      const documentFiles = files.filter(
+        (file) => !file.type.startsWith("image/") && !file.type.startsWith("video/"),
+      );
+
+      const promises: Promise<any>[] = [];
+
+      if (mediaFiles.length > 0) {
+        const formData = new FormData();
+        formData.append("conversationId", id);
+        formData.append("senderId", user.userId);
+        if (replyingMessage?._id) formData.append("repliedId", replyingMessage._id);
+
+        mediaFiles.forEach((file) => {
+          formData.append("files", {
+            uri: file.uri,
+            name: file.name,
+            type: file.type,
+          } as any);
+        });
+
+        promises.push(
+          messageService.sendFormData(formData)
+        );
+      }
+
+      // Documents: one message per file
+      documentFiles.forEach((file) => {
+        const formData = new FormData();
+        formData.append("conversationId", id);
+        formData.append("senderId", user.userId);
+        if (replyingMessage?._id) formData.append("repliedId", replyingMessage._id);
+        formData.append("files", {
+          uri: file.uri,
+          name: file.name,
+          type: file.type,
+        } as any);
+
+        promises.push(
+          messageService.sendFormData(formData)
+        );
+      });
+
+      await Promise.all(promises);
       if (replyingMessage) dispatch(clearReplyingMessage());
       scrollToBottom();
     } catch (err) {
-      console.error(err);
+      console.error("Send file error:", err);
+      Alert.alert("Lỗi", "Không thể gửi file. Vui lòng thử lại.");
     }
   };
 
@@ -434,10 +480,13 @@ export default function ChatWindow() {
 
     const isLastReadMessage = index === messages.length - 1;
 
-    const addSpacing = !sameSenderOlder;
+    const addSpacing = isFirstInCluster && !showDivider;
 
     return (
-      <View style={{ marginBottom: item.reactions?.length > 0 ? 12 : 0, marginTop: addSpacing ? 16 : 0 }}>
+      <View style={{
+        marginTop: addSpacing ? 12 : 2, // 2px within cluster, 12px between clusters
+        marginBottom: item.reactions?.length > 0 ? 14 : 0, // Space for reaction bar
+      }}>
         {showDivider && (
           <View style={{ flexDirection: "row", justifyContent: "center", marginVertical: 12 }}>
             <View style={{ backgroundColor: "#babbbe", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 6 }}>
@@ -627,7 +676,7 @@ export default function ChatWindow() {
           <ChatInput
             chatName={conversation?.name}
             onSendMessage={handleSendMessage}
-            onSendFile={handleSendFile}
+            onSendFiles={handleSendFile}
             isSelectMode={isSelectMode}
             selectedMessages={selectedMessages}
             onOpenForwardModal={() => setShowForwardModal(true)}

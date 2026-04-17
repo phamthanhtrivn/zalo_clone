@@ -5,17 +5,26 @@ import {
   TextInput,
   TouchableOpacity,
   Keyboard,
+  Alert,
+  ScrollView,
 } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import EmojiPicker from "rn-emoji-keyboard";
 import { COLORS } from "@/constants/colors";
 
+interface SelectedFile {
+  uri: string;
+  name: string;
+  type: string;
+}
+
 interface ChatInputProps {
   chatName?: string;
   onSendMessage: (text: string) => void;
-  onSendFile: (file: any) => void;
+  onSendFiles: (files: SelectedFile[]) => void;
   isSelectMode?: boolean;
   selectedMessages?: string[];
   onOpenForwardModal?: () => void;
@@ -25,7 +34,7 @@ interface ChatInputProps {
 const ChatInput: React.FC<ChatInputProps> = ({
   chatName,
   onSendMessage,
-  onSendFile,
+  onSendFiles,
   isSelectMode = false,
   selectedMessages = [],
   onOpenForwardModal,
@@ -33,12 +42,17 @@ const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const [text, setText] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const inputRef = useRef<TextInput>(null);
 
-  const handleSendText = () => {
+  const handleSend = () => {
     if (text.trim()) {
       onSendMessage(text.trim());
       setText("");
+    }
+    if (selectedFiles.length > 0) {
+      onSendFiles(selectedFiles);
+      setSelectedFiles([]);
     }
   };
 
@@ -52,7 +66,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     };
   }, []);
 
-  // ✅ FIX: emoji picker mới
   const handleEmojiSelect = (emoji: any) => {
     setText((prev) => prev + emoji.emoji);
   };
@@ -62,41 +75,87 @@ const ChatInput: React.FC<ChatInputProps> = ({
     setShowEmoji(true);
   };
 
-  // ✅ FIX: ImagePicker MediaTypeOptions deprecated
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: false,
-      quality: 1,
-    });
+  const removeFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
 
-    if (!result.canceled) {
-      const asset = result.assets[0];
-      onSendFile({
-        uri: asset.uri,
-        name: asset.fileName || "media.jpg",
-        type: asset.mimeType || "image/jpeg",
+  const pickImages = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (status !== "granted") {
+        Alert.alert("Quyền truy cập", "Cần quyền truy cập thư viện ảnh để chọn ảnh.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        // ✅ FIX deprecated
+        mediaTypes: ["images", "videos"],
+        allowsMultipleSelection: true,
+        selectionLimit: 15,
+        allowsEditing: false,
+        quality: 0.8,
       });
+
+      if (!result.canceled && result.assets?.length > 0) {
+        const newFiles = result.assets.map((asset, index) => {
+          const isVideo = asset.type === "video";
+          const mimeType =
+            asset.mimeType ||
+            (isVideo ? "video/mp4" : "image/jpeg");
+
+          const extension = isVideo ? "mp4" : "jpg";
+          const fileName =
+            asset.fileName ||
+            `media_${Date.now()}_${index}.${extension}`;
+
+          return {
+            uri: asset.uri.startsWith("file://")
+              ? asset.uri
+              : `file://${asset.uri}`,
+            name: encodeURIComponent(fileName),
+            type: mimeType,
+          };
+        });
+
+        setSelectedFiles((prev) => [...prev, ...newFiles]);
+      }
+    } catch (err) {
+      console.error("Image picking error:", err);
+      Alert.alert("Lỗi", "Không thể chọn ảnh. Vui lòng thử lại.");
     }
   };
 
-  const pickDocument = async () => {
+  const pickDocuments = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: "*/*",
         copyToCacheDirectory: true,
+        multiple: true,
       });
 
-      if (!result.canceled) {
-        const asset = result.assets[0];
-        onSendFile({
-          uri: asset.uri,
-          name: asset.name,
-          type: asset.mimeType || "application/octet-stream",
+      if (!result.canceled && result.assets?.length > 0) {
+        const newFiles = result.assets.map((asset, index) => {
+          const fileName =
+            asset.name || `file_${Date.now()}_${index}`;
+
+          const mimeType =
+            asset.mimeType || "application/octet-stream";
+
+          return {
+            uri: asset.uri.startsWith("file://")
+              ? asset.uri
+              : `file://${asset.uri}`,
+            name: fileName,
+            type: mimeType,
+          };
         });
+
+        setSelectedFiles((prev) => [...prev, ...newFiles]);
       }
     } catch (err) {
-      console.error("Document picking error", err);
+      console.error("Document picking error:", err);
+      Alert.alert("Lỗi", "Không thể chọn file. Vui lòng thử lại.");
     }
   };
 
@@ -143,6 +202,74 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <View style={{ backgroundColor: "white" }}>
+      {/* Preview Bar */}
+      {selectedFiles.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{
+            maxHeight: 110,
+            paddingHorizontal: 10,
+            paddingVertical: 10,
+            borderTopWidth: 1,
+            borderTopColor: "#e5e7eb",
+          }}
+          contentContainerStyle={{ gap: 12, paddingRight: 20 }}
+        >
+          {selectedFiles.map((file, index) => (
+            <View key={index} style={{ width: 80, height: 80, position: "relative" }}>
+              {file.type.startsWith("image/") ? (
+                <Image
+                  source={{ uri: file.uri }}
+                  style={{ width: 80, height: 80, borderRadius: 8 }}
+                  contentFit="cover"
+                />
+              ) : (
+                <View
+                  style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 8,
+                    backgroundColor: "#f3f4f6",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    padding: 4,
+                    borderWidth: 1,
+                    borderColor: "#e5e7eb",
+                  }}
+                >
+                  <Ionicons
+                    name={file.type.startsWith("video/") ? "play-circle" : "document"}
+                    size={32}
+                    color="#6b7280"
+                  />
+                  <Text numberOfLines={1} style={{ fontSize: 9, color: "#6b7280", marginTop: 4 }}>
+                    {file.name}
+                  </Text>
+                </View>
+              )}
+              <TouchableOpacity
+                onPress={() => removeFile(index)}
+                style={{
+                  position: "absolute",
+                  top: -6,
+                  right: -6,
+                  backgroundColor: "rgba(0,0,0,0.6)",
+                  borderRadius: 12,
+                  width: 22,
+                  height: 22,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  zIndex: 10,
+                }}
+              >
+                <Ionicons name="close" size={14} color="white" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
       {/* Input */}
       <View
         style={{
@@ -178,23 +305,24 @@ const ChatInput: React.FC<ChatInputProps> = ({
         />
 
         {/* Image */}
-        <TouchableOpacity onPress={pickImage} style={{ padding: 6 }}>
+        <TouchableOpacity onPress={pickImages} style={{ padding: 6 }}>
           <MaterialIcons name="image" size={26} color="#6b7280" />
         </TouchableOpacity>
 
         {/* File */}
-        <TouchableOpacity onPress={pickDocument} style={{ padding: 6 }}>
+        <TouchableOpacity onPress={pickDocuments} style={{ padding: 6 }}>
           <Ionicons name="attach-outline" size={26} color="#6b7280" />
         </TouchableOpacity>
 
         {/* Send */}
         <TouchableOpacity
-          onPress={handleSendText}
+          onPress={handleSend}
+          disabled={!text.trim() && selectedFiles.length === 0}
           style={{
             width: 38,
             height: 38,
             borderRadius: 19,
-            backgroundColor: text.trim() ? COLORS.primary : "#e5e7eb",
+            backgroundColor: (text.trim() || selectedFiles.length > 0) ? COLORS.primary : "#e5e7eb",
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -203,7 +331,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* ✅ NEW Emoji Picker */}
+      {/* Emoji Picker */}
       <EmojiPicker
         open={showEmoji}
         onClose={() => setShowEmoji(false)}

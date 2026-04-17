@@ -9,6 +9,7 @@ import {
   Image as RNImage,
   Linking,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { Image } from "expo-image";
 import { Video } from "expo-av";
@@ -25,6 +26,10 @@ import {
   unpinConversation,
 } from "@/services/conversation-settings.service";
 import { useSocket } from "@/contexts/SocketContext";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
+import { truncateFileName } from "@/utils/render-file";
+import { formatFileSize } from "@/utils/format-file.util";
 
 interface Props {
   visible: boolean;
@@ -227,6 +232,43 @@ const ConversationInfoSheet: React.FC<Props> = ({
 
   const getFileExt = (name: string) =>
     name.split(".").pop()?.toUpperCase() || "FILE";
+
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownload = async (file: any) => {
+    try {
+      setDownloadingId(file.fileKey);
+
+      const safeFileName = decodeURIComponent(file.fileName || "file");
+
+      const downloadUrl = encodeURI(file.fileKey);
+
+      const fileUri = FileSystem.documentDirectory + safeFileName;
+
+      const { uri } = await FileSystem.downloadAsync(downloadUrl, fileUri);
+
+      const canShare = await Sharing.isAvailableAsync();
+
+      if (canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: file.mimeType || "application/octet-stream",
+          dialogTitle: safeFileName,
+        });
+      } else {
+        Alert.alert("Thành công", `Đã tải: ${safeFileName}`);
+      }
+
+    } catch (err: any) {
+      console.error("Download error:", err?.response || err);
+
+      Alert.alert(
+        "Lỗi",
+        "Không thể tải file. Có thể do link hết hạn hoặc cần đăng nhập."
+      );
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   return (
     <Modal
@@ -470,7 +512,8 @@ const ConversationInfoSheet: React.FC<Props> = ({
                       return (
                         <TouchableOpacity
                           key={idx}
-                          onPress={() => Linking.openURL(file.fileKey)}
+                          onPress={() => handleDownload(file)}
+                          disabled={downloadingId === file.fileKey}
                           style={{
                             flexDirection: "row",
                             alignItems: "center",
@@ -512,18 +555,17 @@ const ConversationInfoSheet: React.FC<Props> = ({
                                 color: "#111",
                               }}
                             >
-                              {file.fileName}
+                              {truncateFileName(file.fileName, 30)}
                             </Text>
                             <Text style={{ fontSize: 11, color: "#9ca3af" }}>
                               {getDateLabel(item.createdAt)} •{" "}
-                              {(file.fileSize / 1024).toFixed(1)} KB
+                              {formatFileSize(file.fileSize)}
                             </Text>
                           </View>
-                          <Ionicons
-                            name="download-outline"
-                            size={18}
-                            color="#6b7280"
-                          />
+                          {downloadingId === file.fileKey
+                            ? <ActivityIndicator size="small" color="blue" />
+                            : <Ionicons name="download-outline" size={17} color="blue" />
+                          }
                         </TouchableOpacity>
                       );
                     })
@@ -558,7 +600,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
                       let domain = url;
                       try {
                         domain = new URL(url).hostname.replace("www.", "");
-                      } catch {}
+                      } catch { }
                       return (
                         <TouchableOpacity
                           key={idx}
@@ -659,6 +701,28 @@ const ConversationInfoSheet: React.FC<Props> = ({
                   onPress={() => setPreviewIndex(null)}
                 >
                   <Ionicons name="close" size={30} color="white" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    position: "absolute",
+                    top: 48,
+                    left: 20,
+                    zIndex: 10,
+                  }}
+                  onPress={() => {
+                    const file = medias[previewIndex!]?.content?.file;
+                    if (file) handleDownload(file);
+                  }}
+                  disabled={
+                    downloadingId === medias[previewIndex!]?.content?.file?.fileKey
+                  }
+                >
+                  {downloadingId === medias[previewIndex!]?.content?.file?.fileKey ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Ionicons name="download-outline" size={28} color="white" />
+                  )}
                 </TouchableOpacity>
 
                 {previewIndex > 0 && (

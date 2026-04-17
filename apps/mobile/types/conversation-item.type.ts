@@ -16,7 +16,7 @@ export interface ConversationItemType {
     content: {
       text: string;
       icon: string;
-      file: File;
+      files: File[];
     };
     recalled: boolean;
   };

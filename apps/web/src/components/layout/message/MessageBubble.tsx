@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import { getFileIcon } from "@/utils/file-icon.util";
 import { saveAs } from "file-saver";
 import { useState } from "react";
+import { truncateFileName } from "@/utils/render-file";
 
 interface Props {
   message: MessagesType;
@@ -182,7 +183,7 @@ export const MessageBubble = ({
             <div>{getFileIcon(files[0].fileName)}</div>
 
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{files[0].fileName}</p>
+              <p className="text-sm font-medium truncate">{truncateFileName(files[0].fileName, 40)}</p>
               <p className="text-xs text-gray-500">
                 {(files[0].fileSize / 1024).toFixed(1)} KB
               </p>

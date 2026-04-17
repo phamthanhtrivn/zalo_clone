@@ -98,7 +98,7 @@ const ConversationListItem = ({
     } else if (content.icon) {
       icon = <LuSticker />;
       text = "Sticker";
-    } else if (content.files) {
+    } else if (Array.isArray(content.files) && content.files.length > 0) {
       switch (content.files[content.files.length - 1].type) {
         case "IMAGE":
           icon = <CiImageOn />;

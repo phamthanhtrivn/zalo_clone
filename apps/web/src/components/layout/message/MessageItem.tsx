@@ -66,7 +66,6 @@ export const MessageItem = ({
     return () => window.removeEventListener("click", handleClickOutside);
   }, []);
 
-  // 🔥 DOWNLOAD ALL FILES
   const handleDownloadAll = async () => {
     try {
       for (const file of files) {

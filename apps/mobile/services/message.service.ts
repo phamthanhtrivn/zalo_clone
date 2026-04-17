@@ -114,37 +114,53 @@ export const messageService = {
     sendMessage: async (
         conversationId: string,
         senderId: string,
+        repliedId?: string,
         content?: { text?: string; icon?: string },
-        file?: any | null,
-        repliedId?: string | null,
+        files?: File[] | null,
     ) => {
-        if (file) {
+        if (files && files.length > 0) {
             const formData = new FormData();
+
             formData.append("conversationId", conversationId);
             formData.append("senderId", senderId);
-            if (content) {
-                formData.append("content", JSON.stringify(content));
-            }
+
             if (repliedId) {
                 formData.append("repliedId", repliedId);
             }
-            formData.append("files", file);
+
+            if (content) {
+                formData.append("content", JSON.stringify(content));
+            }
+
+            files.forEach((file) => {
+                formData.append("files", file);
+            });
 
             const response = await api.post(`/messages`, formData, {
                 headers: {
                     "Content-Type": "multipart/form-data",
                 },
             });
-            return response;
+            return response.data;
         }
 
         const response = await api.post(`/messages`, {
             conversationId,
             senderId,
-            content,
             repliedId,
+            content,
         });
-        return response;
+        return response.data;
+    },
+
+    // Mobile-specific: upload files using React Native FormData ({uri, name, type})
+    sendFormData: async (formData: FormData) => {
+        const response = await api.post(`/messages`, formData, {
+            headers: {
+                "Content-Type": "multipart/form-data",
+            },
+        });
+        return response.data;
     },
     deleteMessageForMe: async (
         userId: string,
