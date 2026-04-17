@@ -1,4 +1,5 @@
-import { Gender } from "../../../../packages/shared-types/src/enums/gender";
+import type { Gender } from "./enums/gender";
+
 export interface UserLogin {
   phone: string;
   password: string;

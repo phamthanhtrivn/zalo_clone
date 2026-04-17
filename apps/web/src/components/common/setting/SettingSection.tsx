@@ -6,11 +6,12 @@ type SettingSectionType = React.ComponentProps<"div"> & {
 export default function SettingSection({
   children,
   title,
+  className,
 }: SettingSectionType) {
   return (
     <div>
       <p className="pb-3">{title}</p>
-      <div className="rounded-lg bg-white">{children}</div>
+      <div className={`${className} rounded-lg bg-white`}>{children}</div>
     </div>
   );
 }

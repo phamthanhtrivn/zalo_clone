@@ -8,8 +8,6 @@ interface ProtectedRouteProps {
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { accessToken } = useAppSelector((state) => state.auth);
 
-  console.log(accessToken);
-
   if (!accessToken) {
     return <Navigate to="/login" replace />;
   }

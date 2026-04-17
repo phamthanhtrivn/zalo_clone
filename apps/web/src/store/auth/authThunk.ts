@@ -141,6 +141,7 @@ export const changePassword = createAsyncThunk(
       const res = await authService.changePassword(payload);
       return res;
     } catch (err: any) {
+      console.log(err.response.data);
       return thunkAPI.rejectWithValue(err.response?.data);
     }
   },
@@ -163,6 +164,18 @@ export const logOutDevice = createAsyncThunk(
   async (deviceId: string, thunkApi) => {
     try {
       const res = await authService.logOutDevice(deviceId);
+      return res;
+    } catch (err: any) {
+      return thunkApi.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const logOutOther = createAsyncThunk(
+  "auth/logout-others",
+  async (_, thunkApi) => {
+    try {
+      const res = await authService.logOutDevices();
       return res;
     } catch (err: any) {
       return thunkApi.rejectWithValue(err.response?.data);

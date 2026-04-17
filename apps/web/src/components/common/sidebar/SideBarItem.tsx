@@ -3,7 +3,6 @@ import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
@@ -46,7 +45,7 @@ export default function SideBarItem({
 
           {/* Vạch trắng nhỏ bên cạnh khi Active (giống Zalo gốc) */}
           {isActive && (
-            <div className="absolute left-0 h-full w-[3px] bg-white" />
+            <div className="absolute left-0 h-full w-1 bg-white" />
           )}
         </div>
       </TooltipTrigger>

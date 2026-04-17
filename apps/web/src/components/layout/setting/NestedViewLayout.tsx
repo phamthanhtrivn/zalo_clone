@@ -31,7 +31,7 @@ export const NestedViewLayout: React.FC<NestedViewLayoutProps> = ({
       }`}
     >
       {/* HEADER chung */}
-      <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+      <div className="flex items-center gap-3 mb-6  border-b border-gray-100">
         <button
           onClick={handleBack}
           className="p-1 hover:bg-gray-100 rounded-full transition-colors hover:cursor-pointer"

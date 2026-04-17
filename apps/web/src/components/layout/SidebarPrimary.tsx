@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { MessageSquare, Contact, Settings } from "lucide-react";
+import { MessageSquare, Contact } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
@@ -49,7 +49,11 @@ export const SidebarPrimary = () => {
                 onClick={() => setOpen(true)}
                 className="w-12 h-12 border border-white/10 hover:opacity-90 transition-opacity"
               >
-                <AvatarImage className="object-cover" src={user?.profile?.avatarUrl} alt="User" />
+                <AvatarImage
+                  className="object-cover"
+                  src={user?.profile?.avatarUrl}
+                  alt="User"
+                />
                 <AvatarFallback>FT</AvatarFallback>
               </Avatar>
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#005AE0] rounded-full"></div>

@@ -56,4 +56,8 @@ export const authService = {
     const res = await apiClient.post("/api/auth/logout-device", { deviceId });
     return res.data.data;
   },
+  logOutDevices: async () => {
+    const res = await apiClient.post("/api/auth/logout-others");
+    return res.data.data;
+  },
 };
