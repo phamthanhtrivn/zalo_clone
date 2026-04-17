@@ -24,12 +24,15 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDTO } from './dto/change-password.dto';
 import type { Response } from 'express';
 import { RedisService } from 'src/common/redis/redis.service';
-
+import { SessionService } from './services/session.service';
+import { ClientContext } from 'src/common/decorator/client-info.decorator';
+import type { IClientInfo } from 'src/common/decorator/client-info.decorator';
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private redisService: RedisService,
+    private sessionService: SessionService,
   ) {}
 
   @Post('sign-up')
@@ -53,14 +56,14 @@ export class AuthController {
   @RequireTempPurpose(Purpose.SignUp)
   @UseGuards(TempVerifyGuard)
   async completeSignUp(
-    @Request() req,
+    @Request() req: any,
+    @ClientContext() client: IClientInfo,
     @Body() signUpDto: SignUpDto,
     @Headers('authorization') authHeader: string,
   ) {
     if (signUpDto.password !== signUpDto.repassword) {
       throw new BadRequestException('Mật khẩu xác nhận không khớp !');
     }
-    const device = req.headers['user-agent'] as string;
     try {
       const session = await this.authService.completeSignUp(
         req.user.phone,
@@ -68,7 +71,7 @@ export class AuthController {
         signUpDto.gender,
         signUpDto.birthDay,
         signUpDto.password,
-        device,
+        client,
       );
       await this.redisService.del(
         `tmp_token_valid:${authHeader.split(' ')[1]}`,
@@ -94,17 +97,17 @@ export class AuthController {
   async resetPassword(
     @Request() req,
     @Body() resetPasswordDto: ResetPasswordDto,
+    @ClientContext() client: IClientInfo,
     @Headers('authorization') authHeader: string,
   ) {
     if (resetPasswordDto.confirmPassword !== resetPasswordDto.newPassword) {
       throw new BadRequestException('Mật khẩu xác nhận không khớp !');
     }
-    const device = req.headers['user-agent'] as string;
 
     const session = await this.authService.resetPassword(
       req.user,
       resetPasswordDto.newPassword,
-      device,
+      client,
     );
     await this.redisService.del(`tmp_token_valid:${authHeader.split(' ')[1]}`);
 
@@ -117,17 +120,16 @@ export class AuthController {
   @UseGuards(TempVerifyGuard)
   async loginWithTemp(
     @Request() req,
+    @ClientContext() client: IClientInfo,
     @Headers('authorization') authHeader: string,
   ) {
-    const device = req.headers['user-agent'] as string;
-
     const session = this.authService.signIn(
       {
         userId: req.user.userId as string,
         phone: req.user.phone as string,
         name: req.user.name as string,
       },
-      device,
+      client,
     );
 
     await this.redisService.del(`tmp_token_valid:${authHeader.split(' ')[1]}`);
@@ -138,10 +140,12 @@ export class AuthController {
   @Post('sign-in')
   @Public()
   @UseGuards(LocalAuthGuard)
-  async logIn(@Request() req, @Res({ passthrough: true }) res: Response) {
-    const device = req.headers['user-agent'] as string;
-
-    const result = await this.authService.signIn(req.user, device);
+  async logIn(
+    @Request() req: any,
+    @ClientContext() client: IClientInfo,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.signIn(req.user, client);
 
     // Set Cookie cho Web (Mobile sẽ lờ đi cái này)
     res.cookie('refreshToken', result.refreshToken, {
@@ -206,10 +210,37 @@ export class AuthController {
     return this.authService.refresh(token);
   }
 
+  @Get('sessions')
+  getSessions(@Request() req: any) {
+    return this.sessionService.getAll(req.user?.userId);
+  }
+
   // api này chỉ để test
   @Get('profile')
-  @UseGuards(JwtAuthGuard)
   profile(@Request() req) {
     return req.user as AuthUser;
+  }
+
+  @Post('logout-others')
+  async logoutOthers(
+    @Request() req: any,
+    @ClientContext() client: IClientInfo,
+  ) {
+    return this.authService.signOutOtherDevices(
+      req.user.userId,
+      client.deviceId,
+    );
+  }
+
+  // API: Đăng xuất một máy cụ thể (truyền deviceId vào body)
+  @Post('logout-device')
+  async logoutDevice(
+    @Request() req: any,
+    @Body('deviceId') targetDeviceId: string,
+  ) {
+    return this.authService.signOutSpecificDevice(
+      req.user.userId,
+      targetDeviceId,
+    );
   }
 }

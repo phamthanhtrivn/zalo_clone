@@ -4,18 +4,19 @@ import { RedisService } from '../../../common/redis/redis.service';
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthUser } from '../types/auth.type';
-import { TokenService } from './jwt.service';
+import { TokenService } from '../../../common/jwt-token/jwt.service';
 import { SessionService } from './session.service';
 import { Purpose } from '../dto/verify-otp.dto';
 import { Gender } from 'src/common/types/enums/gender';
-
+import { IClientInfo } from 'src/common/decorator/client-info.decorator';
+import crypto from 'crypto';
+import { ChatGateway } from 'src/modules/chat/chat.gateway';
 @Injectable()
 export class AuthService {
   constructor(
@@ -23,6 +24,7 @@ export class AuthService {
     private userService: UsersService,
     private tokenService: TokenService,
     private sessionService: SessionService,
+    private chatGateway: ChatGateway,
   ) {}
 
   //tạo key để lưu otp trong redis
@@ -104,14 +106,16 @@ export class AuthService {
     }
   }
 
-  async resetPassword(user: AuthUser, password: string, device: string) {
+  async resetPassword(user: AuthUser, password: string, client: IClientInfo) {
     await this.userService.updatePassword(user.phone, password);
 
     return this.signIn(
       { userId: user.userId, phone: user.phone, name: user.name },
-      device,
+      client,
     );
   }
+
+  // async logOut
 
   async signUp(phone: string) {
     const user = await this.userService.findByPhone(phone);
@@ -134,7 +138,7 @@ export class AuthService {
     gender: Gender,
     birthday: Date,
     password: string,
-    device: string,
+    client: IClientInfo,
   ) {
     const user = await this.userService.createRegister(
       phone,
@@ -150,7 +154,7 @@ export class AuthService {
       name: user.profile?.name,
     };
 
-    const authData = await this.signIn(authUser, device);
+    const authData = await this.signIn(authUser, client);
 
     return {
       message: 'Đăng ký thành công!',
@@ -171,39 +175,43 @@ export class AuthService {
       refreshToken,
     )) as AuthUser;
 
-    console.log(payload);
-
     const session = await this.sessionService.findValidSession(
       payload.userId,
       refreshToken,
     );
 
     if (!session) {
-      throw new UnauthorizedException();
+      throw new UnauthorizedException('Phiên đăng nhập không tồn tại ');
     }
 
-    const user = await this.userService.findById(payload.userId);
     const accessToken = await this.tokenService.signAccess({
-      userId: user?.id as string,
-      phone: user?.phone,
+      userId: payload.userId,
+      phone: payload.phone,
     });
 
     return { accessToken };
   }
 
-  async signIn(user: AuthUser, device: string) {
-    await this.sessionService.removeByDevice(user.userId, device);
+  async signIn(user: AuthUser, client: IClientInfo) {
+    await this.sessionService.removeByDevice(user.userId, client.deviceId);
 
     const accessToken = await this.tokenService.signAccess(user);
     const refreshToken = await this.tokenService.signRefresh(user);
 
-    const hashToken = await bcrypt.hash(refreshToken, 10);
+    const hashToken = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
 
     await this.sessionService.create(
       user.userId,
       hashToken,
       new Date(this.tokenService.decode(refreshToken).exp * 1000),
-      device,
+      client.deviceId,
+      client.deviceName,
+      client.deviceType,
+      client.ip,
+      client.location,
     );
 
     return { accessToken, refreshToken, user };
@@ -230,7 +238,32 @@ export class AuthService {
     if (deleted) {
       return { message: 'Đăng xuất thành công !' };
     } else {
-      throw new ForbiddenException('Không có phiên đăng nhập !');
+      throw new UnauthorizedException('Không có phiên đăng nhập !');
     }
+  }
+
+  async signOutOtherDevices(userId: string, currentDeviceId: string) {
+    const count = await this.sessionService.removeAllOtherDevices(
+      userId,
+      currentDeviceId,
+    );
+    return {
+      message: `Đã đăng xuất khỏi ${count} thiết bị khác thành công.`,
+      deletedCount: count,
+    };
+  }
+
+  async signOutSpecificDevice(userId: string, targetDeviceId: string) {
+    const deleted = await this.sessionService.removeByDevice(
+      userId,
+      targetDeviceId,
+    );
+    if (!deleted) {
+      throw new NotFoundException(
+        'Không tìm thấy phiên đăng nhập của thiết bị này.',
+      );
+    }
+    this.chatGateway.forceLogoutDevice(targetDeviceId);
+    return { message: 'Đã đăng xuất thiết bị thành công.' };
   }
 }

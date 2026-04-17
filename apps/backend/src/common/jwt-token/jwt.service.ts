@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { StringValue } from 'ms';
 import { RedisService } from 'src/common/redis/redis.service';
+import { AuthUser } from '../../modules/auth/types/auth.type';
 
 @Injectable()
 export class TokenService {
@@ -33,6 +34,12 @@ export class TokenService {
   verifyRefresh(token: string): any {
     return this.jwt.verifyAsync(token, {
       secret: this.configService.get<string>('refresh_secret'),
+    });
+  }
+
+  verifyAccessToken(token: string): AuthUser {
+    return this.jwt.verify(token, {
+      secret: this.configService.get<string>('access_secret'),
     });
   }
 
