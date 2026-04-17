@@ -111,9 +111,6 @@ export class MessagesActionService {
         repliedId: repliedId ? new Types.ObjectId(repliedId) : null,
       });
 
-      console.log(message);
-
-
       await this.conversationModel.findByIdAndUpdate(conversationId, {
         lastMessageId: new Types.ObjectId(message._id),
         lastMessageAt: (message as any).createdAt,
@@ -756,7 +753,7 @@ export class MessagesActionService {
           })
           .session(session);
 
-        if (pinnedCount >= 3) {
+        if (pinnedCount > 3) {
           throw new BadRequestException('Maximum pinned messages reached');
         }
       }
