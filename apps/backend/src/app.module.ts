@@ -14,6 +14,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/passport/jwt-auth.guard';
 import { ChatModule } from './modules/chat/chat.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ChatModule } from './modules/chat/chat.module';
     ConversationSettingsModule,
     AuthModule,
     ChatModule,
+    EventEmitterModule.forRoot()
   ],
   providers: [
     {
@@ -45,4 +47,4 @@ import { ChatModule } from './modules/chat/chat.module';
   ],
 })
 
-export class AppModule {}
+export class AppModule { }

@@ -392,60 +392,83 @@ export class MessagesQueryService {
       toDate,
     } = getMediasFileTypeDto;
 
-    // const member = await this.memberModel.findOne({
-    //   userId: new Types.ObjectId(userId),
-    //   conversationId: new Types.ObjectId(conversationId),
-    //   leftAt: null,
-    // });
+    const member = await this.memberModel.findOne({
+      userId: new Types.ObjectId(userId),
+      conversationId: new Types.ObjectId(conversationId),
+      leftAt: null,
+    });
 
-    // if (!member) {
-    //   throw new NotFoundException(
-    //     'User is not a participant in this conversation',
-    //   );
-    // }
+    if (!member) {
+      throw new NotFoundException(
+        'User is not a participant in this conversation',
+      );
+    }
 
-    // const query: any = {
-    //   conversationId: new Types.ObjectId(conversationId),
-    //   deletedFor: { $ne: new Types.ObjectId(userId) },
-    // };
+    const query: any = {
+      conversationId: new Types.ObjectId(conversationId),
+      deletedFor: { $ne: new Types.ObjectId(userId) },
+    };
 
-    // if (type === FileType.IMAGE || type === FileType.VIDEO) {
-    //   query['content.file.type'] = { $in: ['IMAGE', 'VIDEO'] };
-    // } else if (type === FileType.FILE) {
-    //   query['content.file.type'] = 'FILE';
-    // } else if (type === 'LINK') {
-    //   query['content.text'] = { $regex: /(http|https):\/\// };
-    // }
+    if (type === FileType.IMAGE || type === FileType.VIDEO) {
+      query['content.files.type'] = { $in: ['IMAGE', 'VIDEO'] };
+    } else if (type === FileType.FILE) {
+      query['content.files.type'] = 'FILE';
+    } else if (type === 'LINK') {
+      query['content.text'] = { $regex: /(http|https):\/\// };
+    }
 
-    // if (senderId) query.senderId = new Types.ObjectId(senderId);
+    if (senderId) query.senderId = new Types.ObjectId(senderId);
 
-    // if (fromDate || toDate) {
-    //   query.createdAt = {};
-    //   if (fromDate) query.createdAt.$gte = new Date(fromDate);
-    //   if (toDate) query.createdAt.$lte = new Date(toDate);
-    // }
+    if (fromDate || toDate) {
+      query.createdAt = {};
+      if (fromDate) query.createdAt.$gte = new Date(fromDate);
+      if (toDate) query.createdAt.$lte = new Date(toDate);
+    }
 
-    // if (cursor) query._id = { $lt: new Types.ObjectId(cursor) };
+    if (cursor) query._id = { $lt: new Types.ObjectId(cursor) };
 
-    // const messages = await this.messageModel
-    //   .find(query)
-    //   .sort({ _id: -1 })
-    //   .limit(Number(limit))
-    //   .lean();
+    const messages = await this.messageModel
+      .find(query)
+      .sort({ _id: -1 })
+      .limit(Number(limit) + 1)
+      .lean();
 
-    // const signedMessages = messages.map((message) => {
-    //   if (message.content?.file) {
-    //     (message.content as any).file.fileKey = this.storageService.signFileUrl(
-    //       (message.content as any).file.fileKey,
-    //     );
-    //   }
-    //   return message;
-    // });
+    const results: any[] = [];
 
-    // return {
-    //   messages: signedMessages,
-    //   nextCursor:
-    //     messages.length > 0 ? messages[messages.length - 1]._id : null,
-    // };
+    messages.forEach((msg: any) => {
+      if (type === 'LINK') {
+        const matches = msg.content?.text?.match(/https?:\/\/[^\s]+/g) || [];
+        matches.forEach((url: string) => {
+          results.push({
+            _id: msg._id,
+            createdAt: msg.createdAt,
+            content: { text: url },
+          });
+        });
+      } else {
+        const files = (msg.content?.files || []).filter((f: any) => {
+          if (type === FileType.IMAGE || type === FileType.VIDEO) {
+            return f.type === 'IMAGE' || f.type === 'VIDEO';
+          }
+          return f.type === type;
+        });
+
+        files.forEach((file: any) => {
+          results.push({
+            _id: msg._id,
+            createdAt: msg.createdAt,
+            content: { file: this.transformService.signFile(file) },
+          });
+        });
+      }
+    });
+
+    const paginatedResults = results.slice(0, Number(limit));
+    const nextCursor = results.length > Number(limit) ? results[results.length - 1]._id : null;
+
+    return {
+      messages: paginatedResults,
+      nextCursor,
+    };
   }
 }

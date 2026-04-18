@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -7,7 +8,11 @@ import {
   MessageBody,
   ConnectedSocket,
 } from '@nestjs/websockets';
+import { createAdapter } from '@socket.io/redis-adapter';
 import { Server, Socket } from 'socket.io';
+import { RedisService } from 'src/common/redis/redis.service';
+import { REDIS_CHANNEL_SOCKET_EVENTS } from 'src/common/constants/redis.constant';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @WebSocketGateway({
   cors: {
@@ -17,6 +22,11 @@ import { Server, Socket } from 'socket.io';
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
+
+  constructor(
+    private readonly redisService: RedisService,
+    private readonly eventEmitter: EventEmitter2
+  ) { }
 
   handleConnection(socket: Socket) {
     const userId = socket.handshake.auth?.userId;
@@ -57,5 +67,40 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     socket.leave(coversationId);
     console.log(`User ${socket.data.userId} left room: ${coversationId}`);
+  }
+
+  async afterInit() {
+    const pubClient = this.redisService.getClient();
+    const subClient = this.redisService.createDuplicateClient();
+
+    this.server.adapter(createAdapter(pubClient, subClient));
+
+    // Subscribe to custom redis events for multi-instance support
+    this.redisService.subscribe(REDIS_CHANNEL_SOCKET_EVENTS, (payload: any) => {
+      const { event, room, data } = payload;
+
+      if (event === 'internal_force_read_receipt') {
+        const { senderId, conversationId } = data;
+        const roomSockets = this.server.sockets.adapter.rooms.get(room);
+        if (roomSockets) {
+          for (const socketId of roomSockets) {
+            const socket: any = this.server.sockets.sockets.get(socketId);
+            if (socket?.data?.userId !== senderId) {
+              this.eventEmitter.emit('message.force_read_receipt', {
+                userId: socket.data.userId,
+                conversationId,
+              });
+            }
+          }
+        }
+        return;
+      }
+
+      if (event && room) {
+        this.server.to(room).emit(event, data);
+      }
+    });
+
+    console.log('Redis adapter and custom pub/sub listener connected'); // for chat gateway to serve multiple instances (server when deploy)
   }
 }

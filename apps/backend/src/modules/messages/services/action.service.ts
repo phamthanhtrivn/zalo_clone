@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Message } from '../schemas/message.schema';
@@ -11,7 +12,8 @@ import { Conversation } from '../../conversations/schemas/conversation.schema';
 import { MessagesTransformService } from './transform.service';
 import { StorageService } from 'src/common/storage/storage.service';
 import { ConversationsService } from '../../conversations/conversations.service';
-import { ChatGateway } from '../../chat/chat.gateway';
+import { RedisService } from 'src/common/redis/redis.service';
+import { REDIS_CHANNEL_SOCKET_EVENTS } from 'src/common/constants/redis.constant';
 import { SendMessageDto } from '../dto/send-message.dto';
 import { PinnedMessageDto } from '../dto/pinned-message.dto';
 import { RecalledMessageDto } from '../dto/recalled-message.dto';
@@ -35,7 +37,7 @@ export class MessagesActionService {
     private readonly transformService: MessagesTransformService,
     private readonly storageService: StorageService,
     private readonly conversationService: ConversationsService,
-    private readonly chatGateway: ChatGateway,
+    private readonly redisService: RedisService,
   ) { }
 
   async sendMessage(
@@ -135,32 +137,24 @@ export class MessagesActionService {
         const transformedMessage =
           this.transformService.transformMessage(populatedMessage);
 
-        console.log(transformedMessage);
 
+        await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+          room: conversationIdStr,
+          event: 'new_message',
+          data: transformedMessage,
+        });
 
-        this.chatGateway.server
-          .to(conversationIdStr)
-          .emit('new_message', transformedMessage);
-
-        this.transformService.emitMessageForMedias(
+        await this.transformService.emitMessageForMedias(
           conversationIdStr,
           transformedMessage,
         );
 
-        const room =
-          this.chatGateway.server.sockets.adapter.rooms.get(conversationIdStr);
-        if (room) {
-          for (const socketId of room) {
-            const socket: any =
-              this.chatGateway.server.sockets.sockets.get(socketId);
-            if (socket?.data?.userId !== senderId) {
-              await this.readReceiptMessage({
-                userId: socket.data.userId,
-                conversationId,
-              });
-            }
-          }
-        }
+        // For multi-instance, we send an internal event to trigger read receipts on all instances
+        await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+          room: conversationIdStr,
+          event: 'internal_force_read_receipt',
+          data: { senderId, conversationId: conversationId.toString() },
+        });
       }
 
       const members = await this.memberModel.find({
@@ -177,9 +171,11 @@ export class MessagesActionService {
           (c) => c.conversationId.toString() === conversationId,
         );
         if (conv) {
-          this.chatGateway.server
-            .to(m.userId.toString())
-            .emit('new_message_sidebar', conv);
+          await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+            room: m.userId.toString(),
+            event: 'new_message_sidebar',
+            data: conv,
+          });
         }
       }
 
@@ -245,9 +241,11 @@ export class MessagesActionService {
       const conversationIdStr = conversationId.toString();
       const messageIdStr = messageId.toString();
 
-      this.chatGateway.server
-        .to(conversationIdStr)
-        .emit('message_recalled', { messageId: messageIdStr });
+      this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+        room: conversationIdStr,
+        event: 'message_recalled',
+        data: { messageId: messageIdStr },
+      });
 
       const members = await this.memberModel.find({
         conversationId: new Types.ObjectId(conversationIdStr),
@@ -255,12 +253,14 @@ export class MessagesActionService {
       });
 
       members.forEach((m) => {
-        this.chatGateway.server
-          .to(m.userId.toString())
-          .emit('message_recalled_sidebar', {
+        this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+          room: m.userId.toString(),
+          event: 'message_recalled_sidebar',
+          data: {
             conversationId: conversationIdStr,
             messageId: messageIdStr,
-          });
+          },
+        });
       });
     }
 
@@ -368,26 +368,18 @@ export class MessagesActionService {
             this.transformService.transformMessage(populatedMessage);
           const conversationIdStr = convId.toString();
 
-          this.chatGateway.server
-            .to(conversationIdStr)
-            .emit('new_message', transformed);
+          this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+            room: conversationIdStr,
+            event: 'new_message',
+            data: transformed,
+          });
 
-          const room =
-            this.chatGateway.server.sockets.adapter.rooms.get(
-              conversationIdStr,
-            );
-          if (room) {
-            for (const socketId of room) {
-              const socket: any =
-                this.chatGateway.server.sockets.sockets.get(socketId);
-              if (socket?.data?.userId !== dto.userId) {
-                await this.readReceiptMessage({
-                  userId: socket.data.userId,
-                  conversationId: convId,
-                });
-              }
-            }
-          }
+          // For multi-instance, we send an internal event to trigger read receipts on all instances
+          await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+            room: conversationIdStr,
+            event: 'internal_force_read_receipt',
+            data: { senderId: dto.userId, conversationId: convId },
+          });
           results.push(newMessage);
         }
 
@@ -405,9 +397,11 @@ export class MessagesActionService {
             (c) => c.conversationId.toString() === convId,
           );
           if (conv) {
-            this.chatGateway.server
-              .to(m.userId.toString())
-              .emit('new_message_sidebar', conv);
+            this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+              room: m.userId.toString(),
+              event: 'new_message_sidebar',
+              data: conv,
+            });
           }
         }
       }),
@@ -530,9 +524,10 @@ export class MessagesActionService {
       userId: this.transformService.signUser(r.userId),
     }));
 
-    this.chatGateway.server.to(conversationId).emit('message_reacted', {
-      messageId,
-      reactions,
+    this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+      room: conversationId,
+      event: 'message_reacted',
+      data: { messageId, reactions },
     });
 
     return updatedMessage;
@@ -579,12 +574,14 @@ export class MessagesActionService {
       .populate('reactions.userId', 'profile.name profile.avatarUrl')
       .lean();
 
-    this.chatGateway.server
-      .to(conversationId.toString())
-      .emit('message_reacted', {
+    this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+      room: conversationId.toString(),
+      event: 'message_reacted',
+      data: {
         messageId: messageId.toString(),
         reactions: updatedMessage?.reactions,
-      });
+      },
+    });
 
     return updatedMessage;
   }
@@ -671,9 +668,13 @@ export class MessagesActionService {
       return msg;
     });
 
-    this.chatGateway.server.to(conversationId.toString()).emit('read_receipt', {
-      conversationId,
-      messages: transformedMessages,
+    this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+      room: conversationId.toString(),
+      event: 'read_receipt',
+      data: {
+        conversationId,
+        messages: transformedMessages,
+      },
     });
 
     await this.memberModel.updateOne(
@@ -776,13 +777,15 @@ export class MessagesActionService {
 
       const transformedMessages = messages.map((m) => this.transformService.transformMessage(m));
 
-      this.chatGateway.server
-        .to(conversationId.toString())
-        .emit('message_pinned', {
+      this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+        room: conversationId.toString(),
+        event: 'message_pinned',
+        data: {
           messageId: messageId.toString(),
           pinned: message.pinned,
           pinnedMessages: transformedMessages,
-        });
+        },
+      });
 
       return message;
     } catch (error) {
@@ -790,5 +793,11 @@ export class MessagesActionService {
       session.endSession();
       throw error;
     }
+  }
+
+  @OnEvent('message.force_read_receipt')
+  async handleForceReadReceipt(payload: any) {
+    const { userId, conversationId } = payload;
+    await this.readReceiptMessage({ userId, conversationId });
   }
 }

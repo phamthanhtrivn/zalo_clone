@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { StorageService } from '../../../common/storage/storage.service';
-import { ChatGateway } from '../../chat/chat.gateway';
+import { RedisService } from 'src/common/redis/redis.service';
+import { REDIS_CHANNEL_SOCKET_EVENTS } from 'src/common/constants/redis.constant';
 
 @Injectable()
 export class MessagesTransformService {
   constructor(
     private readonly storageService: StorageService,
-    private readonly chatGateway: ChatGateway,
+    private readonly redisService: RedisService,
   ) { }
 
   signAvatar = (avatar?: string) =>
@@ -60,51 +61,64 @@ export class MessagesTransformService {
     };
   }
 
-  emitMessageForMedias(
-    conversationIdStr: string,
-    transformedMessage: any,
-  ) {
-    const files = transformedMessage.content?.files;
+  getMediaEvents(transformedMessage: any) {
+    const files = transformedMessage.content?.files || [];
     const text = transformedMessage.content?.text;
 
-    const mediasFile = files.filter(file => file?.type === 'IMAGE' || file?.type === 'VIDEO')
+    const events: any[] = [];
 
-    const documentsFile = files.filter(file => file?.type === 'FILE')
+    const mediasFile = files.filter(
+      (file) => file?.type === 'IMAGE' || file?.type === 'VIDEO',
+    );
 
-    if (mediasFile.length > 0) {
-      mediasFile.forEach(file => (
-        this.chatGateway.server.to(conversationIdStr).emit('new_media_preview', {
-          type: 'IMAGE_VIDEO',
-          data: {
-            _id: transformedMessage._id,
-            content: { file },
-            createdAt: transformedMessage.createdAt,
-          },
-        })
-      ))
-    }
+    const documentsFile = files.filter(
+      (file) => file?.type === 'FILE',
+    );
 
-    if (documentsFile.length > 0) {
-      documentsFile.forEach(file => (
-        this.chatGateway.server.to(conversationIdStr).emit('new_media_preview', {
-          type: 'FILE',
-          data: {
-            _id: transformedMessage._id,
-            content: { file },
-            createdAt: transformedMessage.createdAt,
-          },
-        })
-      ))
-    }
+    mediasFile.forEach((file) => {
+      events.push({
+        type: 'IMAGE_VIDEO',
+        data: {
+          _id: transformedMessage._id,
+          content: { file },
+          createdAt: transformedMessage.createdAt,
+        },
+      });
+    });
+
+    documentsFile.forEach((file) => {
+      events.push({
+        type: 'FILE',
+        data: {
+          _id: transformedMessage._id,
+          content: { file },
+          createdAt: transformedMessage.createdAt,
+        },
+      });
+    });
 
     if (text && /(http|https):\/\/[^\s]+/.test(text)) {
-      this.chatGateway.server.to(conversationIdStr).emit('new_media_preview', {
+      events.push({
         type: 'LINK',
         data: {
           _id: transformedMessage._id,
           content: { text },
           createdAt: transformedMessage.createdAt,
         },
+      });
+    }
+
+    return events;
+  }
+
+  async emitMessageForMedias(conversationId: string, transformedMessage: any) {
+    const events = this.getMediaEvents(transformedMessage);
+
+    for (const event of events) {
+      await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+        room: `media_${conversationId}_${event.type}`,
+        event: 'new_media',
+        data: { type: event.type, data: event.data },
       });
     }
   }

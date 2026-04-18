@@ -168,28 +168,39 @@ const ConversationInfoPanel = ({ isOpen, conversation, onClose }: ConversationIn
   }, [preview.isOpen, medias.length]);
 
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !isOpen || !currentConversation?.conversationId) return;
 
-    const handleMediasUpdated = (data: { type: string; data: any }) => {
-      if (data.type === "IMAGE_VIDEO") {
-        setMedias((prev) => [data.data, ...prev].slice(0, 6));
+    const conversationId = currentConversation.conversationId;
+    const mediaRooms = [
+      `media_${conversationId}_IMAGE_VIDEO`,
+      `media_${conversationId}_FILE`,
+      `media_${conversationId}_LINK`,
+    ];
+
+    // Join specialized media rooms
+    mediaRooms.forEach((room) => socket.emit("join_room", room));
+
+    const handleNewMedia = (payload: { type: string; data: any }) => {
+      const { type, data } = payload;
+      if (type === "IMAGE_VIDEO") {
+        setMedias((prev) => [data, ...prev].slice(0, 6));
       }
-
-      if (data.type === "FILE") {
-        setFiles((prev) => [data.data, ...prev].slice(0, 3));
+      if (type === "FILE") {
+        setFiles((prev) => [data, ...prev].slice(0, 3));
       }
-
-      if (data.type === "LINK") {
-        setLinks((prev) => [data.data, ...prev].slice(0, 3));
+      if (type === "LINK") {
+        setLinks((prev) => [data, ...prev].slice(0, 3));
       }
     };
 
-    socket.on("new_media_preview", handleMediasUpdated);
+    socket.on("new_media", handleNewMedia);
 
     return () => {
-      socket.off("new_media_preview", handleMediasUpdated);
+      // Leave rooms and cleanup listener
+      mediaRooms.forEach((room) => socket.emit("leave_room", room));
+      socket.off("new_media", handleNewMedia);
     };
-  }, [socket, conversation?.conversationId]);
+  }, [socket, isOpen, currentConversation?.conversationId]);
 
   if (!isOpen) return <div className="w-0 overflow-hidden" />;
 

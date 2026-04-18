@@ -130,26 +130,40 @@ const ConversationInfoSheet: React.FC<Props> = ({
   }, [visible, conversation?.conversationId]);
 
   useEffect(() => {
-    const handleMediasUpdated = (data: { type: string; data: any }) => {
-      if (data.type === "IMAGE_VIDEO") {
-        setMedias((prev) => [data.data, ...prev].slice(0, 6));
+    if (!socket || !visible || !conversation?.conversationId) return;
+
+    const conversationId = conversation.conversationId;
+    const mediaRooms = [
+      `media_${conversationId}_IMAGE_VIDEO`,
+      `media_${conversationId}_FILE`,
+      `media_${conversationId}_LINK`,
+    ];
+
+    mediaRooms.forEach((room) => socket.emit("join_room", room));
+
+    const handleNewMedia = (payload: { type: string; data: any }) => {
+      const { type, data } = payload;
+      if (type === "IMAGE_VIDEO") {
+        setMedias((prev) => [data, ...prev].slice(0, 6));
       }
 
-      if (data.type === "FILE") {
-        setFiles((prev) => [data.data, ...prev].slice(0, 6));
+      if (type === "FILE") {
+        setFiles((prev) => [data, ...prev].slice(0, 6));
       }
 
-      if (data.type === "LINK") {
-        setLinks((prev) => [data.data, ...prev].slice(0, 6));
+      if (type === "LINK") {
+        setLinks((prev) => [data, ...prev].slice(0, 6));
       }
     };
 
-    socket?.on("new_media_preview", handleMediasUpdated);
+    socket.on("new_media", handleNewMedia);
 
     return () => {
-      socket?.off("new_media_preview", handleMediasUpdated);
+      // Leave rooms and cleanup listener
+      mediaRooms.forEach((room) => socket.emit("leave_room", room));
+      socket.off("new_media", handleNewMedia);
     };
-  }, [socket, conversation?.conversationId]);
+  }, [socket, visible, conversation?.conversationId]);
 
   const handlePin = () => {
     const newPinned = !conversation.pinned;
