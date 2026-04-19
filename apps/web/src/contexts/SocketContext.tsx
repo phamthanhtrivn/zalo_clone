@@ -1,5 +1,6 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -13,7 +14,9 @@ import {
   updateConversation,
   updateConversationSetting,
   updateRecallMessageInConversation,
+  updateUnreadStateInMessages,
 } from "@/store/slices/conversationSlice";
+import { updateReadReceipt } from "@/store/slices/messageSlice";
 
 interface SocketContextType {
   socket: Socket | null;
@@ -36,6 +39,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
   const socketRef = useRef<Socket | null>(null);
+
 
 
 
@@ -66,6 +70,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     const handleNewMessageSidebar = (data: any) => {
+      console.log("SOCKET UPDATE", data);
       dispatch(updateConversation(data));
     };
 
@@ -102,6 +107,25 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       dispatch(removeConversation(data.conversationId));
 
     };
+    const handleUnreadUpdate = (data: {
+      conversationId: string;
+      userId: string;
+      lastReadMessageId: string | null;
+    }) => {
+      dispatch(updateUnreadStateInMessages(data));
+    };
+    const handleMessageRead = (data: {
+      conversationId: string;
+      messageId: string;
+      userId: string;
+      type: "read" | "unread";
+    }) => {
+      dispatch(updateReadReceipt(data));
+    };
+
+    socketInstance.on("message_read", handleMessageRead);
+
+    socketInstance.on("messages_unread_updated", handleUnreadUpdate);
 
     socketInstance.on("connect", onConnect);
     socketInstance.on("disconnect", onDisconnect);

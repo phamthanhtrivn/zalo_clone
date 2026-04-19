@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -51,6 +53,7 @@ export class MessagesService {
     @InjectModel(ConversationSetting.name)
     private readonly conversationSettingModel: Model<ConversationSetting>,
     private readonly conversationService: ConversationsService,
+    @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
   ) { }
 
@@ -1775,4 +1778,69 @@ export class MessagesService {
   //   });
   //   console.log('Expired messages:', ids);
   // }
+
+  async markAsUnread(userId: string, conversationId: string) {
+    const objectUserId = new Types.ObjectId(userId);
+    const objectConversationId = new Types.ObjectId(conversationId);
+
+    const member = await this.memberModel.findOne({
+      userId: objectUserId,
+      conversationId: objectConversationId,
+      leftAt: null,
+    });
+
+    if (!member) {
+      throw new NotFoundException('User is not a participant in this conversation');
+    }
+
+    const conversation = await this.conversationModel.findById(objectConversationId, { lastMessageId: 1 });
+
+    if (!conversation?.lastMessageId) {
+      return { message: 'No messages' };
+    }
+
+    // Set lastReadMessageId về message trước lastMessage
+    // để lastMessage trở thành unread
+    // const lastMessage = await this.messageModel.findById(conversation.lastMessageId);
+    // if (!lastMessage) return { message: 'No messages' };
+
+    // Tìm message ngay trước lastMessage
+    // const prevMessage = await this.messageModel.findOne({
+    //   conversationId: objectConversationId,
+    //   _id: { $lt: lastMessage._id },
+    //   senderId: { $ne: objectUserId }, // chỉ unread tin của người khác
+    // }).sort({ _id: -1 });
+    const messages = await this.messageModel
+      .find({
+        conversationId,
+        senderId: { $ne: userId },
+      })
+      .sort({ _id: -1 })
+      .limit(2);
+
+    const prevMessage = messages[1] || null;
+
+    await this.memberModel.updateOne(
+      { _id: member._id },
+      { $set: { lastReadMessageId: prevMessage?._id ?? null } },
+    );
+    await this.messageModel.updateMany(
+      {
+        conversationId: objectConversationId,
+        _id: { $gt: prevMessage?._id ?? new Types.ObjectId("000000000000000000000000") }
+      },
+      {
+        $pull: {
+          readReceipts: { userId: objectUserId }
+        }
+      }
+    );
+    this.chatGateway.server.to(conversationId).emit("messages_unread_updated", {
+      conversationId,
+      userId,
+      lastReadMessageId: prevMessage?._id ?? null,
+    });
+
+    return { success: true };
+  }
 }

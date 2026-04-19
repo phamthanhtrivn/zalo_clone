@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { MessagesController } from './messages.controller';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -11,7 +11,7 @@ import {
   ConversationSchema,
 } from '../conversations/schemas/conversation.schema';
 import { StorageModule } from 'src/common/storage/storage.module';
-import { ChatGateway } from './messages.gateway';
+import { ChatGateway } from '../chat/chat.gateway';
 import { ChatModule } from '../chat/chat.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { ConversationSettingSchema } from '../conversation-settings/schemas/conversation-setting.schema';
@@ -20,6 +20,7 @@ import { ConversationSetting } from '../conversation-settings/schemas/conversati
 
 @Module({
   imports: [
+    forwardRef(() => ChatModule),
     MongooseModule.forFeature([
       { name: Message.name, schema: MessageSchema },
       { name: Member.name, schema: MemberSchema },
@@ -28,10 +29,10 @@ import { ConversationSetting } from '../conversation-settings/schemas/conversati
     ]),
     MembersModule,
     StorageModule,
-    ChatModule,
     ConversationsModule,
   ],
-  providers: [MessagesService, ChatGateway],
+  providers: [MessagesService],
   controllers: [MessagesController],
+  exports: [MessagesService],
 })
 export class MessagesModule { }

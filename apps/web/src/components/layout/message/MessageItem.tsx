@@ -13,6 +13,7 @@ import { RiUnpinLine } from "react-icons/ri";
 import { FaRegTrashAlt } from "react-icons/fa";
 import ViewDetailMessageModal from "./ViewDetailMessageModal";
 import { FaListCheck } from "react-icons/fa6";
+import { useAppSelector } from "@/store";
 
 interface Props {
   message: MessagesType;
@@ -57,6 +58,12 @@ export const MessageItem = ({
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
+
+  const liveMessage = useAppSelector((state) =>
+    state.message.messagesByConversation[message.conversationId]?.find(
+      (m) => m._id === message._id
+    )
+  );
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
     window.addEventListener("click", handleClickOutside);
@@ -231,7 +238,7 @@ export const MessageItem = ({
 
       {showDetailModal && (
         <ViewDetailMessageModal
-          selectedMessage={message}
+          selectedMessage={liveMessage || message}
           setShowDetailModal={() => setShowDetailModal(false)}
         />
       )}

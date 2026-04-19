@@ -7,11 +7,11 @@ import {
 
 import authReducer from "./auth/authSlice";
 import conversationReducer from "./slices/conversationSlice";
-
+import messageReducer from "./slices/messageSlice";
 export const store = configureStore({
   reducer: {
     auth: authReducer,
-
+    message: messageReducer,
     conversation: conversationReducer,
   },
 });

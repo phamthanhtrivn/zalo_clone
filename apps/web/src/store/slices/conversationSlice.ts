@@ -27,7 +27,8 @@ const conversationSlice = createSlice({
       if (index !== -1) {
         const updated = {
           ...state.conversations[index],
-          ...action.payload
+          ...action.payload,
+
         };
         state.conversations.splice(index, 1);
         state.conversations.unshift(updated);
@@ -115,6 +116,35 @@ const conversationSlice = createSlice({
       if (c) {
         c.unreadCount = action.payload.unreadCount;
       }
+    },
+    updateUnreadStateInMessages(
+      state,
+      action: PayloadAction<{
+        conversationId: string;
+        userId: string;
+        lastReadMessageId: string | null;
+      }>
+    ) {
+      const { conversationId, userId, lastReadMessageId } = action.payload;
+
+      const conversation = state.conversations.find(
+        (c) => c.conversationId === conversationId
+      );
+
+      if (!conversation || !conversation.messages) return;
+
+      conversation.messages = conversation.messages.map((msg) => {
+        if (!lastReadMessageId || msg._id > lastReadMessageId) {
+          return {
+            ...msg,
+            readReceipts: msg.readReceipts?.filter(
+              (r) => r.userId !== userId
+            ),
+          };
+        }
+        return msg;
+      });
+
     }
   },
 });
@@ -127,7 +157,8 @@ export const {
   removeConversation,
   updateRecallMessageInConversation,
   removeExpiredMessages,
-  setUnreadCount
+  setUnreadCount,
+  updateUnreadStateInMessages
 } = conversationSlice.actions;
 
 export default conversationSlice.reducer;

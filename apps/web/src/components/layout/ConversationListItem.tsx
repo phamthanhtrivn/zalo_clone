@@ -1,5 +1,5 @@
 import type { ConversationCategory, ConversationItemType } from "@/types/conversation-item.type";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { cn } from "@/lib/utils";
 import { formatMessageTime } from "@/utils/format-message-time..util";
@@ -15,9 +15,10 @@ import {
   deleteConversation, expireMessage
 } from "@/services/conversation-settings.service";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { updateConversationSetting, setCategoryLocal, removeConversation } from "@/store/slices/conversationSlice";
+import { updateConversationSetting, setCategoryLocal, removeConversation, setUnreadCount } from "@/store/slices/conversationSlice";
 import { PiPushPinFill } from "react-icons/pi";
 import { IoCheckmark } from "react-icons/io5";
+import { useSocket } from "@/contexts/SocketContext";
 
 type Props = {
   conversation: ConversationItemType;
@@ -39,9 +40,45 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
   const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
   const [hoverMenu, setHoverMenu] = useState<string | null>(null);
-
+  const { socket } = useSocket();
   const closeSubMenu = () => setHoverMenu(null);
+  const navigate = useNavigate();
+  const handleMarkUnread = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOpenMenu(null);
+    if (!user?.userId || !socket) return; // ✅ Kiểm tra socket
+    const prevUnreadCount = conversation.unreadCount;
+    const newUnreadCount = prevUnreadCount > 0 ? 0 : 1;
 
+    // ✅ Optimistic update
+    dispatch(setUnreadCount({
+      conversationId: conversation.conversationId,
+      unreadCount: newUnreadCount
+    }));
+    if (prevUnreadCount > 0) {
+      socket.emit('mark_as_read', {
+        userId: user.userId,
+        conversationId: conversation.conversationId,
+      }, (response) => {
+        if (!response?.success) {
+          console.error('Failed to mark as read');
+          // Rollback state if needed
+        }
+      });
+
+
+    } else {
+      socket.emit('mark_as_unread', {
+        userId: user.userId,
+        conversationId: conversation.conversationId
+      }, (response) => {
+        if (!response?.success) {
+          console.error('Failed to mark as unread');
+        }
+      });
+    }
+  };
   const { refs, floatingStyles } = useFloating({
     placement: "bottom-end",
     middleware: [offset(8), flip(), shift({ padding: 8 })],
@@ -69,7 +106,9 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
 
   const isDirect = conversation.type === "DIRECT";
 
-  const handlePinConversation = async () => {
+  const handlePinConversation = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setOpenMenu(null);
     const newPinned = !conversation.pinned;
 
@@ -91,7 +130,9 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
     }
   };
 
-  const handleHideConversation = async () => {
+  const handleHideConversation = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setOpenMenu(null);
     const newHidden = !conversation.hidden;
 
@@ -113,7 +154,9 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
     }
   };
 
-  const handleMute = async (duration: number) => {
+  const handleMute = async (duration: number, e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     setOpenMenu(null);
     const newMuted = duration !== 0;
     const prevMuted = conversation.muted;
@@ -136,7 +179,9 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
     }
   };
 
-  const handleCategory = async (category: ConversationCategory) => {
+  const handleCategory = async (category: ConversationCategory, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setOpenMenu(null);
     const newCategory = conversation.category === category ? null : category;
 
@@ -156,7 +201,9 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
     }
   };
 
-  const handleDeleteConversation = async () => {
+  const handleDeleteConversation = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setOpenMenu(null);
     try {
       await deleteConversation(user?.userId, conversation.conversationId);
@@ -166,7 +213,9 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
     }
   };
 
-  const handleExpire = async (days: number) => {
+  const handleExpire = async (days: number, e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     setOpenMenu(null);
     const duration = days === 0 ? 0 : days * 24 * 60 * 60 * 1000;
     const prevDuration = conversation.expireDuration;
@@ -192,9 +241,9 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
     : 0;
 
   return (
-    <Link
-      to={`/conversation/${conversation.conversationId}`}
-      state={{ conversation }}
+    <div
+      onClick={() => navigate(`/conversation/${conversation.conversationId}`)}
+      // state={{ conversation }}
       className={cn(
         "flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors group mt-2 mx-2 rounded-lg",
         isActive ? "bg-[#e5efff]" : "hover:bg-[#f3f5f6]",
@@ -310,8 +359,12 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
                       )}
                     </div>
 
-                    <div onMouseEnter={closeSubMenu} className="p-3 hover:bg-gray-100 cursor-pointer">
-                      Đánh dấu chưa đọc
+                    <div
+                      onMouseEnter={closeSubMenu}
+                      className="p-3 hover:bg-gray-100 cursor-pointer"
+                      onClick={handleMarkUnread}
+                    >
+                      {conversation.unreadCount > 0 ? "Đánh dấu đã đọc" : "Đánh dấu chưa đọc"}
                     </div>
 
                     <div className="border-t my-1"></div>
@@ -441,7 +494,7 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
           </span>
         </p>
       </div>
-    </Link>
+    </div>
   );
 };
 

@@ -1,3 +1,5 @@
+/* eslint-disable prettier/prettier */
+
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -8,6 +10,8 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { MessagesService } from '../messages/messages.service';
+import { forwardRef, Inject } from '@nestjs/common';
 
 @WebSocketGateway({
   cors: {
@@ -17,6 +21,11 @@ import { Server, Socket } from 'socket.io';
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
+
+  constructor(
+    @Inject(forwardRef(() => MessagesService))
+    private readonly messagesService: MessagesService
+  ) { }
 
   handleConnection(socket: Socket) {
     const userId = socket.handshake.auth?.userId;
@@ -60,6 +69,31 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     socket.leave(coversationId);
     console.log(`User ${socket.data.userId} left room: ${coversationId}`);
   }
+  // Trong chat.gateway.ts
+  @SubscribeMessage('mark_as_read')
+  handleMarkAsRead(
+    client: Socket,
+    data: { userId: string; conversationId: string },
+  ) {
+    return this.messagesService.readReceiptMessage(data);
+  }
 
+  @SubscribeMessage('mark_as_unread')
+  handleMarkAsUnread(
+    client: Socket,
+    data: { userId: string; conversationId: string },
+  ) {
+    return this.messagesService.markAsUnread(data.userId, data.conversationId);
+  }
+  emitConversationUpdated(userId: string, conversation: any) {
+    this.server.to(userId).emit("conversation_setting:update", conversation);
+  }
 
+  emitConversationDeleted(
+    userId: string,
+    payload: { conversationId: string; deletedAt: Date | null, clearAt: Date | null },
+  ) {
+    console.log("EMIT DELETE:", userId, payload);
+    this.server.to(userId).emit("conversation_setting:delete", payload);
+  }
 }

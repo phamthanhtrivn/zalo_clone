@@ -76,6 +76,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
     };
     const handleConversationUpdate = (data: any) => {
+      if (data.unreadCount !== undefined && Object.keys(data).length === 2) {
+        console.log('Skip unreadCount broadcast from server');
+        return;
+      }
       const patch: Parameters<typeof updateConversationSetting>[0] = {
         conversationId: data.conversationId,
       };

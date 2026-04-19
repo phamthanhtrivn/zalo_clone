@@ -63,7 +63,7 @@ const ConversationList = () => {
         )}
 
         {sortedConversations.filter(c => !c.hidden).map((c) => (
-          console.log("🚀 ~ file: ConversationList.tsx:49 ~ ConversationList ~ c:", c),
+          // console.log("🚀 ~ file: ConversationList.tsx:49 ~ ConversationList ~ c:", c),
           <ConversationListItem
             key={c.conversationId}
             conversation={c}
