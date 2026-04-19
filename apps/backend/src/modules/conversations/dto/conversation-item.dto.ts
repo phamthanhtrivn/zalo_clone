@@ -12,9 +12,12 @@ export class ConversationItemDto {
   deletedAt: Date | null;
   expireDuration: number;
   lastMessage?: {
+    _id: string;
     senderName: string;
     content: Content;
     recalled: boolean;
+    expired?: boolean;
+    expiresAt?: Date | null;
   };
   lastMessageAt: Date;
 }

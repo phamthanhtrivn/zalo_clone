@@ -11,6 +11,7 @@ import { useAppDispatch, useAppSelector } from "@/store";
 import {
   removeConversation,
   removeExpiredMessages,
+  setUnreadCount,
   updateConversation,
   updateConversationSetting,
   updateRecallMessageInConversation,
@@ -21,6 +22,8 @@ import { updateReadReceipt } from "@/store/slices/messageSlice";
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
+  markAsRead: (data: { userId: string; conversationId: string }) => Promise<any>;
+  markAsUnread: (data: { userId: string; conversationId: string }) => Promise<any>;
 }
 
 const SocketContext = createContext<SocketContextType>({
@@ -40,7 +43,33 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const user = useAppSelector((state) => state.auth.user);
   const socketRef = useRef<Socket | null>(null);
 
+  const handleMarkAsRead = useCallback(async (data: { userId: string; conversationId: string }) => {
+    if (!socketRef.current) return;
 
+    return new Promise((resolve, reject) => {
+      socketRef.current?.emit('mark_as_read', data, (response: any) => {
+        if (response?.success) {
+          resolve(response);
+        } else {
+          reject(response);
+        }
+      });
+    });
+  }, []);
+
+  const handleMarkAsUnread = useCallback(async (data: { userId: string; conversationId: string }) => {
+    if (!socketRef.current) return;
+
+    return new Promise((resolve, reject) => {
+      socketRef.current?.emit('mark_as_unread', data, (response: any) => {
+        if (response?.success) {
+          resolve(response);
+        } else {
+          reject(response);
+        }
+      });
+    });
+  }, []);
 
 
   useEffect(() => {
@@ -83,9 +112,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const handleMessagesExpired = (data: { conversationId: string, messageIds: string[] }) => {
       dispatch(removeExpiredMessages(data.messageIds));
-      dispatch(updateConversation({
-        conversationId: data.conversationId
-      }))
     };
     const handleConversationUpdate = (data: any) => {
       const patch: any = { conversationId: data.conversationId };
@@ -99,7 +125,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       if ("category" in data) patch.category = data.category;
       if ("expireDuration" in data) patch.expireDuration = data.expireDuration;
-
+      if ("unreadCount" in data) {
+        console.log('📢 unreadCount from broadcast:', data.unreadCount);
+        patch.unreadCount = data.unreadCount;
+      }
       dispatch(updateConversationSetting(patch));
     };
 
@@ -122,13 +151,81 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     }) => {
       dispatch(updateReadReceipt(data));
     };
+    const handleMarkAsReadSuccess = (data: {
+      conversationId: string;
+      unreadCount: number;
+    }) => {
+      console.log('✅ mark_as_read:success', data);
+      dispatch(
+        setUnreadCount({
+          conversationId: data.conversationId,
+          unreadCount: data.unreadCount,
+        })
+      );
+    };
+    const handleMarkAsReadBroadcast = (data: {
+      conversationId: string;
+      unreadCount: number;
+    }) => {
+      console.log('📢 mark_as_read:broadcast (from other tabs)', data);
+      dispatch(
+        setUnreadCount({
+          conversationId: data.conversationId,
+          unreadCount: data.unreadCount,
+        })
+      );
+    };
+    // ✅ THÊM: Handler cho mark_as_unread:success callback
+    const handleMarkAsUnreadSuccess = (data: {
+      conversationId: string;
+      unreadCount: number;
+    }) => {
+      console.log('✅ mark_as_unread:success', data);
+      dispatch(
+        setUnreadCount({
+          conversationId: data.conversationId,
+          unreadCount: data.unreadCount,
+        })
+      );
+    };
+    const handleMarkAsUnreadBroadcast = (data: {
+      conversationId: string;
+      unreadCount: number;
+    }) => {
+      console.log('📢 mark_as_unread:broadcast (from other tabs)', data);
+      dispatch(
+        setUnreadCount({
+          conversationId: data.conversationId,
+          unreadCount: data.unreadCount,
+        })
+      );
+    };
+    // ✅ THÊM: Error handlers
+    const handleMarkAsReadError = (data: {
+      conversationId: string;
+      message: string;
+    }) => {
+      console.error('❌ mark_as_read:error', data);
+    };
 
+    const handleMarkAsUnreadError = (data: {
+      conversationId: string;
+      message: string;
+    }) => {
+      console.error('❌ mark_as_unread:error', data);
+    };
     socketInstance.on("message_read", handleMessageRead);
 
-    socketInstance.on("messages_unread_updated", handleUnreadUpdate);
+    // socketInstance.on("messages_unread_updated", handleUnreadUpdate);
 
     socketInstance.on("connect", onConnect);
     socketInstance.on("disconnect", onDisconnect);
+    socketInstance.on('mark_as_read:success', handleMarkAsReadSuccess);
+    socketInstance.on('mark_as_unread:success', handleMarkAsUnreadSuccess);
+    socketInstance.on('mark_as_read:error', handleMarkAsReadError);
+    socketInstance.on('mark_as_unread:error', handleMarkAsUnreadError);
+    socketInstance.on('mark_as_read:broadcast', handleMarkAsReadBroadcast);
+    socketInstance.on('mark_as_unread:broadcast', handleMarkAsUnreadBroadcast);
 
     socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
     socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
@@ -148,6 +245,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => {
       socketInstance.off("connect", onConnect);
       socketInstance.off("disconnect", onDisconnect);
+      socketInstance.off('mark_as_read:success', handleMarkAsReadSuccess);
+      socketInstance.off('mark_as_unread:success', handleMarkAsUnreadSuccess);
+      socketInstance.off('mark_as_read:error', handleMarkAsReadError);
+      socketInstance.off('mark_as_unread:error', handleMarkAsUnreadError);
+      socketInstance.off('mark_as_read:broadcast', handleMarkAsReadBroadcast);
+      socketInstance.off('mark_as_unread:broadcast', handleMarkAsUnreadBroadcast);
 
       socketInstance.off("new_message_sidebar", handleNewMessageSidebar);
       socketInstance.off("message_recalled_sidebar", handleRecallMessageSidebar);
@@ -161,12 +264,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         handleConversationDelete,
       );
       socketInstance.off('messages_expired', handleMessagesExpired);
-
+      socketInstance.off("message_read", handleMessageRead);
+      socketInstance.off("messages_unread_updated", handleUnreadUpdate);
     };
   }, [apiUrl, user?.userId, dispatch]);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected }}>
+    <SocketContext.Provider value={{ socket, isConnected, markAsRead: handleMarkAsRead, markAsUnread: handleMarkAsUnread }}>
       {children}
     </SocketContext.Provider>
   );

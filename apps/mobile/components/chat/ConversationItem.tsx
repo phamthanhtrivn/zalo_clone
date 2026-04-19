@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -29,8 +29,10 @@ import {
   updateConversationSetting,
   hideConversationLocal,
   removeConversation,
+  setUnreadCount,
 } from "@/store/slices/conversationSlice";
 import { Avatar } from "../common/ui/Avatar";
+import { useSocket } from "@/contexts/SocketContext";
 
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -45,6 +47,16 @@ interface Props {
 
 type SubMenu = "mute" | null;
 
+const getIsExpired = (expired?: boolean, expiresAt?: string | null) => {
+  if (expired) return true;
+  if (!expiresAt) return false;
+
+  const expiresAtMs = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiresAtMs)) return Boolean(expired);
+
+  return expiresAtMs <= Date.now();
+};
+
 const ConversationItem: React.FC<Props> = ({
   conversation,
   currentUserId,
@@ -55,11 +67,46 @@ const ConversationItem: React.FC<Props> = ({
   const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
   const [subMenu, setSubMenu] = useState<SubMenu>(null);
+  const [isLastMessageExpired, setIsLastMessageExpired] = useState(() =>
+    getIsExpired(conversation.lastMessage?.expired, conversation.lastMessage?.expiresAt),
+  );
   const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
+  const { markAsRead, markAsUnread } = useSocket();
+
+  const isUnread = (conversation.unreadCount ?? 0) > 0;
 
   const lastMessage = conversation.lastMessage;
   const isRecall = lastMessage?.recalled;
+
+  useEffect(() => {
+    if (lastMessage?.expired) {
+      setIsLastMessageExpired(true);
+      return;
+    }
+
+    if (!lastMessage?.expiresAt) {
+      setIsLastMessageExpired(false);
+      return;
+    }
+
+    const expiresAtMs = new Date(lastMessage.expiresAt).getTime();
+    if (Number.isNaN(expiresAtMs)) {
+      setIsLastMessageExpired(Boolean(lastMessage.expired));
+      return;
+    }
+
+    const remainingMs = expiresAtMs - Date.now();
+    if (remainingMs <= 0) {
+      setIsLastMessageExpired(true);
+      return;
+    }
+
+    setIsLastMessageExpired(false);
+    const timeoutId = setTimeout(() => setIsLastMessageExpired(true), remainingMs + 50);
+
+    return () => clearTimeout(timeoutId);
+  }, [lastMessage]);
 
   const preview = useMemo(() => {
     const lastMsg = conversation.lastMessage;
@@ -71,7 +118,7 @@ const ConversationItem: React.FC<Props> = ({
         text: "Tin nhắn đã được thu hồi",
       };
     }
-    if (lastMsg.expired) {
+    if (isLastMessageExpired) {
       return {
         icon: null,
         text: "Tin nhắn đã hết hạn",
@@ -126,7 +173,7 @@ const ConversationItem: React.FC<Props> = ({
     }
 
     return { icon: null, text: "" };
-  }, [lastMessage]);
+  }, [conversation.lastMessage, isLastMessageExpired, isRecall]);
 
   const isOwn =
     lastMessage?.senderId === currentUserId ||
@@ -321,6 +368,11 @@ const ConversationItem: React.FC<Props> = ({
             onSelectToggle?.(conversation.conversationId);
             return;
           }
+          // ✅ Optimistic: clear unread badge ngay lập tức
+          if (isUnread && user?.userId) {
+            dispatch(setUnreadCount({ conversationId: conversation.conversationId, unreadCount: 0 }));
+            markAsRead({ userId: user.userId, conversationId: conversation.conversationId }).catch(() => { });
+          }
           router.push(`/private/chat/${conversation.conversationId}`);
         }}
         onLongPress={isSelectMode ? undefined : openSheet}
@@ -383,7 +435,7 @@ const ConversationItem: React.FC<Props> = ({
                 <MaterialIcons
                   name="group"
                   size={14}
-                  color="#9ca3af"
+                  color={isUnread ? "#374151" : "#9ca3af"}
                   style={{ marginRight: 3, flexShrink: 0 }}
                 />
               )}
@@ -392,8 +444,8 @@ const ConversationItem: React.FC<Props> = ({
                 style={{
                   flex: 1,
                   fontSize: 14,
-                  fontWeight: "600",
-                  color: "#111827",
+                  fontWeight: isUnread ? "600" : "400",
+                  color: isUnread ? "#000000" : "#111827", // giữ gần web
                 }}
               >
                 {conversation.name}
@@ -410,28 +462,59 @@ const ConversationItem: React.FC<Props> = ({
 
             <View
               style={{
-                flexDirection: "row",
-                alignItems: "center",
+                flexDirection: "column",
+                alignItems: "flex-end",
                 gap: 4,
                 flexShrink: 0,
               }}
             >
-              {conversation.muted && (
-                <Ionicons
-                  name="notifications-off-outline"
-                  size={13}
-                  color="#9ca3af"
-                />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                {conversation.muted && (
+                  <Ionicons
+                    name="notifications-off-outline"
+                    size={13}
+                    color="#9ca3af"
+                  />
+                )}
+                <Text style={{ fontSize: 11, color: "#9ca3af" }}>
+                  {formatMessageTime(conversation.lastMessageAt)}
+                </Text>
+              </View>
+              {conversation.unreadCount > 0 && (
+                <View
+                  style={{
+                    backgroundColor: "#d10e0eff",
+                    borderRadius: 10,
+                    minWidth: 18,
+                    height: 18,
+                    paddingHorizontal: 5,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "700",
+                      color: "#ffffff",
+                    }}
+                  >
+                    {conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}
+                  </Text>
+                </View>
               )}
-              <Text style={{ fontSize: 11, color: "#9ca3af" }}>
-                {formatMessageTime(conversation.lastMessageAt)}
-              </Text>
             </View>
           </View>
 
           <View className="flex-row items-center mt-1">
             {/* sender */}
-            <Text className="text-[13px] text-gray-400">
+            <Text
+              style={{
+                fontSize: 13,
+                color: isUnread ? "#111827" : "#6b7280",
+                fontWeight: isUnread ? "600" : "400",
+              }}
+            >
               {conversation.type === "PRIVATE" && !isOwn
                 ? ""
                 : `${isOwn ? "Bạn" : lastMessage?.senderName}: `}
@@ -445,7 +528,12 @@ const ConversationItem: React.FC<Props> = ({
 
               <Text
                 numberOfLines={1}
-                className="text-[13px] text-gray-500 flex-1"
+                style={{
+                  fontSize: 13,
+                  flex: 1,
+                  color: isUnread ? "#111827" : "#6b7280",
+                  fontWeight: isUnread ? "600" : "400",
+                }}
               >
                 {preview.text}
               </Text>
@@ -591,13 +679,28 @@ const ConversationItem: React.FC<Props> = ({
               <SheetItem
                 icon={
                   <MaterialIcons
-                    name="mark-chat-unread"
+                    name={isUnread ? "mark-chat-read" : "mark-chat-unread"}
                     size={21}
                     color="#374151"
                   />
                 }
-                label="Đánh dấu chưa đọc"
-                onPress={() => closeSheet()}
+                label={isUnread ? "Đánh dấu đã đọc" : "Đánh dấu chưa đọc"}
+                onPress={() => {
+                  if (!user?.userId) return;
+                  if (isUnread) {
+                    // ✅ Optimistic update
+                    dispatch(setUnreadCount({ conversationId: conversation.conversationId, unreadCount: 0 }));
+                    closeSheet(() => {
+                      markAsRead({ userId: user.userId!, conversationId: conversation.conversationId }).catch(console.error);
+                    });
+                  } else {
+                    // ✅ Optimistic update
+                    dispatch(setUnreadCount({ conversationId: conversation.conversationId, unreadCount: 1 }));
+                    closeSheet(() => {
+                      markAsUnread({ userId: user.userId!, conversationId: conversation.conversationId }).catch(console.error);
+                    });
+                  }
+                }}
               />
               <Divider />
               <SheetItem

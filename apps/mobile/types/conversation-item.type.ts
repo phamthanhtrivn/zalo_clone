@@ -20,6 +20,7 @@ export interface ConversationItemType {
     };
     recalled: boolean;
     expired?: boolean;
+    expiresAt?: string | null;
   };
   unreadCount: number;
   lastMessageAt: string;

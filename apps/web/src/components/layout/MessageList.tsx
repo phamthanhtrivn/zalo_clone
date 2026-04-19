@@ -21,6 +21,79 @@ const MessageList = ({
   containerRef,
   handleScrollToTop,
 }: Props) => {
+  // Trong ConversationPage component, thêm useEffect để xử lý read_receipt
+  useEffect(() => {
+    if (!socket || !id) return;
+
+    // ... existing socket listeners ...
+
+    // Cập nhật read_receipt cho messages
+    const handleReadReceipt = (data: {
+      conversationId: string;
+      messages: MessagesType[];
+    }) => {
+      if (data.conversationId === id) {
+        setMessages((prev) => {
+          const updatedMap = new Map(
+            data.messages.map((m) => [m._id, m.readReceipts])
+          );
+
+          return prev.map((m) => {
+            const newReadReceipts = updatedMap.get(m._id);
+            if (!newReadReceipts) return m;
+            return {
+              ...m,
+              readReceipts: newReadReceipts,
+            };
+          });
+        });
+      }
+    };
+
+    // Xử lý messages_unread_updated
+    const handleUnreadUpdated = (data: {
+      conversationId: string;
+      userId: string;
+      lastReadMessageId: string | null;
+      unreadCount?: number;
+    }) => {
+      if (data.conversationId === id) {
+        // Cập nhật lại messages để xóa/hiện readReceipts
+        setMessages((prev) => {
+          if (!data.lastReadMessageId) {
+            // Nếu không có lastReadMessageId, xóa tất cả readReceipts của user này
+            return prev.map((msg) => ({
+              ...msg,
+              readReceipts: msg.readReceipts?.filter(
+                (r) => r.userId._id !== data.userId
+              ),
+            }));
+          }
+
+          return prev.map((msg) => {
+            if (msg._id > data.lastReadMessageId!) {
+              return {
+                ...msg,
+                readReceipts: msg.readReceipts?.filter(
+                  (r) => r.userId._id !== data.userId
+                ),
+              };
+            }
+            return msg;
+          });
+        });
+      }
+    };
+
+    socket.on("read_receipt", handleReadReceipt);
+    socket.on("messages_unread_updated", handleUnreadUpdated);
+
+    return () => {
+      // ... existing cleanup ...
+      socket.off("read_receipt", handleReadReceipt);
+      socket.off("messages_unread_updated", handleUnreadUpdated);
+    };
+  }, [socket, id]);
   return (
     <div
       ref={containerRef}

@@ -137,15 +137,30 @@ const MessageList = ({
             {isLastMessage && !message.recalled && message.readReceipts?.length > 0 && (
               <div className={`flex ${isMe ? "justify-end" : "justify-start ml-11"} mt-1 pr-1`}>
                 <div className="flex items-center">
-                  {message.readReceipts.slice(0, 3).map((user: any, index) => {
+                  {message.readReceipts.slice(0, 3).map((receipt: any, index) => {
+                    const avatarUrl = receipt.userId?.profile?.avatarUrl;
+                    const userName = receipt.userId?.profile?.name || 'User';
+                    console.log(`Rendering receipt ${index}:`, { avatarUrl, userName });
 
                     return <img
                       key={index}
-                      src={user?.userId?.profile?.avatarUrl}
+                      src={avatarUrl}
                       className="w-4 h-4 rounded-full border border-white"
+                      alt=""
+                      onError={(e) => {
+                        console.error(`Failed to load avatar: ${avatarUrl}`);
+                        (e.target as HTMLImageElement).style.display = 'none';
+                        // Hiển thị fallback
+                        const parent = (e.target as HTMLImageElement).parentElement;
+                        if (parent) {
+                          const fallback = document.createElement('div');
+                          fallback.className = 'w-4 h-4 rounded-full bg-gray-400 border border-white flex items-center justify-center text-[8px] text-white';
+                          fallback.textContent = userName.charAt(0).toUpperCase();
+                          (e.target as HTMLImageElement).replaceWith(fallback);
+                        }
+                      }}
                     />
                   })}
-
                   {message.readReceipts.length > 3 && (
                     <div className="w-4 h-4 rounded-full bg-gray-300 text-[10px] flex items-center justify-center border border-white">
                       +{message.readReceipts.length - 3}

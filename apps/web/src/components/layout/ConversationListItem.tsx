@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { formatMessageTime } from "@/utils/format-message-time..util";
 import { MoreHorizontal } from "lucide-react";
 import { MdGroups, MdNotificationsOff } from "react-icons/md";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   autoUpdate,
   flip,
@@ -61,47 +61,108 @@ const CATEGORY_STYLE = {
   colleague: "bg-blue-500 before:bg-blue-500",
 };
 
+const getIsExpired = (expired?: boolean, expiresAt?: string | null) => {
+  if (expired) return true;
+  if (!expiresAt) return false;
+
+  const expiresAtMs = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiresAtMs)) return Boolean(expired);
+
+  return expiresAtMs <= Date.now();
+};
+
 const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }: Props) => {
   const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
   const [hoverMenu, setHoverMenu] = useState<string | null>(null);
+  const [isLastMessageExpired, setIsLastMessageExpired] = useState(() =>
+    getIsExpired(conversation.lastMessage?.expired, conversation.lastMessage?.expiresAt),
+  );
   const { socket } = useSocket();
   const closeSubMenu = () => setHoverMenu(null);
   const navigate = useNavigate();
-  const handleMarkUnread = (e: React.MouseEvent) => {
+  // Cập nhật handleMarkUnread function
+  // ConversationListItem.tsx
+  const { markAsRead, markAsUnread } = useSocket(); // ✅ Lấy từ context
+  const handleConversationClick = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Chuyển hướng đến conversation
+    navigate(`/conversation/${conversation.conversationId}`);
+
+    // ✅ Nếu có tin nhắn chưa đọc, đánh dấu đã đọc
+    if (conversation.unreadCount > 0 && user?.userId && socket) {
+      console.log(`📖 Marking conversation ${conversation.conversationId} as read`);
+
+      // Optimistic update
+      dispatch(
+        setUnreadCount({
+          conversationId: conversation.conversationId,
+          unreadCount: 0,
+        })
+      );
+
+      try {
+        await markAsRead({
+          userId: user.userId,
+          conversationId: conversation.conversationId,
+        });
+      } catch (error) {
+        console.error("Failed to mark as read:", error);
+        // Rollback nếu có lỗi
+        dispatch(
+          setUnreadCount({
+            conversationId: conversation.conversationId,
+            unreadCount: conversation.unreadCount,
+          })
+        );
+      }
+    }
+  }, [conversation, user, socket, markAsRead, dispatch, navigate]);
+  const handleMarkUnread = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setOpenMenu(null);
-    if (!user?.userId || !socket) return; // ✅ Kiểm tra socket
+
+    if (!user?.userId) return;
+
     const prevUnreadCount = conversation.unreadCount;
-    const newUnreadCount = prevUnreadCount > 0 ? 0 : 1;
+    const isCurrentlyUnread = prevUnreadCount > 0;
 
     // ✅ Optimistic update
-    dispatch(setUnreadCount({
-      conversationId: conversation.conversationId,
-      unreadCount: newUnreadCount
-    }));
-    if (prevUnreadCount > 0) {
-      socket.emit('mark_as_read', {
-        userId: user.userId,
+    dispatch(
+      setUnreadCount({
         conversationId: conversation.conversationId,
-      }, (response) => {
-        if (!response?.success) {
-          console.error('Failed to mark as read');
-          // Rollback state if needed
-        }
-      });
+        unreadCount: isCurrentlyUnread ? 0 : 1,
+      })
+    );
 
-
-    } else {
-      socket.emit('mark_as_unread', {
-        userId: user.userId,
-        conversationId: conversation.conversationId
-      }, (response) => {
-        if (!response?.success) {
-          console.error('Failed to mark as unread');
-        }
-      });
+    try {
+      if (isCurrentlyUnread) {
+        console.log("📖 Marking as read...");
+        await markAsRead({
+          userId: user.userId,
+          conversationId: conversation.conversationId,
+        });
+        // ✅ Callback từ server sẽ confirm qua socket event
+      } else {
+        console.log("📝 Marking as unread...");
+        await markAsUnread({
+          userId: user.userId,
+          conversationId: conversation.conversationId,
+        });
+        // ✅ Callback từ server sẽ confirm qua socket event
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      // ❌ Rollback nếu có lỗi
+      dispatch(
+        setUnreadCount({
+          conversationId: conversation.conversationId,
+          unreadCount: prevUnreadCount,
+        })
+      );
     }
   };
   const { refs, floatingStyles } = useFloating({
@@ -116,11 +177,45 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
     whileElementsMounted: autoUpdate,
   });
 
+  useEffect(() => {
+    const lastMessage = conversation.lastMessage;
+
+    if (lastMessage?.expired) {
+      setIsLastMessageExpired(true);
+      return;
+    }
+
+    if (!lastMessage?.expiresAt) {
+      setIsLastMessageExpired(false);
+      return;
+    }
+
+    const expiresAtMs = new Date(lastMessage.expiresAt).getTime();
+    if (Number.isNaN(expiresAtMs)) {
+      setIsLastMessageExpired(Boolean(lastMessage.expired));
+      return;
+    }
+
+    const remainingMs = expiresAtMs - Date.now();
+    if (remainingMs <= 0) {
+      setIsLastMessageExpired(true);
+      return;
+    }
+
+    setIsLastMessageExpired(false);
+    const timeoutId = window.setTimeout(
+      () => setIsLastMessageExpired(true),
+      remainingMs + 50,
+    );
+
+    return () => window.clearTimeout(timeoutId);
+  }, [conversation.lastMessage]);
+
   const getPreviewContent = useMemo(() => {
     const lastMsg = conversation.lastMessage;
     if (!lastMsg) return "";
     if (lastMsg.recalled) return "Tin nhắn đã bị thu hồi";
-    if (lastMsg.expired) return "Tin nhắn đã hết hạn";
+    if (isLastMessageExpired) return "Tin nhắn đã hết hạn";
     const content = lastMsg.content;
     if (!content) return "";
 
@@ -160,7 +255,7 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
         <span className="truncate">{text}</span>
       </span>
     );
-  }, [conversation.lastMessage]);
+  }, [conversation.lastMessage, isLastMessageExpired]);
 
   const isDirect = conversation.type === "DIRECT";
 
@@ -300,8 +395,7 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
 
   return (
     <div
-      onClick={() => navigate(`/conversation/${conversation.conversationId}`)}
-      // state={{ conversation }}
+      onClick={handleConversationClick}
       className={cn(
         "flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors group mt-2 mx-2 rounded-lg",
         isActive ? "bg-[#e5efff]" : "hover:bg-[#f3f5f6]",
@@ -536,16 +630,24 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
               {{ customer: "KH", family: "GĐ", work: "CV", friends: "BB", later: "Sau", colleague: "ĐN" }[conversation.category]}
             </span>
           )}
-          <span
-            className={cn(
-              "truncate",
-              conversation.unreadCount > 0 ? "font-semibold text-gray-900" : "text-gray-500"
-            )}
-          >
-            {conversation.type === "PRIVATE" && conversation.lastMessage?.senderName !== "Bạn"
-              ? ""
-              : conversation.lastMessage?.senderName + ": "}
-            {getPreviewContent}
+          <span className="text-[13px] text-gray-500 flex items-center gap-1 truncate">
+            {/* sender */}
+            <span className="shrink-0">
+              {conversation.type === "PRIVATE" &&
+                conversation.lastMessage?.senderName !== "Bạn"
+                ? ""
+                : `${conversation.lastMessage?.senderName ?? ""}: `}
+            </span>
+
+            {/* message content */}
+            <span
+              className={cn(
+                "flex items-center gap-1 truncate",
+                conversation.unreadCount > 0 ? "font-semibold text-gray-900" : "text-gray-500"
+              )}
+            >
+              {getPreviewContent}
+            </span>
           </span>
         </p>
       </div>

@@ -471,4 +471,33 @@ export class MessagesQueryService {
       nextCursor,
     };
   }
+  async getUpdatedMessagesAfterReadReceipt(
+    conversationId: string,
+    userId: string,
+    lastReadMessageId: Types.ObjectId | null,
+  ): Promise<any[]> {
+    const objectConversationId = new Types.ObjectId(conversationId);
+    const objectUserId = new Types.ObjectId(userId);
+
+    // Tìm tất cả messages cần cập nhật readReceipts
+    const findFilter: any = {
+      conversationId: objectConversationId,
+    };
+
+    if (lastReadMessageId) {
+      findFilter._id = { $lte: lastReadMessageId };
+    }
+
+    const messages = await this.messageModel
+      .find(findFilter)
+      .populate('readReceipts.userId', '_id profile.name profile.avatarUrl')
+      .sort({ _id: 1 })
+      .lean();
+
+    // Format messages để trả về
+    return messages.map(msg => ({
+      _id: msg._id,
+      readReceipts: msg.readReceipts,
+    }));
+  }
 }

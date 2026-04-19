@@ -454,6 +454,46 @@ export default function ChatWindow() {
     prevCursorRef.current = prevCursor;
   }, [prevCursor]);
 
+  useEffect(() => {
+    const expiringMessages = messages.filter(
+      (message) => !message.expired && message.expiresAt,
+    );
+
+    if (!expiringMessages.length) return;
+
+    const nextExpiryAt = Math.min(
+      ...expiringMessages
+        .map((message) => new Date(message.expiresAt!).getTime())
+        .filter((time) => !Number.isNaN(time)),
+    );
+
+    if (!Number.isFinite(nextExpiryAt)) return;
+
+    const syncExpiredMessages = () => {
+      setMessages((prev) =>
+        prev.map((message) => {
+          if (message.expired || !message.expiresAt) return message;
+
+          const expiresAtMs = new Date(message.expiresAt).getTime();
+          if (Number.isNaN(expiresAtMs) || expiresAtMs > Date.now()) {
+            return message;
+          }
+
+          return { ...message, expired: true };
+        }),
+      );
+    };
+
+    const delay = nextExpiryAt - Date.now();
+    if (delay <= 0) {
+      syncExpiredMessages();
+      return;
+    }
+
+    const timeoutId = setTimeout(syncExpiredMessages, delay + 50);
+    return () => clearTimeout(timeoutId);
+  }, [messages]);
+
 
 
   // ===== SOCKET =====
@@ -500,6 +540,15 @@ export default function ChatWindow() {
       );
     };
 
+
+    const handleMessagesExpired = (data: { conversationId: string, messageIds: string[] }) => {
+      if (data.conversationId !== id) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          data.messageIds.includes(m._id) ? { ...m, expired: true } : m
+        )
+      );
+    };
     const handleReadReceipt = (data: { conversationId: string; messages: MessagesType[] }) => {
       if (data.conversationId === id) {
         setMessages((prev) => {
@@ -512,20 +561,13 @@ export default function ChatWindow() {
         });
       }
     };
-    const handleMessagesExpired = (data: { messageIds: string[] }) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          data.messageIds.includes(m._id) ? { ...m, expired: true } : m
-        )
-      );
-    };
-
+    socket.on("read_receipt", handleReadReceipt);
     socket.on("messages_expired", handleMessagesExpired);
     socket.on("new_message", handleNewMessage);
     socket.on("message_reacted", handleMessageReacted);
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
-    socket.on("read_receipt", handleReadReceipt);
+
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -534,6 +576,8 @@ export default function ChatWindow() {
       socket.off("message_pinned", handleMessagePinned);
       socket.off("read_receipt", handleReadReceipt);
       socket.off("messages_expired", handleMessagesExpired);
+
+
       socket.emit("leave_room", id);
     };
   }, [socket, id, user?.userId]);

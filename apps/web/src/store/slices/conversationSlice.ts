@@ -50,6 +50,7 @@ const conversationSlice = createSlice({
         mutedUntil?: string | null;
         category?: ConversationCategory | null;
         expireDuration?: number;
+        unreadCount?: number;
       }>
     ) {
       const c = state.conversations.find(
@@ -63,6 +64,8 @@ const conversationSlice = createSlice({
       if (action.payload.mutedUntil !== undefined) c.mutedUntil = action.payload.mutedUntil;
       if (action.payload.category !== undefined) c.category = action.payload.category;
       if (action.payload.expireDuration !== undefined) c.expireDuration = action.payload.expireDuration;
+      if (action.payload.unreadCount !== undefined) // ✅ THÊM
+        c.unreadCount = action.payload.unreadCount;
     },
 
     setCategoryLocal(
@@ -85,17 +88,23 @@ const conversationSlice = createSlice({
 
     },
     removeExpiredMessages(state, action: PayloadAction<string[]>) {
-      for (const c of state.conversations) {
+      state.conversations = state.conversations.map((c) => {
         if (c.lastMessage && action.payload.includes(c.lastMessage._id)) {
-          c.lastMessage = {
-            ...c.lastMessage,
-            expired: true,
-            content: {
-              text: "Tin nhắn đã hết hạn",
+          return {
+            ...c,
+            lastMessage: {
+              ...c.lastMessage,
+              expired: true,
+              content: {
+                ...c.lastMessage.content,
+                text: "Tin nhắn đã hết hạn",
+              },
             },
+            lastMessageAt: new Date().toISOString(),
           };
         }
-      }
+        return c;
+      });
     },
     updateRecallMessageInConversation(
       state,
@@ -122,6 +131,7 @@ const conversationSlice = createSlice({
         c.unreadCount = action.payload.unreadCount;
       }
     },
+    // conversationSlice.ts
     updateUnreadStateInMessages(
       state,
       action: PayloadAction<{
@@ -136,20 +146,18 @@ const conversationSlice = createSlice({
         (c) => c.conversationId === conversationId
       );
 
-      if (!conversation || !conversation.messages) return;
+      if (!conversation) return;
 
-      conversation.messages = conversation.messages.map((msg) => {
-        if (!lastReadMessageId || msg._id > lastReadMessageId) {
-          return {
-            ...msg,
-            readReceipts: msg.readReceipts?.filter(
-              (r) => r.userId !== userId
-            ),
-          };
-        }
-        return msg;
-      });
+      // Cập nhật unreadCount cho conversation
+      if (conversation.messages) {
+        const newUnreadCount = conversation.messages.filter((msg) => {
+          if (msg.senderId._id === userId) return false; // Không tính tin nhắn của chính user
+          if (!lastReadMessageId) return true;
+          return msg._id > lastReadMessageId;
+        }).length;
 
+        conversation.unreadCount = newUnreadCount;
+      }
     },
     setReplyingMessage(state, action: PayloadAction<any | null>) {
       state.replyingMessage = action.payload;

@@ -721,6 +721,8 @@ export class ConversationsService {
               },
               content: '$lastMessage.content',
               recalled: '$lastMessage.recalled',
+              expired: '$lastMessage.expired',
+              expiresAt: '$lastMessage.expiresAt',
             },
             unreadCount: {
               $ifNull: [{ $arrayElemAt: ['$unreadData.count', 0] }, 0],

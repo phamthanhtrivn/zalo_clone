@@ -68,17 +68,23 @@ const conversationSlice = createSlice({
       if (action.payload.expireDuration !== undefined) c.expireDuration = action.payload.expireDuration;
     },
     removeExpiredMessages(state, action: PayloadAction<string[]>) {
-      for (const c of state.conversations) {
+      state.conversations = state.conversations.map((c) => {
         if (c.lastMessage && action.payload.includes(c.lastMessage._id)) {
-          c.lastMessage = {
-            ...c.lastMessage,
-            expired: true,
-            content: {
-              text: "Tin nhắn đã hết hạn",
+          return {
+            ...c,
+            lastMessage: {
+              ...c.lastMessage,
+              expired: true,
+              content: {
+                ...c.lastMessage.content,
+                text: "Tin nhắn đã hết hạn",
+              },
             },
+            lastMessageAt: new Date().toISOString(),
           };
         }
-      }
+        return c;
+      });
     },
     updateRecallMessageInConversation(state, action) {
       const index = state.conversations.findIndex(
@@ -112,15 +118,20 @@ const conversationSlice = createSlice({
         c => c.conversationId !== action.payload
       );
     },
+    // conversationSlice.ts
     setUnreadCount(
       state,
       action: PayloadAction<{ conversationId: string; unreadCount: number }>
     ) {
-      const c = state.conversations.find(
+      const index = state.conversations.findIndex(
         (c) => c.conversationId === action.payload.conversationId
       );
-      if (c) {
-        c.unreadCount = action.payload.unreadCount;
+      if (index !== -1) {
+        // ✅ Tạo object mới để trigger re-render
+        state.conversations[index] = {
+          ...state.conversations[index],
+          unreadCount: action.payload.unreadCount,
+        };
       }
     },
     setReplyingMessage(state, action: PayloadAction<any | null>) {

@@ -48,9 +48,115 @@ const ConversationPage = () => {
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [loadingForward, setLoadingForward] = useState(false);
   const lastMessageId = messages[messages.length - 1]?._id;
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastProcessedMessageIdRef = useRef<string | null>(null);
 
   const { socket } = useSocket();
+  // Trong ConversationPage component, thêm useEffect để xử lý read_receipt
+  // ConversationPage.tsx - useEffect đã đúng, chỉ cần kiểm tra
+  // ConversationPage.tsx
+  // ConversationPage.tsx
+  // ConversationPage.tsx
 
+  // ✅ SỬA: Chỉ xử lý read_receipt, bỏ qua messages_unread_updated
+  // ConversationPage.tsx
+  const processingRef = useRef<Set<string>>(new Set());
+  // ConversationPage.tsx
+  const handleReadReceipt = useCallback((data: {
+    conversationId: string;
+    messages: Array<{ _id: string; readReceipts: any[] }>;
+  }) => {
+    if (data.conversationId !== id) return;
+    console.log('📖 Client received read_receipt:');
+    data.messages.forEach(msg => {
+      console.log(`  Message ${msg._id}:`);
+      msg.readReceipts?.forEach((receipt, idx) => {
+        console.log(`    Receipt ${idx}:`, {
+          userId: receipt.userId?._id,
+          hasProfile: !!receipt.userId?.profile,
+          avatarUrl: receipt.userId?.profile?.avatarUrl,
+          fullData: receipt
+        });
+      });
+    });
+    // ✅ Nếu là user hiện tại, cập nhật readReceipts bình thường
+    // Nếu là user khác, cũng cập nhật nhưng không gây re-render mạnh
+    setMessages((prev) => {
+      const updatedMap = new Map(data.messages.map((m) => [m._id, m.readReceipts]));
+      let hasChanges = false;
+
+      const newMessages = prev.map((msg) => {
+        const newReadReceipts = updatedMap.get(msg._id);
+        if (newReadReceipts) {
+          const currentReceipts = msg.readReceipts || [];
+          // Kiểm tra xem có thay đổi không
+          if (currentReceipts.length !== newReadReceipts.length) {
+            hasChanges = true;
+            return { ...msg, readReceipts: newReadReceipts };
+          }
+        }
+        return msg;
+      });
+
+      return hasChanges ? newMessages : prev;
+    });
+  }, [id]);
+
+  // ✅ BỎ QUA messages_unread_updated - không xử lý gì cả
+  // const handleUnreadUpdated = useCallback((data: {
+  //   conversationId: string;
+  //   userId: string;
+  //   lastReadMessageId: string | null;
+  //   unreadCount?: number;
+  // }) => {
+  //   if (data.conversationId !== id) return;
+  //   // Chỉ log, không cập nhật messages
+  //   console.log('📝 Ignored unread_updated for user:', data.userId);
+  // }, [id]);
+
+  // ✅ SỬA useEffect - thêm debounce để tránh cập nhật quá nhanh
+  // useEffect(() => {
+  //   if (!socket || !id) return;
+
+  //   // Debounce cho read_receipt
+  //   let timeoutId: NodeJS.Timeout;
+
+  //   const debouncedReadReceipt = (data: any) => {
+  //     clearTimeout(timeoutId);
+  //     timeoutId = setTimeout(() => {
+  //       handleReadReceipt(data);
+  //     }, 50);
+  //   };
+
+  //   socket.on("read_receipt", debouncedReadReceipt);
+  //   socket.on("messages_unread_updated", handleUnreadUpdated);
+
+  //   return () => {
+  //     socket.off("read_receipt", debouncedReadReceipt);
+  //     socket.off("messages_unread_updated", handleUnreadUpdated);
+  //     clearTimeout(timeoutId);
+  //     if (updateTimeoutRef.current) {
+  //       clearTimeout(updateTimeoutRef.current);
+  //     }
+  //   };
+  // }, [socket, id, handleReadReceipt, handleUnreadUpdated]);
+  // ConversationPage.tsx - Sửa useEffect
+  // useEffect(() => {
+  //   if (!socket || !id) return;
+
+  //   // ✅ Chỉ lắng nghe read_receipt
+  //   socket.on("read_receipt", handleReadReceipt);
+  //   // ❌ Không lắng nghe messages_unread_updated nữa
+  //   // socket.on("messages_unread_updated", handleUnreadUpdated);
+
+  //   return () => {
+  //     socket.off("read_receipt", handleReadReceipt);
+  //     // socket.off("messages_unread_updated", handleUnreadUpdated);
+  //     if (updateTimeoutRef.current) {
+  //       clearTimeout(updateTimeoutRef.current);
+  //     }
+  //   };
+  // }, [socket, id, handleReadReceipt]); // ❌ Bỏ handleUnreadUpdated khỏi dependencies
   const handleScrollToTop = async () => {
     const container = containerRef.current;
     if (
@@ -571,28 +677,37 @@ const ConversationPage = () => {
       setPinnedMessages(data.pinnedMessages);
     };
 
-    const handleReadReceipt = (data: {
-      conversationId: string;
-      messages: MessagesType[];
-    }) => {
-      if (data.conversationId === id) {
-        setMessages((prev) => {
-          const updatedMap = new Map(
-            data.messages.map((m) => [m._id, m.readReceipts]),
-          );
+    // const handleReadReceipt = (data: {
+    //   conversationId: string;
+    //   messages: MessagesType[];
+    // }) => {
+    //   if (data.conversationId === id) {
+    //     setMessages((prev) => {
+    //       const updatedMap = new Map(
+    //         data.messages.map((m) => [m._id, m.readReceipts]),
+    //       );
 
-          return prev.map((m) => {
-            const newReadReceipts = updatedMap.get(m._id);
+    //       return prev.map((m) => {
+    //         const newReadReceipts = updatedMap.get(m._id);
 
-            if (!newReadReceipts) return m;
+    //         if (!newReadReceipts) return m;
 
-            return {
-              ...m,
-              readReceipts: newReadReceipts,
-            };
-          });
-        });
-      }
+    //         return {
+    //           ...m,
+    //           readReceipts: newReadReceipts,
+    //         };
+    //       });
+    //     });
+    //   }
+    // };
+
+    const handleMessagesExpired = (data: { conversationId: string, messageIds: string[] }) => {
+      if (data.conversationId !== id) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          data.messageIds.includes(m._id) ? { ...m, expired: true } : m,
+        ),
+      );
     };
 
     socket.on("new_message", handleNewMessage);
@@ -600,6 +715,7 @@ const ConversationPage = () => {
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
     socket.on("read_receipt", handleReadReceipt);
+    socket.on("messages_expired", handleMessagesExpired);
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -607,7 +723,11 @@ const ConversationPage = () => {
       socket.off("message_recalled", handleMessageRecalled);
       socket.off("message_pinned", handleMessagePinned);
       socket.off("read_receipt", handleReadReceipt);
+      socket.off("messages_expired", handleMessagesExpired);
       socket.emit("leave_room", id);
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
     };
   }, [socket, id]);
 

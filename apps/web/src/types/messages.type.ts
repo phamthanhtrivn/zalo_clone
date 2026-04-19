@@ -25,7 +25,7 @@ export interface MessagesType {
   createdAt: string;
   updatedAt: string;
   expired?: boolean;
-  expiredAt: string | null;
+  expiresAt: string | null;
 
 }
 
@@ -55,4 +55,5 @@ export interface ReadReceiptType {
   };
   createdAt: string;
   updatedAt: string;
+
 }
