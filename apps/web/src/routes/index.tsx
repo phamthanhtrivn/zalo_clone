@@ -23,11 +23,12 @@ const router = createBrowserRouter([
         element: <HomePage />,
       },
       {
-        path: '/conversation/:id',
+        path: "/conversation/:id",
         element: <ConversationPage />,
       },
       {
         path: "/conversations/:id",
+
         element: <ConversationPage />,
       },
       {

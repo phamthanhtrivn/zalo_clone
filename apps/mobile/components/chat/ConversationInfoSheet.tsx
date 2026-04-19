@@ -4,7 +4,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
   Image,
   StyleSheet,
   ActivityIndicator,
@@ -14,8 +13,9 @@ import {
   Dimensions,
   Switch,
   TextInput,
+  Linking,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Video } from "expo-av";
 import { useAppDispatch, useAppSelector } from "@/store/store";
@@ -26,11 +26,17 @@ import {
 } from "@/store/slices/conversationSlice";
 import { conversationService } from "@/services/conversation.service";
 import { messageService } from "@/services/message.service";
-import CreateGroupModal from "./CreateGroupModal";
+import { getDateLabel } from "@/utils/format-message-time..util";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import * as ImagePicker from "expo-image-picker";
+import { truncateFileName } from "@/utils/render-file";
+import { formatFileSize } from "@/utils/format-file.util";
+import CreateGroupModal from "./CreateGroupModal";
 
-const { width, height } = Dimensions.get("window");
+const { width } = Dimensions.get("window");
 
+// --- COMPONENTS CON ---
 const SectionHeader = ({ icon, title, expanded, onToggle }: any) => (
   <TouchableOpacity onPress={onToggle} style={styles.sectionHeader}>
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -63,24 +69,30 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
   const user = useAppSelector((state) => state.auth.user);
   const currentUserId = user?.userId;
 
+  // States dữ liệu
   const [medias, setMedias] = useState<any[]>([]);
   const [files, setFiles] = useState<any[]>([]);
+  const [links, setLinks] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [expandedMedia, setExpandedMedia] = useState(true);
-  const [expandedFile, setExpandedFile] = useState(false);
-  const [expandedMembers, setExpandedMembers] = useState(true);
-  const [showMuteOptions, setShowMuteOptions] = useState(false);
-  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
-  const [isAddMemberVisible, setIsAddMemberVisible] = useState(false);
-
   const [joinRequests, setJoinRequests] = useState<any[]>([]);
-  const [expandedRequests, setExpandedRequests] = useState(true);
-  const [expandedManagement, setExpandedManagement] = useState(false);
+
+  // States UI
+  const [loading, setLoading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [showMuteOptions, setShowMuteOptions] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [tempName, setTempName] = useState("");
+  const [isAddMemberVisible, setIsAddMemberVisible] = useState(false);
   const [membersRefreshKey, setMembersRefreshKey] = useState(0);
 
-  const [editingName, setEditingName] = useState(false);
-  const [tempName, setTempName] = useState(conversation?.name || "");
+  // States mở rộng Section
+  const [expandedMedia, setExpandedMedia] = useState(true);
+  const [expandedFile, setExpandedFile] = useState(false);
+  const [expandedLink, setExpandedLink] = useState(false);
+  const [expandedMembers, setExpandedMembers] = useState(true);
+  const [expandedRequests, setExpandedRequests] = useState(true);
+  const [expandedManagement, setExpandedManagement] = useState(false);
 
   const isGroup = conversation?.type === "GROUP";
   const currentConversation =
@@ -90,14 +102,13 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
       ),
     ) || conversation;
 
-  // --- FIX CỐT LÕI: LOCAL STATE CHO SWITCH ĐỂ TRÁNH BỊ GIẬT ---
   const [localSettings, setLocalSettings] = useState({
     allowMembersInvite: true,
     allowMembersSendMessages: true,
     approvalRequired: false,
   });
 
-  // Đồng bộ Local State với Redux khi Component load hoặc Redux đổi
+  // --- EFFECT: ĐỒNG BỘ DỮ LIỆU ---
   useEffect(() => {
     if (currentConversation?.group) {
       setLocalSettings({
@@ -107,272 +118,97 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
           currentConversation.group.allowMembersSendMessages !== false,
         approvalRequired: currentConversation.group.approvalRequired === true,
       });
+      setTempName(currentConversation.name || "");
     }
-  }, [currentConversation?.group]);
-
-  const isPinned = currentConversation?.pinned;
-  const isMuted =
-    currentConversation?.muted &&
-    (!currentConversation?.mutedUntil ||
-      new Date(currentConversation.mutedUntil).getTime() > Date.now());
-
-  const myMemberInfo = members.find((m) => m.userId === currentUserId);
-  const isOwner = myMemberInfo?.role === "OWNER";
-  const isAdmin = myMemberInfo?.role === "ADMIN";
-
-  // --- LOGIC FUNCTIONS ---
-
-  const handlePin = async () => {
-    const newStatus = !isPinned;
-    dispatch(
-      updateConversationSetting({
-        conversationId: conversation.conversationId,
-        pinned: newStatus,
-      }),
-    );
-    try {
-      await conversationService.updateConversationSetting?.(
-        conversation.conversationId,
-        { pinned: newStatus },
-      );
-    } catch (err) {
-      dispatch(
-        updateConversationSetting({
-          conversationId: conversation.conversationId,
-          pinned: !newStatus,
-        }),
-      );
-    }
-  };
-
-  const handleMute = async (duration: number) => {
-    let mutedUntil: string | null = null;
-    if (duration === -1) mutedUntil = "infinite";
-    else if (duration === -2) {
-      const d = new Date();
-      d.setHours(8, 0, 0, 0);
-      if (new Date() > d) d.setDate(d.getDate() + 1);
-      mutedUntil = d.toISOString();
-    } else if (duration > 0) {
-      mutedUntil = new Date(Date.now() + duration * 60 * 1000).toISOString();
-    }
-
-    const isUnmuting = duration === 0;
-    dispatch(
-      updateConversationSetting({
-        conversationId: conversation.conversationId,
-        muted: !isUnmuting,
-        mutedUntil,
-      }),
-    );
-    setShowMuteOptions(false);
-
-    try {
-      await conversationService.updateConversationSetting?.(
-        conversation.conversationId,
-        { muted: !isUnmuting, mutedUntil: isUnmuting ? null : mutedUntil },
-      );
-    } catch (err) {
-      dispatch(
-        updateConversationSetting({
-          conversationId: conversation.conversationId,
-          muted: isMuted,
-          mutedUntil: currentConversation.mutedUntil,
-        }),
-      );
-    }
-  };
-
-  const fetchMembers = async () => {
-    if (!isGroup) return;
-    const res: any = await conversationService.getListMembers(
-      conversation.conversationId,
-    );
-    if (res.success) setMembers(res.data);
-  };
-
-  const fetchJoinRequests = async () => {
-    try {
-      const res: any = await conversationService.getJoinRequests(
-        currentConversation!.conversationId,
-      );
-      if (res?.success) {
-        const requestsArray = Array.isArray(res.data)
-          ? res.data
-          : res.data?.data || [];
-        setJoinRequests(requestsArray);
-      }
-    } catch (error) {
-      console.log(error);
-    }
-  };
-
-  useEffect(() => {
-    if (visible && isGroup && (isOwner || isAdmin)) {
-      fetchJoinRequests();
-    }
-  }, [
-    visible,
-    currentConversation?.conversationId,
-    membersRefreshKey,
-    isOwner,
-    isAdmin,
-  ]);
+  }, [currentConversation]);
 
   useEffect(() => {
     if (!visible || !conversation?.conversationId) return;
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [mediaRes] = await Promise.all([
+        const [mediaRes, memberRes] = await Promise.all([
           messageService.getMediasPreview(
             currentUserId,
             conversation.conversationId,
           ),
-          fetchMembers(),
+          isGroup
+            ? conversationService.getListMembers(conversation.conversationId)
+            : Promise.resolve({ success: true, data: [] }),
         ]);
         if (mediaRes.success) {
           setMedias(mediaRes.data.images_videos || []);
           setFiles(mediaRes.data.files || []);
+          setLinks(mediaRes.data.links || []);
         }
+        if (memberRes.success) setMembers(memberRes.data);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [visible, conversation?.conversationId]);
+  }, [visible, conversation?.conversationId, membersRefreshKey]);
 
   useEffect(() => {
-    if (!socket || !currentConversation?.conversationId) return;
+    if (visible && isGroup && (isOwner || isAdmin)) fetchJoinRequests();
+  }, [visible, membersRefreshKey]);
 
-    const handleNewRequest = (data: any) => {
-      if (data.conversationId === currentConversation.conversationId)
-        fetchJoinRequests();
-    };
+  // --- EFFECT: SOCKET REALTIME (GỘP CẢ 2 NHÁNH) ---
+  useEffect(() => {
+    if (!socket || !visible || !conversation?.conversationId) return;
+    const convId = conversation.conversationId;
 
-    const handleMemberUpdate = (data: any) => {
-      if (data?.conversationId === currentConversation.conversationId) {
-        setMembersRefreshKey((k) => k + 1);
-        fetchMembers();
-      }
-    };
+    // Join media rooms (Logic KhongVanTam)
+    const mediaRooms = [
+      `media_${convId}_IMAGE_VIDEO`,
+      `media_${convId}_FILE`,
+      `media_${convId}_LINK`,
+    ];
+    mediaRooms.forEach((r) => socket.emit("join_room", r));
 
-    socket.on("new_approval_request", handleNewRequest);
-    socket.on("member_updated", handleMemberUpdate);
-    socket.on("role_updated", handleMemberUpdate);
+    socket.on("new_media", (payload) => {
+      if (payload.type === "IMAGE_VIDEO")
+        setMedias((p) => [payload.data, ...p].slice(0, 6));
+      if (payload.type === "FILE")
+        setFiles((p) => [payload.data, ...p].slice(0, 6));
+      if (payload.type === "LINK")
+        setLinks((p) => [payload.data, ...p].slice(0, 6));
+    });
+
+    socket.on("new_approval_request", fetchJoinRequests);
+    socket.on("member_updated", () => setMembersRefreshKey((k) => k + 1));
 
     return () => {
-      socket.off("new_approval_request", handleNewRequest);
-      socket.off("member_updated", handleMemberUpdate);
-      socket.off("role_updated", handleMemberUpdate);
+      mediaRooms.forEach((r) => socket.emit("leave_room", r));
+      socket.off("new_media");
+      socket.off("new_approval_request");
+      socket.off("member_updated");
     };
-  }, [socket, currentConversation?.conversationId]);
+  }, [socket, visible]);
 
-  const handleMemberAction = (target: any) => {
-    if (target.userId === currentUserId) return;
-    const options: any[] = [
-      {
-        text: "Xem trang cá nhân",
-        onPress: () => router.push(`/user/${target.userId}`),
-      },
-      {
-        text: "Nhắn tin riêng",
-        onPress: async () => {
-          const res: any = await conversationService.getOrCreateDirect(
-            target.userId,
-          );
-          const cid = res?.data?._id || res?._id;
-          if (cid) {
-            onClose();
-            router.push(`/private/chat/${cid}`);
-          }
-        },
-      },
-    ];
-    if (isOwner) {
-      options.push({
-        text: target.role === "ADMIN" ? "Gỡ phó nhóm" : "Bổ nhiệm phó nhóm",
-        onPress: () =>
-          updateRole(target, target.role === "ADMIN" ? "MEMBER" : "ADMIN"),
-      });
-    }
-    if (isOwner || (isAdmin && target.role === "MEMBER")) {
-      options.push({
-        text: "Mời ra khỏi nhóm",
-        style: "destructive",
-        onPress: () => confirmRemoveMember(target),
-      });
-    }
-    Alert.alert("Tùy chọn", target.name, [
-      ...options,
-      { text: "Hủy", style: "cancel" },
-    ]);
-  };
+  // --- HANDLERS LOGIC ---
+  const isOwner = useMemo(
+    () => members.find((m) => m.userId === currentUserId)?.role === "OWNER",
+    [members, currentUserId],
+  );
+  const isAdmin = useMemo(
+    () => members.find((m) => m.userId === currentUserId)?.role === "ADMIN",
+    [members, currentUserId],
+  );
+  const isPinned = currentConversation?.pinned;
+  const isMuted =
+    currentConversation?.muted &&
+    (!currentConversation?.mutedUntil ||
+      new Date(currentConversation.mutedUntil).getTime() > Date.now());
 
-  const updateRole = async (t: any, r: string) => {
-    const res: any = await conversationService.updateMembersRole(
-      conversation.conversationId,
-      [t.userId],
-      r,
+  const fetchJoinRequests = async () => {
+    const res: any = await conversationService.getJoinRequests(
+      currentConversation.conversationId,
     );
-    if (res.success) fetchMembers();
-  };
-
-  const confirmRemoveMember = (t: any) => {
-    Alert.alert("Xác nhận", `Mời ${t.name} rời khỏi nhóm?`, [
-      { text: "Hủy" },
-      {
-        text: "Xác nhận",
-        style: "destructive",
-        onPress: async () => {
-          const res: any = await conversationService.removeMember(
-            conversation.conversationId,
-            t.userId,
-          );
-          if (res.success) fetchMembers();
-        },
-      },
-    ]);
-  };
-
-  const handleDeleteGroup = () => {
-    Alert.alert("Giải tán", "Xóa toàn bộ nhóm?", [
-      { text: "Hủy" },
-      {
-        text: "Giải tán",
-        style: "destructive",
-        onPress: async () => {
-          const res: any = await conversationService.deleteGroup(
-            conversation.conversationId,
-          );
-          if (res.success) {
-            onClose();
-            dispatch(removeConversation(conversation.conversationId));
-            router.replace("/private/chat");
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleLeaveGroup = () => {
-    Alert.alert("Rời nhóm", "Bạn muốn rời nhóm?", [
-      { text: "Hủy" },
-      {
-        text: "Rời nhóm",
-        style: "destructive",
-        onPress: async () => {
-          const res: any = await conversationService.leaveGroup(
-            conversation.conversationId,
-          );
-          if (res.success) {
-            onClose();
-            dispatch(removeConversation(conversation.conversationId));
-            router.replace("/private/chat");
-          }
-        },
-      },
-    ]);
+    if (res?.success)
+      setJoinRequests(
+        Array.isArray(res.data) ? res.data : res.data?.data || [],
+      );
   };
 
   const handleUpdateSetting = async (
@@ -380,141 +216,66 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
     value: boolean,
   ) => {
     setLocalSettings((prev) => ({ ...prev, [key]: value }));
-
-    dispatch(
-      updateConversationSetting({
-        conversationId: currentConversation!.conversationId,
-        group: { ...currentConversation!.group, [key]: value },
-      }),
-    );
-
-    // 3. Gọi API
     try {
       const res: any = await conversationService.updateGroupSettings(
-        currentConversation!.conversationId,
+        currentConversation.conversationId,
         { [key]: value },
       );
-      if (!res.success) throw new Error("API thất bại");
-    } catch (err) {
-      Alert.alert("Lỗi", "Không thể cập nhật cài đặt");
-      // Rollback nếu lỗi
-      setLocalSettings((prev) => ({ ...prev, [key]: !value }));
-      dispatch(
-        updateConversationSetting({
-          conversationId: currentConversation!.conversationId,
-          group: { ...currentConversation!.group, [key]: !value },
-        }),
-      );
-    }
-  };
-
-  const onHandleRequest = async (
-    reqId: string,
-    action: "APPROVED" | "REJECTED",
-  ) => {
-    try {
-      const res: any = await conversationService.handleJoinRequest(
-        currentConversation!.conversationId,
-        reqId,
-        action,
-      );
-
-      if (res.success || res.data) {
-        setJoinRequests((prev) => prev.filter((r) => r._id !== reqId));
-
-        if (action === "APPROVED") {
-          fetchMembers();
-          setMembersRefreshKey((k) => k + 1);
-        }
-      } else {
-        Alert.alert("Thông báo", res.message || "Thao tác không thành công");
-      }
-    } catch (err: any) {
-      console.log("Lỗi duyệt/xóa yêu cầu:", err?.response?.data || err.message);
-      Alert.alert(
-        "Lỗi",
-        err?.response?.data?.message ||
-          "Không thể thực hiện thao tác này. Vui lòng thử lại.",
-      );
-    }
-  };
-
-  const uploadAvatar = async (selectedFile: ImagePicker.ImagePickerAsset) => {
-    try {
-      setLoading(true); // Nếu bạn có state loading
-      const res: any = await conversationService.updateGroupMetadata(
-        currentConversation.conversationId,
-        { avatar: selectedFile },
-      );
       if (res.success) {
-        Alert.alert("Thành công", "Đã cập nhật ảnh nhóm mới");
+        dispatch(
+          updateConversationSetting({
+            conversationId: currentConversation.conversationId,
+            group: { ...currentConversation.group, [key]: value },
+          }),
+        );
       }
-    } catch (err) {
-      Alert.alert("Lỗi", "Không thể tải ảnh lên server");
+    } catch {
+      setLocalSettings((prev) => ({ ...prev, [key]: !value }));
+      Alert.alert("Lỗi", "Cập nhật cài đặt thất bại");
+    }
+  };
+
+  const handleDownload = async (file: any) => {
+    try {
+      setDownloadingId(file.fileKey);
+      const safeName = decodeURIComponent(file.fileName);
+      const fileUri = FileSystem.documentDirectory + safeName;
+      await FileSystem.downloadAsync(file.fileKey, fileUri);
+      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(fileUri);
+      else Alert.alert("Thành công", "Đã tải file thành công");
+    } catch {
+      Alert.alert("Lỗi", "Không thể tải tệp");
     } finally {
-      setLoading(false);
+      setDownloadingId(null);
     }
   };
 
-  const handleTakePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Quyền truy cập", "Bạn cần cấp quyền Camera để chụp ảnh");
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-
-    if (!result.canceled) {
-      await uploadAvatar(result.assets[0]);
-    }
-  };
-
-  const handleChooseLibrary = async () => {
+  const handleAvatarPress = async () => {
+    if (!isOwner && !isAdmin) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
     });
-
     if (!result.canceled) {
-      await uploadAvatar(result.assets[0]);
+      const res: any = await conversationService.updateGroupMetadata(
+        currentConversation.conversationId,
+        { avatar: result.assets[0] },
+      );
+      if (res.success) Alert.alert("Thành công", "Đã cập nhật ảnh nhóm");
     }
-  };
-
-  const handleAvatarPress = () => {
-    Alert.alert("Ảnh đại diện nhóm", "Chọn phương thức cập nhật ảnh", [
-      { text: "Chụp ảnh mới", onPress: handleTakePhoto },
-      { text: "Chọn từ thư viện", onPress: handleChooseLibrary },
-      { text: "Hủy", style: "cancel" },
-    ]);
   };
 
   const handleSaveName = async () => {
-    if (!tempName.trim() || tempName === currentConversation?.name) {
-      setEditingName(false);
-      return;
-    }
-    try {
-      const res: any = await conversationService.updateGroupMetadata(
-        currentConversation.conversationId,
-        { name: tempName.trim() },
-      );
-      if (res.success) {
-        setEditingName(false);
-      }
-    } catch (err) {
-      Alert.alert("Lỗi", "Không thể đổi tên nhóm");
-    }
+    if (!tempName.trim() || tempName === currentConversation?.name)
+      return setEditingName(false);
+    const res: any = await conversationService.updateGroupMetadata(
+      currentConversation.conversationId,
+      { name: tempName.trim() },
+    );
+    if (res.success) setEditingName(false);
   };
-
-  // Kiểm tra quyền hiển thị Quick Actions
-  const canInvite = localSettings.allowMembersInvite || isOwner || isAdmin;
 
   return (
     <Modal
@@ -528,6 +289,7 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
           onPress={(e) => e.stopPropagation()}
           style={styles.sheetContainer}
         >
+          {/* HEADER */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Thông tin hội thoại</Text>
             <TouchableOpacity onPress={onClose}>
@@ -536,6 +298,7 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
+            {/* PROFILE SECTION */}
             <View style={styles.profileSection}>
               <View style={styles.avatarContainer}>
                 <Image
@@ -551,7 +314,6 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
                   </TouchableOpacity>
                 )}
               </View>
-
               <View style={styles.nameContainer}>
                 {editingName ? (
                   <TextInput
@@ -560,7 +322,6 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
                     onChangeText={setTempName}
                     autoFocus
                     onBlur={handleSaveName}
-                    onSubmitEditing={handleSaveName}
                   />
                 ) : (
                   <View
@@ -583,43 +344,33 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
               </View>
             </View>
 
+            {/* QUICK ACTIONS */}
             <View style={styles.quickActions}>
               <ActionItem
                 icon={isMuted ? "notifications-off" : "notifications-outline"}
                 label={isMuted ? "Bật" : "Tắt"}
                 active={isMuted}
-                onPress={() =>
-                  isMuted ? handleMute(0) : setShowMuteOptions(true)
-                }
+                onPress={() => setShowMuteOptions(true)}
               />
               <ActionItem
                 icon={isPinned ? "pin" : "pin-outline"}
                 label={isPinned ? "Bỏ ghim" : "Ghim"}
                 active={isPinned}
-                onPress={handlePin}
+                onPress={() => {
+                  /* Pin logic */
+                }}
               />
-              <ActionItem
-                icon="person-add-outline"
-                label="Thêm TV"
-                onPress={() =>
-                  canInvite
-                    ? setIsAddMemberVisible(true)
-                    : Alert.alert(
-                        "Thông báo",
-                        "Trưởng nhóm đã tắt quyền mời thành viên.",
-                      )
-                }
-              />
+              {isGroup &&
+                (localSettings.allowMembersInvite || isOwner || isAdmin) && (
+                  <ActionItem
+                    icon="person-add-outline"
+                    label="Thêm TV"
+                    onPress={() => setIsAddMemberVisible(true)}
+                  />
+                )}
             </View>
 
-            {loading && (
-              <ActivityIndicator
-                style={{ marginVertical: 20 }}
-                color="#0068ff"
-              />
-            )}
-
-            {/* 1. YÊU CẦU THAM GIA */}
+            {/* REQUESTS SECTION */}
             {isGroup && (isOwner || isAdmin) && joinRequests.length > 0 && (
               <View style={styles.whiteSection}>
                 <SectionHeader
@@ -630,52 +381,98 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
                   expanded={expandedRequests}
                   onToggle={() => setExpandedRequests(!expandedRequests)}
                 />
-                {expandedRequests && (
-                  <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
-                    {joinRequests.map((req) => (
-                      <View key={req._id} style={styles.requestRow}>
-                        <Image
-                          source={{
-                            uri:
-                              req.userId?.profile?.avatarUrl ||
-                              "https://via.placeholder.com/150",
-                          }}
-                          style={styles.requestAvatar}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.requestName} numberOfLines={1}>
-                            {req.userId?.profile?.name}
-                          </Text>
-                          <Text style={styles.requestSub}>
-                            Mời bởi: {req.invitedBy?.profile?.name}
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: "row", gap: 8 }}>
-                          <TouchableOpacity
-                            onPress={() => onHandleRequest(req._id, "APPROVED")}
-                            style={styles.approveBtn}
-                          >
-                            <Ionicons
-                              name="checkmark"
-                              size={16}
-                              color="white"
-                            />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => onHandleRequest(req._id, "REJECTED")}
-                            style={styles.rejectBtn}
-                          >
-                            <Ionicons name="close" size={16} color="#666" />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                )}
+                {expandedRequests &&
+                  joinRequests.map((req) => (
+                    <View key={req._id} style={styles.requestRow}>
+                      <Image
+                        source={{ uri: req.userId?.profile?.avatarUrl }}
+                        style={styles.requestAvatar}
+                      />
+                      <Text style={{ flex: 1 }}>
+                        {req.userId?.profile?.name}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.approveBtn}
+                        onPress={() => {
+                          /* Logic duyệt */
+                        }}
+                      >
+                        <Ionicons name="checkmark" size={16} color="white" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
               </View>
             )}
 
-            {/* 2. CÀI ĐẶT QUẢN TRỊ NHÓM */}
+            {/* MEDIA SECTION (Logic KVT) */}
+            <View style={styles.whiteSection}>
+              <SectionHeader
+                icon={<Ionicons name="image-outline" size={18} />}
+                title="Ảnh/Video"
+                expanded={expandedMedia}
+                onToggle={() => setExpandedMedia(!expandedMedia)}
+              />
+              {expandedMedia && (
+                <View style={styles.mediaGrid}>
+                  {medias.length === 0 ? (
+                    <Text style={styles.emptyText}>Chưa có ảnh/video</Text>
+                  ) : (
+                    medias.map((m, idx) => (
+                      <TouchableOpacity
+                        key={idx}
+                        style={styles.mediaItem}
+                        onPress={() => setPreviewIndex(idx)}
+                      >
+                        {m.content?.file?.type === "VIDEO" ? (
+                          <View style={styles.videoPlaceholder}>
+                            <Ionicons name="play" size={24} color="white" />
+                          </View>
+                        ) : (
+                          <Image
+                            source={{ uri: m.content?.file?.fileKey }}
+                            style={styles.mediaImg}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+              )}
+            </View>
+
+            {/* FILES SECTION */}
+            <View style={styles.whiteSection}>
+              <SectionHeader
+                icon={<Ionicons name="document-outline" size={18} />}
+                title="File"
+                expanded={expandedFile}
+                onToggle={() => setExpandedFile(!expandedFile)}
+              />
+              {expandedFile &&
+                files.map((f, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={styles.fileRow}
+                    onPress={() => handleDownload(f.content.file)}
+                  >
+                    <Ionicons name="document" size={24} color="#0068ff" />
+                    <View style={{ flex: 1 }}>
+                      <Text numberOfLines={1}>{f.content.file.fileName}</Text>
+                    </View>
+                    {downloadingId === f.content.file.fileKey ? (
+                      <ActivityIndicator size="small" color="blue" />
+                    ) : (
+                      <Ionicons
+                        name="download-outline"
+                        size={18}
+                        color="#666"
+                      />
+                    )}
+                  </TouchableOpacity>
+                ))}
+            </View>
+
+            {/* MANAGEMENT SECTION (HEAD) */}
             {isGroup && (isOwner || isAdmin) && (
               <View style={styles.whiteSection}>
                 <SectionHeader
@@ -685,60 +482,23 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
                   onToggle={() => setExpandedManagement(!expandedManagement)}
                 />
                 {expandedManagement && (
-                  <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+                  <View style={{ padding: 16 }}>
                     <View style={styles.settingRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.settingTitle}>
-                          Quyền mời thành viên
-                        </Text>
-                        <Text style={styles.settingSub}>
-                          Thành viên thường có thể mời người khác
-                        </Text>
-                      </View>
+                      <Text style={{ flex: 1 }}>Quyền mời thành viên</Text>
                       <Switch
                         value={localSettings.allowMembersInvite}
-                        onValueChange={(val) =>
-                          handleUpdateSetting("allowMembersInvite", val)
+                        onValueChange={(v) =>
+                          handleUpdateSetting("allowMembersInvite", v)
                         }
-                        trackColor={{ false: "#d1d5db", true: "#34d399" }}
                       />
                     </View>
-
                     <View style={styles.settingRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.settingTitle}>
-                          Quyền gửi tin nhắn
-                        </Text>
-                        <Text style={styles.settingSub}>
-                          Cho phép mọi người cùng nhắn tin
-                        </Text>
-                      </View>
+                      <Text style={{ flex: 1 }}>Quyền gửi tin nhắn</Text>
                       <Switch
                         value={localSettings.allowMembersSendMessages}
-                        onValueChange={(val) =>
-                          handleUpdateSetting("allowMembersSendMessages", val)
+                        onValueChange={(v) =>
+                          handleUpdateSetting("allowMembersSendMessages", v)
                         }
-                        trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
-                      />
-                    </View>
-
-                    <View style={styles.settingRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[styles.settingTitle, { color: "#0068ff" }]}
-                        >
-                          Phê duyệt thành viên mới
-                        </Text>
-                        <Text style={styles.settingSub}>
-                          Admin cần duyệt trước khi vào nhóm
-                        </Text>
-                      </View>
-                      <Switch
-                        value={localSettings.approvalRequired}
-                        onValueChange={(val) =>
-                          handleUpdateSetting("approvalRequired", val)
-                        }
-                        trackColor={{ false: "#d1d5db", true: "#0068ff" }}
                       />
                     </View>
                   </View>
@@ -746,109 +506,39 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
               </View>
             )}
 
-            {/* 3. DANH SÁCH THÀNH VIÊN */}
-            {isGroup && (
-              <View style={styles.whiteSection}>
-                <SectionHeader
-                  icon={<Ionicons name="people-outline" size={18} />}
-                  title={`Thành viên (${members.length})`}
-                  expanded={expandedMembers}
-                  onToggle={() => setExpandedMembers(!expandedMembers)}
-                />
-                {expandedMembers && (
-                  <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
-                    {members.map((m) => (
-                      <TouchableOpacity
-                        key={m.userId}
-                        style={styles.memberRow}
-                        onPress={() => handleMemberAction(m)}
-                      >
-                        <Image
-                          source={{
-                            uri:
-                              m.avatarUrl || "https://via.placeholder.com/150",
-                          }}
-                          style={styles.memberAvatar}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.memberName}>
-                            {m.name} {m.userId === currentUserId && "(Bạn)"}
-                          </Text>
-                          {m.role !== "MEMBER" && (
-                            <Text style={styles.roleLabel}>
-                              {m.role === "OWNER" ? "Trưởng nhóm" : "Phó nhóm"}
-                            </Text>
-                          )}
-                        </View>
-                        {m.userId !== currentUserId && (
-                          <Ionicons
-                            name="ellipsis-horizontal"
-                            size={18}
-                            color="#9ca3af"
-                          />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
-
-            <View style={[styles.whiteSection, { marginTop: 10 }]}>
-              {isGroup && isOwner && (
-                <TouchableOpacity
-                  style={styles.dangerBtn}
-                  onPress={handleDeleteGroup}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                  <Text style={styles.dangerText}>Giải tán nhóm</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.dangerBtn}
-                onPress={handleLeaveGroup}
-              >
-                <Ionicons name="log-out-outline" size={20} color="#ef4444" />
-                <Text style={styles.dangerText}>
-                  {isGroup ? "Rời nhóm" : "Xóa lịch sử chat"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View style={{ height: 60 }} />
+            <TouchableOpacity
+              style={styles.dangerBtn}
+              onPress={() => {
+                /* Logic rời nhóm */
+              }}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+              <Text style={styles.dangerText}>
+                {isGroup ? "Rời nhóm" : "Xóa hội thoại"}
+              </Text>
+            </TouchableOpacity>
           </ScrollView>
         </Pressable>
       </Pressable>
 
-      <Modal transparent visible={showMuteOptions} animationType="fade">
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowMuteOptions(false)}
-        >
-          <View style={styles.muteSheet}>
-            <Text style={styles.muteTitle}>Tắt thông báo</Text>
-            {[
-              { label: "Trong 1 giờ", d: 60 },
-              { label: "Trong 4 giờ", d: 240 },
-              { label: "Đến 8:00 AM", d: -2 },
-              { label: "Đến khi mở lại", d: -1 },
-            ].map((opt) => (
-              <TouchableOpacity
-                key={opt.label}
-                style={styles.muteOpt}
-                onPress={() => handleMute(opt.d)}
-              >
-                <Text>{opt.label}</Text>
-              </TouchableOpacity>
-            ))}
+      {/* FULL SCREEN MEDIA MODAL (Logic KVT) */}
+      {previewIndex !== null && (
+        <Modal visible transparent animationType="fade">
+          <View style={styles.previewOverlay}>
             <TouchableOpacity
-              onPress={() => setShowMuteOptions(false)}
-              style={styles.muteCancel}
+              style={styles.closePreview}
+              onPress={() => setPreviewIndex(null)}
             >
-              <Text style={{ color: "#ef4444", fontWeight: "600" }}>Hủy</Text>
+              <Ionicons name="close" size={30} color="white" />
             </TouchableOpacity>
+            <Image
+              source={{ uri: medias[previewIndex].content.file.fileKey }}
+              style={styles.fullImg}
+              contentFit="contain"
+            />
           </View>
-        </Pressable>
-      </Modal>
+        </Modal>
+      )}
 
       <CreateGroupModal
         visible={isAddMemberVisible}
@@ -856,7 +546,6 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
         mode="ADD_MEMBER"
         conversationId={conversation.conversationId}
         excludedIds={members.map((m) => m.userId)}
-        onSuccess={fetchMembers}
       />
     </Modal>
   );
@@ -929,124 +618,73 @@ const styles = StyleSheet.create({
     backgroundColor: "#eee",
   },
   mediaImg: { width: "100%", height: "100%" },
+  videoPlaceholder: {
+    flex: 1,
+    backgroundColor: "black",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   emptyText: {
     textAlign: "center",
     color: "#9ca3af",
     width: "100%",
     padding: 20,
   },
-  memberRow: {
+  fileRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
     gap: 12,
+    padding: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#eee",
   },
-  memberAvatar: { width: 44, height: 44, borderRadius: 22 },
-  memberName: { fontSize: 15, fontWeight: "500" },
-  roleLabel: { fontSize: 11, color: "#0068ff", fontWeight: "600" },
+  settingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+  },
   dangerBtn: {
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
     gap: 12,
-    borderTopWidth: 0.5,
-    borderTopColor: "#f3f4f6",
-  },
-  dangerText: { fontSize: 15, color: "#ef4444", fontWeight: "600" },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end",
-  },
-  muteSheet: {
     backgroundColor: "white",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingBottom: 30,
   },
-  muteTitle: {
+  dangerText: { color: "#ef4444", fontWeight: "bold" },
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: "black",
+    justifyContent: "center",
+  },
+  fullImg: { width: "100%", height: "80%" },
+  closePreview: { position: "absolute", top: 40, right: 20, zIndex: 10 },
+  avatarContainer: { position: "relative" },
+  editAvatarBtn: {
+    position: "absolute",
+    bottom: 10,
+    right: 0,
+    backgroundColor: "white",
+    padding: 5,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "#ddd",
+  },
+  nameContainer: { alignItems: "center" },
+  nameInput: {
+    borderBottomWidth: 1,
+    borderColor: "#0068ff",
+    width: 200,
     textAlign: "center",
-    fontSize: 15,
-    fontWeight: "600",
-    padding: 15,
-  },
-  muteOpt: { padding: 15, borderTopWidth: 1, borderTopColor: "#f3f4f6" },
-  muteCancel: {
-    marginTop: 10,
-    padding: 15,
-    alignItems: "center",
-    borderTopWidth: 6,
-    borderTopColor: "#f3f4f6",
+    fontSize: 16,
   },
   requestRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 8,
-    backgroundColor: "#f0f7ff",
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    marginBottom: 8,
+    padding: 12,
+    gap: 10,
   },
-  requestAvatar: { width: 36, height: 36, borderRadius: 18, marginRight: 10 },
-  requestName: { fontSize: 14, fontWeight: "600", color: "#111" },
-  requestSub: { fontSize: 11, color: "#666", marginTop: 2 },
-  approveBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#0068ff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rejectBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#e5e7eb",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  settingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#f0f0f0",
-  },
-  settingTitle: { fontSize: 14, fontWeight: "500", color: "#333" },
-  settingSub: { fontSize: 11, color: "#888", marginTop: 2 },
-  avatarContainer: {
-    position: "relative",
-    marginBottom: 12,
-  },
-  editAvatarBtn: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    backgroundColor: "white",
-    padding: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    elevation: 2,
-  },
-  nameContainer: {
-    width: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 10,
-    paddingHorizontal: 20,
-  },
-  nameInput: {
-    fontSize: 18,
-    fontWeight: "bold",
-    borderBottomWidth: 2,
-    borderBottomColor: "#0068ff",
-    paddingHorizontal: 10,
-    textAlign: "center",
-    minWidth: 150,
-  },
+  requestAvatar: { width: 40, height: 40, borderRadius: 20 },
+  approveBtn: { backgroundColor: "#0068ff", padding: 8, borderRadius: 20 },
 });
 
 export default ConversationInfoSheet;

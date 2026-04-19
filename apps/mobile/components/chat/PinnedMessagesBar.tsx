@@ -35,7 +35,8 @@ const PinnedMessagesBar: React.FC<PinnedMessagesBarProps> = ({
   const getPreviewText = (msg: MessagesType) => {
     if (msg.content.text) return msg.content.text;
     if (msg.content.icon) return "Biểu cảm";
-    if (msg.content.file) return msg.content.file.fileName;
+
+    if (msg.content.files && msg.content.files.length > 0) return msg.content.files[msg.content.files.length - 1].fileName;
     return "Tin nhắn";
   };
 

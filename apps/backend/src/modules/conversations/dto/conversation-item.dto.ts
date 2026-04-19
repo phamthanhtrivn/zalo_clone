@@ -15,10 +15,10 @@ export class ConversationItemDto {
   name: string | undefined;
   avatar?: string;
 
-  // Dữ liệu phục vụ Video Call (từ nhánh của em)
+  // Dữ liệu phục vụ Video Call
   otherMemberId?: string;
 
-  // Dữ liệu phục vụ quản lý hội thoại (từ nhánh PhamThanhTri)
+  // Dữ liệu phục vụ quản lý hội thoại
   mutedUntil: Date | null | undefined;
   pinned: boolean | undefined;
   hidden: boolean | undefined;

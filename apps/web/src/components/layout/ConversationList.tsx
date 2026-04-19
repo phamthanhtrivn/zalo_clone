@@ -4,7 +4,7 @@ import { Button } from "../ui/button";
 import ConversationListItem from "./ConversationListItem";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { useEffect, useMemo, useState } from "react";
-import { fetchConversations } from "@/store/slices/conversationsSlice";
+import { fetchConversations } from "@/store/slices/conversationSlice";
 
 const ConversationList = () => {
   const { id } = useParams();

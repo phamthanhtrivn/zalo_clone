@@ -23,7 +23,8 @@ const PinnedMessagesBar = ({
 
   const renderContent = (msg: MessagesType) => {
     if (msg.content.text) return msg.content.text;
-    if (msg.content.file) return msg.content.file.fileName;
+    if (msg.content.files.length === 1) return msg.content.files[0].fileName;
+    if (msg.content.files.length > 1) return msg.content.files[msg.content.files.length - 1].fileName;
     return "Tin nhắn";
   };
 
@@ -64,10 +65,9 @@ const PinnedMessagesBar = ({
             <button
               onClick={() => setOpenList((prev) => !prev)}
               className={`text-xs px-2 py-1 rounded-md border  cursor-pointer
-                ${
-                  openList
-                    ? "bg-gray-100 border-gray-300"
-                    : "border-gray-300 hover:bg-gray-100"
+                ${openList
+                  ? "bg-gray-100 border-gray-300"
+                  : "border-gray-300 hover:bg-gray-100"
                 }`}
             >
               +{remaining} ghim
@@ -95,11 +95,10 @@ const PinnedMessagesBar = ({
       {/* 🔹 LIST */}
       <div
         className={`absolute left-0 right-0 mt-2 z-50 transition-all duration-200 origin-top
-        ${
-          openList
+        ${openList
             ? "opacity-100 scale-y-100"
             : "opacity-0 scale-y-95 pointer-events-none"
-        }`}
+          }`}
       >
         <div className="bg-white shadow-lg rounded-lg mx-3 overflow-hidden">
           {pinnedMessages.map((msg) => (

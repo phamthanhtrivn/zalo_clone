@@ -12,23 +12,24 @@ import { conversationService } from "@/services/conversation.service";
 // --- TYPES ---
 type ConversationState = {
   items: ConversationItemType[];
+  replyingMessage: any | null;
   loading: boolean;
   error: string | null;
 };
 
 const initialState: ConversationState = {
   items: [],
+  replyingMessage: null,
   loading: false,
   error: null,
 };
 
-// --- ASYNC THUNKS (Dùng để fetch dữ liệu khi mở App) ---
+// --- ASYNC THUNKS ---
 export const fetchConversations = createAsyncThunk(
   "conversation/fetchConversations",
   async (_, { rejectWithValue }) => {
     try {
       const response = await conversationService.getMyConversations();
-      // Chú ý: response trả về từ Service đã qua Interceptor nên thường là object chứa .success
       if (response?.success) return response.data;
       return rejectWithValue(response?.message || "Lỗi tải dữ liệu");
     } catch (error: any) {
@@ -67,13 +68,10 @@ const conversationSlice = createSlice({
         };
         state.items.splice(index, 1);
         state.items.unshift(updated);
-      } else {
-        // Nếu hội thoại chưa có trong danh sách (người lạ nhắn tin), có thể gọi fetch lại hoặc push vào
-        // Tạm thời để dispatch fetch lại bên SocketContext cho an toàn
       }
     },
 
-    // 3. Cập nhật Cài đặt (Ghim, Ẩn, Tắt thông báo)
+    // 3. Cập nhật Cài đặt (Ghim, Ẩn, Tắt thông báo, Hẹn giờ xóa)
     updateConversationSetting(
       state,
       action: PayloadAction<{
@@ -96,7 +94,6 @@ const conversationSlice = createSlice({
 
       if (action.payload.name !== undefined) c.name = action.payload.name;
       if (action.payload.avatar !== undefined) c.avatar = action.payload.avatar;
-
       if (action.payload.pinned !== undefined) c.pinned = action.payload.pinned;
       if (action.payload.hidden !== undefined) c.hidden = action.payload.hidden;
       if (action.payload.muted !== undefined) c.muted = action.payload.muted;
@@ -106,6 +103,7 @@ const conversationSlice = createSlice({
         c.category = action.payload.category;
       if (action.payload.expireDuration !== undefined)
         c.expireDuration = action.payload.expireDuration;
+
       if (action.payload.group !== undefined) {
         c.group = {
           ...(c.group || {}),
@@ -114,7 +112,23 @@ const conversationSlice = createSlice({
       }
     },
 
-    // 4. Thu hồi tin nhắn cuối cùng (Cập nhật text ở Sidebar)
+    // 4. Xử lý tin nhắn hết hạn
+    removeExpiredMessages(state, action: PayloadAction<string[]>) {
+      for (const c of state.items) {
+        if (c.lastMessage && action.payload.includes(c.lastMessage._id)) {
+          c.lastMessage = {
+            ...c.lastMessage,
+            expired: true,
+            content: {
+              ...c.lastMessage.content,
+              text: "Tin nhắn đã hết hạn",
+            },
+          };
+        }
+      }
+    },
+
+    // 5. Thu hồi tin nhắn cuối cùng (Sidebar)
     updateRecallMessageInConversation(
       state,
       action: PayloadAction<{ conversationId: string; messageId: string }>,
@@ -128,7 +142,13 @@ const conversationSlice = createSlice({
       }
     },
 
-    // 5. Xóa hội thoại khỏi danh sách
+    // 6. Ẩn hội thoại local
+    hideConversationLocal(state, action: PayloadAction<string>) {
+      const c = state.items.find((i) => i.conversationId === action.payload);
+      if (c) c.hidden = !c.hidden;
+    },
+
+    // 7. Xóa hội thoại khỏi danh sách
     removeConversation(
       state,
       action: PayloadAction<{ conversationId: string } | string>,
@@ -140,7 +160,43 @@ const conversationSlice = createSlice({
       state.items = state.items.filter((c) => c.conversationId !== id);
     },
 
-    // 6. Các action bổ trợ khác
+    // 8. Quản lý tin nhắn chưa đọc
+    resetUnreadCount(state, action: PayloadAction<string>) {
+      const c = state.items.find((i) => i.conversationId === action.payload);
+      if (c) c.unreadCount = 0;
+    },
+
+    setUnreadCount(
+      state,
+      action: PayloadAction<{ conversationId: string; unreadCount: number }>,
+    ) {
+      const c = state.items.find(
+        (i) => i.conversationId === action.payload.conversationId,
+      );
+      if (c) c.unreadCount = action.payload.unreadCount;
+    },
+
+    // 9. Thêm hội thoại mới lên đầu
+    addConversationToTop: (state, action: PayloadAction<any>) => {
+      const newConv = action.payload;
+      const index = state.items.findIndex(
+        (c) => c.conversationId === newConv.conversationId,
+      );
+      if (index !== -1) {
+        state.items.splice(index, 1);
+      }
+      state.items = [newConv, ...state.items];
+    },
+
+    // 10. Tính năng Reply
+    setReplyingMessage(state, action: PayloadAction<any | null>) {
+      state.replyingMessage = action.payload;
+    },
+
+    clearReplyingMessage(state) {
+      state.replyingMessage = null;
+    },
+
     setCategoryLocal(
       state,
       action: PayloadAction<{
@@ -152,23 +208,6 @@ const conversationSlice = createSlice({
         (i) => i.conversationId === action.payload.conversationId,
       );
       if (c) c.category = action.payload.category;
-    },
-
-    resetUnreadCount(state, action: PayloadAction<string>) {
-      const c = state.items.find((i) => i.conversationId === action.payload);
-      if (c) c.unreadCount = 0;
-    },
-    addConversationToTop: (state, action: PayloadAction<any>) => {
-      const newConv = action.payload;
-      const index = state.items.findIndex(
-        (c) => c.conversationId === newConv.conversationId,
-      );
-
-      if (index !== -1) {
-        state.items.splice(index, 1);
-      }
-
-      state.items = [newConv, ...state.items];
     },
   },
   extraReducers: (builder) => {
@@ -194,9 +233,14 @@ export const {
   updateConversationSetting,
   updateRecallMessageInConversation,
   removeConversation,
-  setCategoryLocal,
+  removeExpiredMessages,
+  setUnreadCount,
+  setReplyingMessage,
+  clearReplyingMessage,
+  hideConversationLocal,
   resetUnreadCount,
   addConversationToTop,
+  setCategoryLocal,
 } = conversationSlice.actions;
 
 export default conversationSlice.reducer;

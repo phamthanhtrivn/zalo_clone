@@ -6,7 +6,7 @@ import {
   Patch,
   Post,
   Query,
-  UploadedFile,
+  UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
 import { MessagesService } from './messages.service';
@@ -16,14 +16,14 @@ import { RecalledMessageDto } from './dto/recalled-message.dto';
 import { ReactionDto } from './dto/reaction.dto';
 import { RemoveReactionDto } from './dto/remove-reaction.dto';
 import { ReadReceiptDto } from './dto/read-reciept.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { CallMessageDto } from './dto/call-message.dto';
 import { UpdateCallMessageDto } from './dto/update-call-message.dto';
 import { GetMessagesDto } from './dto/get-messages.dto';
 import { GetMediasPreviewDto } from './dto/get-medias-preview.dto';
 import { GetMediasFileTypeDto } from './dto/get-medias-file-type.dto';
-import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
 import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
+import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
 import { DeleteMessageForMeDto } from './dto/delete-message-for-me.dto';
 import { ForwardMessageDto } from './dto/forward-message.dto';
 
@@ -98,12 +98,12 @@ export class MessagesController {
   }
 
   @Post()
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FilesInterceptor('files'))
   async sendMessage(
     @Body() sendMessageDto: SendMessageDto,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFiles() files: Express.Multer.File[],
   ) {
-    return this.messagesService.sendMessage(sendMessageDto, file);
+    return this.messagesService.sendMessage(sendMessageDto, files);
   }
 
   @Post('call')

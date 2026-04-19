@@ -30,7 +30,7 @@ export class ConversationSettingGateway {
 
     emitConversationDeleted(
         userId: string,
-        payload: { conversationId: string; deletedAt: Date | null },
+        payload: { conversationId: string; deletedAt: Date | null, clearAt: Date | null },
     ) {
         console.log("EMIT DELETE:", userId, payload);
         this.server.to(userId).emit("conversation_setting:delete", payload);

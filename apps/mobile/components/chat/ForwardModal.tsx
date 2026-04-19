@@ -7,8 +7,10 @@ import {
   TouchableOpacity,
   FlatList,
   TextInput,
+
   KeyboardAvoidingView,
   Platform,
+
 } from "react-native";
 import { Image } from "expo-image";
 import type { ConversationItemType } from "@/types/conversation-item.type";
@@ -30,6 +32,7 @@ const ForwardModal: React.FC<Props> = ({
   onSubmit,
   loadingForward,
 }) => {
+
   const [selectedConversations, setSelectedConversations] = useState<string[]>(
     [],
   );
@@ -37,11 +40,13 @@ const ForwardModal: React.FC<Props> = ({
 
   const toggleSelect = (id: string) => {
     setSelectedConversations((prev) =>
+
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
     );
   };
 
   const filtered = conversations.filter((c) =>
+
     c.name.toLowerCase().includes(search.toLowerCase()),
   );
 
@@ -52,6 +57,7 @@ const ForwardModal: React.FC<Props> = ({
   };
 
   return (
+
     <Modal
       transparent
       visible={visible}

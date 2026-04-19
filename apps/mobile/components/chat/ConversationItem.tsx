@@ -12,6 +12,7 @@ import {
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import type { ConversationItemType } from "@/types/conversation-item.type";
+
 import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
 import { formatMessageTime } from "@/utils/format-message-time..util";
 import {
@@ -26,8 +27,11 @@ import {
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   updateConversationSetting,
+  hideConversationLocal,
   removeConversation,
 } from "@/store/slices/conversationSlice";
+import { Avatar } from "../common/ui/Avatar";
+
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
@@ -53,16 +57,24 @@ const ConversationItem: React.FC<Props> = ({
   const [subMenu, setSubMenu] = useState<SubMenu>(null);
   const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
+
   const lastMessage = conversation.lastMessage;
+  const isRecall = lastMessage?.recalled;
 
   const preview = useMemo(() => {
-    const content = lastMessage?.content;
-    const recalled = lastMessage?.recalled;
+    const lastMsg = conversation.lastMessage;
+    const content = lastMsg?.content;
 
-    if (recalled) {
+    if (isRecall) {
       return {
         icon: null,
         text: "Tin nhắn đã được thu hồi",
+      };
+    }
+    if (lastMsg.expired) {
+      return {
+        icon: null,
+        text: "Tin nhắn đã hết hạn",
       };
     }
 
@@ -82,8 +94,8 @@ const ConversationItem: React.FC<Props> = ({
       };
     }
 
-    if (content.file) {
-      switch (content.file.type) {
+    if (Array.isArray(content.files) && content.files.length > 0) {
+      switch (content.files[content.files.length - 1].type) {
         case "IMAGE":
           return {
             icon: <MaterialIcons name="image" size={14} color="#6b7280" />,
@@ -99,7 +111,7 @@ const ConversationItem: React.FC<Props> = ({
             icon: (
               <MaterialIcons name="attach-file" size={14} color="#6b7280" />
             ),
-            text: content.file.fileName,
+            text: content.files[0].fileName,
           };
         default:
           return { icon: null, text: "" };
@@ -128,6 +140,7 @@ const ConversationItem: React.FC<Props> = ({
     setMenuVisible(true);
     translateY.setValue(SCREEN_HEIGHT);
     Animated.parallel([
+
       Animated.spring(translateY, {
         toValue: 0,
         damping: 20,
@@ -144,6 +157,7 @@ const ConversationItem: React.FC<Props> = ({
 
   const closeSheet = (onDone?: () => void) => {
     Animated.parallel([
+
       Animated.timing(translateY, {
         toValue: SCREEN_HEIGHT,
         duration: 220,
@@ -167,6 +181,7 @@ const ConversationItem: React.FC<Props> = ({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, { dy }) => dy > 4,
+
       onPanResponderMove: (_, { dy }) => {
         if (dy > 0) dragY.setValue(dy);
       },
@@ -178,13 +193,18 @@ const ConversationItem: React.FC<Props> = ({
           Animated.spring(dragY, { toValue: 0, useNativeDriver: true }).start();
         }
       },
-    }),
+    })
   ).current;
+
+
+  // ── Handlers — optimistic update với giá trị tường minh, KHÔNG toggle ──
+
 
   const handlePin = () => {
     const newPinned = !conversation.pinned;
 
     // 1. Optimistic update ngay lập tức
+
     dispatch(
       updateConversationSetting({
         conversationId: conversation.conversationId,
@@ -200,6 +220,7 @@ const ConversationItem: React.FC<Props> = ({
           : await unpinConversation(user?.userId, conversation.conversationId);
       } catch (err) {
         // Rollback nếu lỗi
+
         dispatch(
           updateConversationSetting({
             conversationId: conversation.conversationId,
@@ -213,6 +234,7 @@ const ConversationItem: React.FC<Props> = ({
 
   const handleMute = (duration: number) => {
     const newMuted = duration !== 0;
+
 
     dispatch(
       updateConversationSetting({
@@ -228,11 +250,12 @@ const ConversationItem: React.FC<Props> = ({
       try {
         duration === 0
           ? await unmuteConversation(user?.userId, conversation.conversationId)
+
           : await muteConversation(
-              user?.userId,
-              conversation.conversationId,
-              duration,
-            );
+            user?.userId,
+            conversation.conversationId,
+            duration,
+          );
       } catch (err) {
         dispatch(
           updateConversationSetting({
@@ -249,6 +272,7 @@ const ConversationItem: React.FC<Props> = ({
   const handleHide = () => {
     const newHidden = !conversation.hidden;
 
+
     dispatch(
       updateConversationSetting({
         conversationId: conversation.conversationId,
@@ -262,6 +286,7 @@ const ConversationItem: React.FC<Props> = ({
           ? await hideConversation(user?.userId, conversation.conversationId)
           : await unhideConversation(user?.userId, conversation.conversationId);
       } catch (err) {
+
         dispatch(
           updateConversationSetting({
             conversationId: conversation.conversationId,
@@ -312,6 +337,7 @@ const ConversationItem: React.FC<Props> = ({
       >
         {isSelectMode && (
           <View style={{ marginRight: 12 }}>
+
             <View
               style={{
                 width: 22,
@@ -405,7 +431,7 @@ const ConversationItem: React.FC<Props> = ({
 
           <View className="flex-row items-center mt-1">
             {/* sender */}
-            <Text className="text-[13px] text-gray-500">
+            <Text className="text-[13px] text-gray-400">
               {conversation.type === "PRIVATE" && !isOwn
                 ? ""
                 : `${isOwn ? "Bạn" : lastMessage?.senderName}: `}
@@ -497,12 +523,12 @@ const ConversationItem: React.FC<Props> = ({
               >
                 {conversation.name}
               </Text>
-              {preview ? (
+              {preview?.text ? (
                 <Text
                   numberOfLines={1}
                   style={{ fontSize: 12, color: "#9ca3af", marginTop: 1 }}
                 >
-                  {preview}
+                  {preview.text}
                 </Text>
               ) : null}
             </View>
@@ -512,6 +538,7 @@ const ConversationItem: React.FC<Props> = ({
             <View>
               <TouchableOpacity
                 onPress={() => setSubMenu(null)}
+
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
@@ -543,6 +570,7 @@ const ConversationItem: React.FC<Props> = ({
                 <TouchableOpacity
                   key={opt.label}
                   onPress={() => handleMute(opt.duration)}
+
                   style={{
                     paddingHorizontal: 20,
                     paddingVertical: 15,
@@ -559,6 +587,7 @@ const ConversationItem: React.FC<Props> = ({
             </View>
           ) : (
             <View>
+
               <SheetItem
                 icon={
                   <MaterialIcons
@@ -646,6 +675,8 @@ const ConversationItem: React.FC<Props> = ({
   );
 };
 
+
+
 const SheetItem = ({
   icon,
   label,
@@ -679,6 +710,7 @@ const SheetItem = ({
 );
 
 const Divider = () => (
+
   <View
     style={{ height: 0.5, backgroundColor: "#f0f0f0", marginVertical: 4 }}
   />

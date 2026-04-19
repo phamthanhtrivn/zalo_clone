@@ -13,7 +13,8 @@ export interface MessagesType {
   content: {
     text: string | null;
     icon: string | null;
-    file: File;
+
+    files: File[];
   };
   pinned: boolean;
   recalled: boolean;
@@ -24,6 +25,9 @@ export interface MessagesType {
   expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
+  expired?: boolean;
+
+
 }
 
 export interface ReactionType {
@@ -41,6 +45,7 @@ export interface ReactionType {
   createdAt: string;
   updatedAt: string;
 }
+
 export interface ReadReceiptType {
   userId: {
     _id: string;

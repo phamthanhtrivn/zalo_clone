@@ -6,8 +6,8 @@ export const formatTime = (time: number) => {
 };
 
 export const formatDate = (date: Date): string => {
-  const day = date.getDate().toString().padStart(2, '0');
-  const month = (date.getMonth() + 1).toString().padStart(2, '0'); // Tháng trong JS bắt đầu từ 0
+  const day = date.getDate().toString().padStart(2, "0");
+  const month = (date.getMonth() + 1).toString().padStart(2, "0"); // Tháng trong JS bắt đầu từ 0
   const year = date.getFullYear();
 
   return `${day}/${month}/${year}`;
@@ -33,4 +33,3 @@ export const formatTimeString = (date: string | Date): string => {
   const minutes = String(d.getMinutes()).padStart(2, "0");
   return `${hours}:${minutes}`;
 };
-

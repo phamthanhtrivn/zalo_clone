@@ -26,7 +26,7 @@ export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     private readonly storageService: StorageService,
-  ) { }
+  ) {}
 
   async findByPhone(phone: string) {
     return this.userModel.findOne({ phone: phone }).exec();

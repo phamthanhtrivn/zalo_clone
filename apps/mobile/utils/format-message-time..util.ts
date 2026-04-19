@@ -1,5 +1,11 @@
-export const formatMessageTime = (dateString: string) => {
+export const formatMessageTime = (dateString?: string | Date | null) => {
+  if (!dateString) return "";
+
   const date = new Date(dateString);
+
+  if (isNaN(date.getTime())) return "";
+
+
   const now = new Date();
 
   const diffMs = now.getTime() - date.getTime();
@@ -11,9 +17,7 @@ export const formatMessageTime = (dateString: string) => {
   const isSameDay = now.toDateString() === date.toDateString();
 
   if (isSameDay) {
-    if (diffMs < minute) {
-      return "Vừa xong";
-    }
+    if (diffMs < minute) return "Vừa xong";
 
     if (diffMs < hour) {
       const minutes = Math.floor(diffMs / minute);
@@ -40,13 +44,9 @@ export const formatMessageTime = (dateString: string) => {
     (startOfToday.getTime() - startOfDate.getTime()) / day,
   );
 
-  if (diffDays === 1) {
-    return "Hôm qua";
-  }
+  if (diffDays === 1) return "Hôm qua";
 
-  if (diffDays < 7) {
-    return `${diffDays} ngày`;
-  }
+  if (diffDays < 7) return `${diffDays} ngày`;
 
   const isSameYear = now.getFullYear() === date.getFullYear();
 
@@ -64,8 +64,12 @@ export const formatMessageTime = (dateString: string) => {
   });
 };
 
-export const formatTime = (date: string) => {
+export const formatTime = (date?: string | null) => {
+  if (!date) return "";
+
   const d = new Date(date);
+  if (isNaN(d.getTime())) return "";
+
   return d.toLocaleTimeString("vi-VN", {
     hour: "2-digit",
     minute: "2-digit",

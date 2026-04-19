@@ -12,7 +12,6 @@ import {
   FileText,
   Link as LinkIcon,
   Users,
-  Link2,
   LogOut,
   Trash2,
   ChevronDown,
@@ -20,7 +19,6 @@ import {
   X as CloseIcon,
   Download,
   ChevronLeft,
-  ShieldCheck,
   UserCheck,
   Settings2,
   Check,
@@ -32,7 +30,6 @@ import {
   flip,
   shift,
   autoUpdate,
-  FloatingPortal,
 } from "@floating-ui/react";
 
 // UI Components
@@ -56,6 +53,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import CreateGroupModal from "@/components/layout/CreateGroupModal";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 // Services & Redux
 import { messageService } from "@/services/message.service";
@@ -72,9 +72,6 @@ import {
   removeConversation,
   updateConversationSetting,
 } from "@/store/slices/conversationSlice";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
 
 // Types & Utils
 import type { ConversationItemType } from "@/types/conversation-item.type";
@@ -249,10 +246,11 @@ const ConversationInfoPanel = ({
     };
   }, [isOpen, isGroup, currentConversation?.conversationId, membersRefreshKey]);
 
-  // --- SOCKET LISTENERS ---
+  // --- SOCKET LISTENERS (GROUP MANAGEMENT) ---
   useEffect(() => {
     if (!socket || !currentConversation?.conversationId) return;
     const convId = currentConversation.conversationId;
+
     const handleRoleUpdated = (payload: any) => {
       if (payload?.conversationId !== currentConversation.conversationId)
         return;
@@ -298,15 +296,40 @@ const ConversationInfoPanel = ({
     };
   }, [socket, currentConversation?.conversationId]);
 
+  // --- SOCKET LISTENERS (MEDIA ROOMS TỪ NHÁNH KhongVanTam) ---
   useEffect(() => {
-    if (!socket) return;
-    socket.on("member_updated", () => {
-      setMembersRefreshKey((k) => k + 1);
-    });
-    return () => {
-      socket.off("member_updated");
+    if (!socket || !isOpen || !currentConversation?.conversationId) return;
+
+    const conversationId = currentConversation.conversationId;
+    const mediaRooms = [
+      `media_${conversationId}_IMAGE_VIDEO`,
+      `media_${conversationId}_FILE`,
+      `media_${conversationId}_LINK`,
+    ];
+
+    // Join specialized media rooms
+    mediaRooms.forEach((room) => socket.emit("join_room", room));
+
+    const handleNewMedia = (payload: { type: string; data: any }) => {
+      const { type, data } = payload;
+      if (type === "IMAGE_VIDEO") {
+        setMedias((prev) => [data, ...prev].slice(0, 6));
+      }
+      if (type === "FILE") {
+        setFiles((prev) => [data, ...prev].slice(0, 6)); // Lấy 6 file
+      }
+      if (type === "LINK") {
+        setLinks((prev) => [data, ...prev].slice(0, 6));
+      }
     };
-  }, [socket]);
+
+    socket.on("new_media", handleNewMedia);
+
+    return () => {
+      mediaRooms.forEach((room) => socket.emit("leave_room", room));
+      socket.off("new_media", handleNewMedia);
+    };
+  }, [socket, isOpen, currentConversation?.conversationId]);
 
   // --- KEYBOARD NAVIGATION FOR PREVIEW ---
   useEffect(() => {
@@ -355,8 +378,8 @@ const ConversationInfoPanel = ({
         setMembersRefreshKey((k) => k + 1);
         dispatch(
           updateConversationSetting({
-            conversationId: currentConversation.conversationId,
-            group: { ...currentConversation.group, [key]: value },
+            conversationId: currentConversation!.conversationId,
+            group: { ...currentConversation!.group, [key]: value },
           }),
         );
       }
@@ -434,6 +457,9 @@ const ConversationInfoPanel = ({
     }
 
     const isUnmuting = duration === 0;
+    const prevMuted = currentConversation.muted;
+    const prevMutedUntil = currentConversation.mutedUntil;
+
     dispatch(
       updateConversationSetting({
         conversationId: currentConversation.conversationId,
@@ -457,8 +483,8 @@ const ConversationInfoPanel = ({
       dispatch(
         updateConversationSetting({
           conversationId: currentConversation.conversationId,
-          muted: isMuted,
-          mutedUntil: currentConversation.mutedUntil ?? null,
+          muted: prevMuted,
+          mutedUntil: prevMutedUntil ?? null,
         }),
       );
     }
@@ -563,6 +589,7 @@ const ConversationInfoPanel = ({
   const handleDownload = async (file: any) => {
     try {
       const response = await fetch(file.fileKey);
+      if (!response.ok) throw new Error("Download failed");
       const blob = await response.blob();
       saveAs(blob, file.fileName);
     } catch (error) {
@@ -706,10 +733,14 @@ const ConversationInfoPanel = ({
               onClick={() =>
                 isMuted ? handleMute(0) : setShowMuteOptions(!showMuteOptions)
               }
-              className="flex flex-col items-center gap-1.5 group"
+              className="flex flex-col items-center gap-1.5 group cursor-pointer"
             >
               <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isMuted ? "bg-blue-50 text-blue-600" : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"}`}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                  isMuted
+                    ? "bg-blue-50 text-blue-600"
+                    : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"
+                }`}
               >
                 {isMuted ? <BellOff size={20} /> : <Bell size={20} />}
               </div>
@@ -717,15 +748,37 @@ const ConversationInfoPanel = ({
                 Thông báo
               </span>
             </button>
+            {/* Popover Mute options */}
+            {showMuteOptions && (
+              <div
+                ref={refs.setFloating}
+                style={floatingStyles}
+                className="z-50 bg-white border shadow-lg rounded-md w-48 py-1 text-sm font-medium"
+              >
+                {MUTE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.duration}
+                    onClick={() => handleMute(opt.duration)}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 transition-colors"
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Pin Button */}
           <button
             onClick={handlePin}
-            className="flex flex-col items-center gap-1.5 flex-1 group"
+            className="flex flex-col items-center gap-1.5 flex-1 group cursor-pointer"
           >
             <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isPinned ? "bg-blue-50 text-blue-600" : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"}`}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                isPinned
+                  ? "bg-blue-50 text-blue-600"
+                  : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"
+              }`}
             >
               {isPinned ? <PinOff size={20} /> : <Pin size={20} />}
             </div>
@@ -734,11 +787,10 @@ const ConversationInfoPanel = ({
 
           {/* Add Member / Create Group Button */}
           {isGroup ? (
-            // NẾU LÀ NHÓM: Kiểm tra quyền mời mới hiện nút Thêm TV
             canInvite && (
               <button
                 onClick={() => setAddMemberModalOpen(true)}
-                className="flex flex-col items-center gap-1.5 flex-1 group animate-in fade-in zoom-in duration-200"
+                className="flex flex-col items-center gap-1.5 flex-1 group animate-in fade-in zoom-in duration-200 cursor-pointer"
               >
                 <div className="w-10 h-10 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center group-hover:bg-gray-200 transition-colors">
                   <UserPlus size={20} />
@@ -749,15 +801,9 @@ const ConversationInfoPanel = ({
               </button>
             )
           ) : (
-            // NẾU LÀ CHAT 1-1: Luôn hiện nút Tạo nhóm
             <button
-              onClick={() => {
-                // Logic: Mở modal tạo nhóm mới
-                // Ở đây có thể gọi CreateGroupModal với mode="CREATE_GROUP"
-                // và truyền sẵn otherMemberId vào list chọn mặc định (nếu muốn)
-                setAddMemberModalOpen(true);
-              }}
-              className="flex flex-col items-center gap-1.5 flex-1 group animate-in fade-in zoom-in duration-200"
+              onClick={() => setAddMemberModalOpen(true)}
+              className="flex flex-col items-center gap-1.5 flex-1 group animate-in fade-in zoom-in duration-200 cursor-pointer"
             >
               <div className="w-10 h-10 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center group-hover:bg-gray-200 transition-colors">
                 <Users size={20} />
@@ -769,12 +815,12 @@ const ConversationInfoPanel = ({
           )}
         </div>
 
-        {/* SECTION: PHÊ DUYỆT THÀNH VIÊN (Hiện khi có request) */}
+        {/* SECTION: PHÊ DUYỆT THÀNH VIÊN */}
         {isGroup && canManageMembers && joinRequests.length > 0 && (
           <div className="bg-white mt-2 border-y border-blue-100 shadow-sm">
             <button
               onClick={() => toggleSection("requests")}
-              className="h-12 w-full flex items-center justify-between px-4"
+              className="h-12 w-full flex items-center justify-between px-4 cursor-pointer"
             >
               <div className="flex items-center gap-3 text-blue-600">
                 <UserCheck size={18} />
@@ -811,13 +857,13 @@ const ConversationInfoPanel = ({
                     <div className="flex gap-1 shrink-0">
                       <button
                         onClick={() => onHandleRequest(req._id, "approve")}
-                        className="p-1.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-sm"
+                        className="p-1.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-sm cursor-pointer"
                       >
                         <Check size={14} />
                       </button>
                       <button
                         onClick={() => onHandleRequest(req._id, "reject")}
-                        className="p-1.5 bg-white text-gray-400 border rounded-full hover:bg-gray-50 shadow-sm"
+                        className="p-1.5 bg-white text-gray-400 border rounded-full hover:bg-gray-50 shadow-sm cursor-pointer"
                       >
                         <CloseIcon size={14} />
                       </button>
@@ -834,7 +880,7 @@ const ConversationInfoPanel = ({
           <div className="bg-white mt-2 border-y">
             <button
               onClick={() => toggleSection("management")}
-              className="h-12 w-full flex items-center justify-between px-4 hover:bg-gray-50 transition-colors"
+              className="h-12 w-full flex items-center justify-between px-4 hover:bg-gray-50 transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <Settings2 size={18} className="text-gray-600" />
@@ -864,14 +910,14 @@ const ConversationInfoPanel = ({
                     disabled={managementLoading}
                     checked={
                       currentConversation?.group?.allowMembersInvite !== false
-                    } // Mặc định true
+                    }
                     onCheckedChange={(val) =>
                       handleUpdateSetting("allowMembersInvite", val)
                     }
                   />
                 </div>
 
-                {/* 2. QUYỀN GỬI TIN NHẮN (MỚI THÊM) */}
+                {/* 2. QUYỀN GỬI TIN NHẮN */}
                 <div className="flex items-center justify-between border-t border-gray-100 pt-4">
                   <div className="space-y-0.5">
                     <p className="text-xs font-semibold text-gray-700">
@@ -886,7 +932,7 @@ const ConversationInfoPanel = ({
                     checked={
                       currentConversation?.group?.allowMembersSendMessages !==
                       false
-                    } // Mặc định true
+                    }
                     onCheckedChange={(val) =>
                       handleUpdateSetting("allowMembersSendMessages", val)
                     }
@@ -907,7 +953,7 @@ const ConversationInfoPanel = ({
                     disabled={managementLoading}
                     checked={
                       currentConversation?.group?.approvalRequired || false
-                    } // Mặc định false
+                    }
                     onCheckedChange={(val) =>
                       handleUpdateSetting("approvalRequired", val)
                     }
@@ -922,7 +968,7 @@ const ConversationInfoPanel = ({
         <div className="bg-white mt-2 border-t">
           <button
             onClick={() => toggleSection("media")}
-            className="h-12 w-full flex items-center justify-between px-4"
+            className="h-12 w-full flex items-center justify-between px-4 cursor-pointer"
           >
             <div className="flex items-center gap-3">
               <ImageIcon size={18} className="text-gray-600" />
@@ -938,34 +984,46 @@ const ConversationInfoPanel = ({
             <div className="px-4 pb-4">
               {medias.length > 0 ? (
                 <div className="grid grid-cols-3 gap-1">
-                  {medias.slice(0, 6).map((m, idx) => (
-                    <div
-                      key={idx}
-                      className="aspect-square bg-gray-100 rounded overflow-hidden cursor-pointer relative"
-                      onClick={() => setPreview({ isOpen: true, index: idx })}
-                    >
-                      <img
-                        src={m?.content?.file?.fileKey}
-                        className="w-full h-full object-cover"
-                        alt=""
-                      />
-                      {m?.content?.file?.type === "VIDEO" && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                          <div className="w-6 h-6 rounded-full bg-black/50 flex items-center justify-center">
-                            <div className="ml-0.5 border-l-[6px] border-l-white border-y-[4px] border-y-transparent" />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                  {medias.slice(0, 6).map((media, idx) => {
+                    const file = media?.content?.file;
+                    const isVideo = file?.type === "VIDEO";
+                    return (
+                      <div
+                        key={idx}
+                        className="aspect-square bg-gray-100 overflow-hidden relative cursor-pointer rounded-md border border-gray-200"
+                        onClick={() => setPreview({ isOpen: true, index: idx })}
+                      >
+                        {isVideo ? (
+                          <>
+                            <video
+                              src={file?.fileKey}
+                              className="w-full h-full object-cover"
+                              muted
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                              <div className="w-7 h-7 rounded-full bg-black/50 flex items-center justify-center">
+                                <div className="ml-1 border-l-8 border-l-white border-y-6 border-y-transparent" />
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <img
+                            src={file?.fileKey}
+                            className="w-full h-full object-cover"
+                            alt=""
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-xs text-gray-400 text-center py-2">
-                  Chưa có ảnh/video
+                  Chưa có ảnh/video trong cuộc trò chuyện
                 </p>
               )}
               {medias.length > 0 && (
-                <Button variant="secondary" className="w-full mt-3 h-8 text-xs">
+                <Button className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 mt-3 h-8 text-xs cursor-pointer">
                   Xem tất cả
                 </Button>
               )}
@@ -977,7 +1035,7 @@ const ConversationInfoPanel = ({
         <div className="bg-white border-t">
           <button
             onClick={() => toggleSection("file")}
-            className="h-12 w-full flex items-center justify-between px-4"
+            className="h-12 w-full flex items-center justify-between px-4 cursor-pointer"
           >
             <div className="flex items-center gap-3">
               <FileText size={18} className="text-gray-600" />
@@ -990,35 +1048,114 @@ const ConversationInfoPanel = ({
             )}
           </button>
           {expandedSections.file && (
-            <div className="px-4 pb-4 space-y-2">
-              {files.slice(0, 3).map((item, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg group"
-                >
-                  <div className="shrink-0">
-                    {getFileIcon(item.content.file.fileName)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {item.content.file.fileName}
-                    </p>
-                    <p className="text-[10px] text-gray-500">
-                      {(item.content.file.fileSize / 1024).toFixed(1)} KB
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleDownload(item.content.file)}
-                    className="p-1.5 hover:bg-white rounded border opacity-0 group-hover:opacity-100"
-                  >
-                    <Download size={14} />
-                  </button>
+            <div className="px-4 pb-4">
+              {files.length > 0 ? (
+                <div className="space-y-2">
+                  {files.slice(0, 6).map((item, idx) => {
+                    const file = item.content?.file;
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-3 p-2 bg-white hover:bg-gray-50 rounded-lg border transition group"
+                      >
+                        <div className="shrink-0">
+                          {getFileIcon(file.fileName)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-medium truncate">
+                            {file.fileName}
+                          </p>
+                          <p className="text-[11px] text-gray-500">
+                            {getDateLabel(item.createdAt)} •{" "}
+                            {(file.fileSize / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleDownload(file)}
+                          className="p-1.5 border rounded-md hover:bg-gray-100 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-              {files.length === 0 && (
+              ) : (
                 <p className="text-xs text-gray-400 text-center py-2">
-                  Chưa có file
+                  Chưa có file trong cuộc trò chuyện
                 </p>
+              )}
+              {files.length > 0 && (
+                <Button className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 mt-3 h-8 text-xs cursor-pointer">
+                  Xem tất cả
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* LINK SECTION */}
+        <div className="bg-white border-t">
+          <button
+            onClick={() => toggleSection("link")}
+            className="h-12 w-full flex items-center justify-between px-4 cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <LinkIcon size={18} className="text-gray-600" />
+              <span className="text-[14px] font-medium">Link</span>
+            </div>
+            {expandedSections.link ? (
+              <ChevronDown size={16} />
+            ) : (
+              <ChevronRight size={16} />
+            )}
+          </button>
+          {expandedSections.link && (
+            <div className="px-4 pb-4 space-y-2">
+              {links.length > 0 ? (
+                links.slice(0, 6).map((item, idx) => {
+                  const url = item.content?.text;
+                  const getDomain = (url: string) => {
+                    try {
+                      return new URL(url).hostname.replace("www.", "");
+                    } catch {
+                      return url;
+                    }
+                  };
+                  return (
+                    <a
+                      key={idx}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 p-2 bg-white border rounded-lg hover:bg-gray-50 transition"
+                    >
+                      <div className="w-9 h-9 flex items-center justify-center bg-gray-100 rounded-md shrink-0">
+                        <LinkIcon size={18} className="text-gray-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] text-[#0068ff] truncate">
+                          {url}
+                        </p>
+                        <p className="text-[11px] text-gray-500 truncate">
+                          {getDomain(url)}
+                        </p>
+                      </div>
+                      <div className="text-[10px] text-gray-400 shrink-0">
+                        {getDateLabel(item.createdAt)}
+                      </div>
+                    </a>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-gray-400 text-center py-2">
+                  Chưa có link trong cuộc trò chuyện
+                </p>
+              )}
+              {links.length > 0 && (
+                <Button className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 mt-3 h-8 text-xs cursor-pointer">
+                  Xem tất cả
+                </Button>
               )}
             </div>
           )}
@@ -1029,7 +1166,7 @@ const ConversationInfoPanel = ({
           <div className="bg-white border-t">
             <button
               onClick={() => toggleSection("members")}
-              className="h-12 w-full flex items-center justify-between px-4 hover:bg-gray-50 transition-colors"
+              className="h-12 w-full flex items-center justify-between px-4 hover:bg-gray-50 transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <Users size={18} className="text-gray-600" />
@@ -1084,13 +1221,13 @@ const ConversationInfoPanel = ({
                       m.userId !== currentUserId && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button className="p-1 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button className="p-1 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
                               <MoreHorizontal size={16} />
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuItem
-                              className="text-[13px]"
+                              className="text-[13px] cursor-pointer"
                               onClick={() =>
                                 handleUpdateMemberRole(
                                   m,
@@ -1103,14 +1240,14 @@ const ConversationInfoPanel = ({
                                 : "Bổ nhiệm Phó nhóm"}
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              className="text-[13px]"
+                              className="text-[13px] cursor-pointer"
                               onClick={() => setMemberPendingTransfer(m)}
                             >
-                              Chuyển trưởng nhóm
+                              Chuyển quyền trưởng nhóm
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              className="text-red-600 text-[13px]"
+                              className="text-red-600 text-[13px] cursor-pointer"
                               onClick={() => setMemberPendingRemove(m)}
                             >
                               Mời ra khỏi nhóm
@@ -1120,12 +1257,11 @@ const ConversationInfoPanel = ({
                       )}
                   </div>
                 ))}
-
-                {/* Nút Xem thêm nếu cần */}
+                {/* Nút Thêm Thành Viên */}
                 {isGroup && canInvite && (
                   <button
                     onClick={() => setAddMemberModalOpen(true)}
-                    className="w-full mt-1 flex items-center gap-3 px-3 py-2 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
+                    className="w-full mt-1 flex items-center gap-3 px-3 py-2 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
                   >
                     <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
                       <UserPlus size={18} />
@@ -1145,7 +1281,7 @@ const ConversationInfoPanel = ({
           {isGroup && currentMember?.role === "OWNER" && (
             <button
               onClick={() => setDeleteGroupDialogOpen(true)}
-              className="h-12 w-full flex items-center px-4 gap-3 text-red-500 hover:bg-red-50 transition-colors"
+              className="h-12 w-full flex items-center px-4 gap-3 text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
             >
               <Trash2 size={18} />
               <span className="text-sm font-medium">Giải tán nhóm</span>
@@ -1153,7 +1289,7 @@ const ConversationInfoPanel = ({
           )}
           <button
             onClick={() => (isGroup ? setLeaveGroupDialogOpen(true) : null)}
-            className="h-12 w-full flex items-center px-4 gap-3 text-red-500 hover:bg-red-50 transition-colors border-t border-gray-50"
+            className="h-12 w-full flex items-center px-4 gap-3 text-red-500 hover:bg-red-50 transition-colors border-t border-gray-50 cursor-pointer"
           >
             {isGroup ? <LogOut size={18} /> : <Trash2 size={18} />}
             <span className="text-sm font-medium">
@@ -1178,13 +1314,13 @@ const ConversationInfoPanel = ({
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center">
           <button
             onClick={() => setPreview({ isOpen: false, index: 0 })}
-            className="absolute top-5 right-5 text-white"
+            className="absolute top-5 right-5 text-white hover:opacity-70 cursor-pointer"
           >
             <CloseIcon size={30} />
           </button>
           <button
-            onClick={() => handleDownload(medias[preview.index].content.file)}
-            className="absolute top-5 left-5 text-white"
+            onClick={() => handleDownload(medias[preview.index]?.content?.file)}
+            className="absolute top-5 left-5 text-white hover:opacity-70 cursor-pointer"
           >
             <Download size={24} />
           </button>
@@ -1192,7 +1328,7 @@ const ConversationInfoPanel = ({
           {preview.index > 0 && (
             <button
               onClick={() => setPreview((p) => ({ ...p, index: p.index - 1 }))}
-              className="absolute left-5 p-2 bg-white/10 rounded-full text-white"
+              className="absolute left-5 p-2 bg-white/10 rounded-full text-white cursor-pointer hover:bg-white/20 transition-colors"
             >
               <ChevronLeft size={30} />
             </button>
@@ -1200,27 +1336,34 @@ const ConversationInfoPanel = ({
           {preview.index < medias.length - 1 && (
             <button
               onClick={() => setPreview((p) => ({ ...p, index: p.index + 1 }))}
-              className="absolute right-5 p-2 bg-white/10 rounded-full text-white"
+              className="absolute right-5 p-2 bg-white/10 rounded-full text-white cursor-pointer hover:bg-white/20 transition-colors"
             >
               <ChevronRight size={30} />
             </button>
           )}
 
-          <div className="max-w-[85%] max-h-[85%]">
-            {medias[preview.index].content.file.type === "VIDEO" ? (
-              <video
-                src={medias[preview.index].content.file.fileKey}
-                controls
-                autoPlay
-                className="max-h-[80vh]"
-              />
-            ) : (
-              <img
-                src={medias[preview.index].content.file.fileKey}
-                className="max-h-[80vh] object-contain"
-                alt=""
-              />
-            )}
+          <div
+            className="max-w-[90%] max-h-[90%]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(() => {
+              const file = medias[preview.index]?.content?.file;
+              if (!file) return null;
+              return file.type === "VIDEO" ? (
+                <video
+                  src={file.fileKey}
+                  controls
+                  autoPlay
+                  className="max-h-[85vh] rounded-lg shadow-2xl"
+                />
+              ) : (
+                <img
+                  src={file.fileKey}
+                  className="max-h-[85vh] rounded-lg object-contain shadow-2xl"
+                  alt=""
+                />
+              );
+            })()}
           </div>
         </div>
       )}
@@ -1240,7 +1383,7 @@ const ConversationInfoPanel = ({
           <AlertDialogFooter>
             <AlertDialogCancel>Hủy</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-500 hover:bg-red-600"
+              className="bg-red-500 hover:bg-red-600 text-white"
               onClick={handleLeaveGroup}
               disabled={isLeavingGroup}
             >
@@ -1265,7 +1408,7 @@ const ConversationInfoPanel = ({
           <AlertDialogFooter>
             <AlertDialogCancel>Hủy</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-500 hover:bg-red-600"
+              className="bg-red-500 hover:bg-red-600 text-white"
               onClick={handleDeleteGroup}
               disabled={isDeletingGroup}
             >
@@ -1289,6 +1432,7 @@ const ConversationInfoPanel = ({
           <AlertDialogFooter>
             <AlertDialogCancel>Hủy</AlertDialogCancel>
             <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600 text-white"
               onClick={() =>
                 memberPendingRemove && handleRemoveMember(memberPendingRemove)
               }
@@ -1314,6 +1458,7 @@ const ConversationInfoPanel = ({
           <AlertDialogFooter>
             <AlertDialogCancel>Hủy</AlertDialogCancel>
             <AlertDialogAction
+              className="bg-blue-600 hover:bg-blue-700 text-white"
               onClick={() =>
                 memberPendingTransfer &&
                 handleTransferOwner(memberPendingTransfer)
@@ -1338,6 +1483,7 @@ const ConversationInfoPanel = ({
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogAction
+              className="bg-blue-600 hover:bg-blue-700 text-white"
               onClick={() => setLeaveGroupErrorDialogOpen(false)}
             >
               Đã hiểu

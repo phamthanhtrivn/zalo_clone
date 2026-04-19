@@ -1074,7 +1074,6 @@ export class ConversationsService {
         ],
         { session },
       );
-
       await session.commitTransaction();
 
       const formatted = await this.getFormattedConversationForUser(
@@ -1458,6 +1457,7 @@ export class ConversationsService {
       // Thêm vào bảng Member
       await this.memberModel.findOneAndUpdate(
         { conversationId: convObjectId, userId: targetUserId },
+
         {
           $set: {
             leftAt: null,

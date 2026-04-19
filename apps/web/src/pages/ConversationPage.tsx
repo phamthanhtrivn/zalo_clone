@@ -11,7 +11,10 @@ import { toast, Zoom } from "react-toastify";
 import { useSocket } from "@/contexts/SocketContext";
 import { conversationService } from "@/services/conversation.service";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { setConversations } from "@/store/slices/conversationSlice";
+import {
+  setConversations,
+  clearReplyingMessage,
+} from "@/store/slices/conversationSlice";
 import ForwardModal from "@/components/layout/message/ForwardModal";
 
 const ConversationPage = () => {
@@ -26,9 +29,14 @@ const ConversationPage = () => {
   const conversations = useAppSelector(
     (state) => state.conversation.conversations,
   );
+  const replyingMessage = useAppSelector(
+    (state) => state.conversation.replyingMessage,
+  );
+
+  // Ưu tiên tìm trong state -> sau đó tìm trong store
   const conversation =
-    stateConversation ||
-    conversations.find((c) => c.conversationId === id || (c as any)._id === id);
+    stateConversation || conversations.find((c) => c.conversationId === id);
+  const isGroup = conversation?.type === "GROUP";
 
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
@@ -50,7 +58,52 @@ const ConversationPage = () => {
   const lastMessageId = messages[messages.length - 1]?._id;
   const { socket } = useSocket();
 
-  // --- LOGIC FETCHING ---
+  // --- LOGIC THÔNG BÁO ---
+  const toastAlert = useCallback((noti: string) => {
+    toast(noti, {
+      position: "top-center",
+      autoClose: 3000,
+      hideProgressBar: true,
+      theme: "dark",
+      transition: Zoom,
+    });
+  }, []);
+
+  // --- LOGIC CUỘN & NHẢY TIN NHẮN ---
+  const scrollToMessage = (messageId: string, retry = 0) => {
+    const el = document.getElementById(messageId);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("highlight");
+      setTimeout(() => el.classList.remove("highlight"), 5000);
+      return;
+    }
+    if (retry < 10) setTimeout(() => scrollToMessage(messageId, retry + 1), 50);
+  };
+
+  const handleJumpToMessage = async (messageId: string) => {
+    if (!id || !currentUserId) return;
+    isJumpingRef.current = true;
+    const res = await messageService.getMessagesAroundPinnedMessage(
+      id,
+      currentUserId,
+      messageId,
+      15,
+    );
+    if (res.success) {
+      setMessages(res.data.messages);
+      setNextCursor(res.data.nextCursor);
+      setPrevCursor(res.data.prevCursor);
+      setTimeout(() => {
+        scrollToMessage(messageId);
+        setTimeout(() => {
+          isJumpingRef.current = false;
+        }, 1000);
+      }, 100);
+    }
+  };
+
+  // --- API FETCHING ---
   const handleLoadMessagesFromConversation = async () => {
     if (!id || !currentUserId) return;
     try {
@@ -70,6 +123,16 @@ const ConversationPage = () => {
     }
   };
 
+  const handleLoadPinnedMessages = async () => {
+    if (!id || !currentUserId) return;
+    try {
+      const res = await messageService.getPinnedMessages(id, currentUserId);
+      if (res.success) setPinnedMessages(res.data.messages);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleScrollToTop = async () => {
     const container = containerRef.current;
     if (
@@ -84,31 +147,28 @@ const ConversationPage = () => {
     if (container.scrollTop < 100) {
       isFetchingRef.current = true;
       const prevHeight = container.scrollHeight;
-      try {
-        const res = await messageService.getMessagesFromConversation(
-          id,
-          currentUserId,
-          nextCursor,
-          20,
-        );
-        if (res.success && res.data.messages.length > 0) {
-          setMessages((prev) => {
-            const existingIds = new Set(prev.map((m) => m._id));
-            const uniqueNew = res.data.messages.filter(
-              (m) => !existingIds.has(m._id),
-            );
-            return [...uniqueNew, ...prev];
-          });
-          setNextCursor(res.data.nextCursor);
-          requestAnimationFrame(() => {
-            container.scrollTop = container.scrollHeight - prevHeight;
-          });
-        } else {
-          setNextCursor(null);
-        }
-      } finally {
-        isFetchingRef.current = false;
+      const res = await messageService.getMessagesFromConversation(
+        id,
+        currentUserId,
+        nextCursor,
+        20,
+      );
+      if (res.success && res.data.messages.length > 0) {
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m._id));
+          return [
+            ...res.data.messages.filter((m) => !existingIds.has(m._id)),
+            ...prev,
+          ];
+        });
+        setNextCursor(res.data.nextCursor);
+        requestAnimationFrame(() => {
+          container.scrollTop = container.scrollHeight - prevHeight;
+        });
+      } else {
+        setNextCursor(null);
       }
+      isFetchingRef.current = false;
     }
   };
 
@@ -128,50 +188,116 @@ const ConversationPage = () => {
       100
     ) {
       isFetchingNewerRef.current = true;
-      try {
-        const res = await messageService.getNewerMessages(
-          id,
-          currentUserId,
-          prevCursor,
-          20,
-        );
-        if (res.success && res.data.messages.length) {
-          setMessages((prev) => {
-            const existingIds = new Set(prev.map((m) => m._id));
-            const uniqueNew = res.data.messages.filter(
-              (m) => !existingIds.has(m._id),
-            );
-            return [...prev, ...uniqueNew];
-          });
-          setPrevCursor(res.data.messages[res.data.messages.length - 1]._id);
-        } else {
-          setPrevCursor(null);
-        }
-      } finally {
-        isFetchingNewerRef.current = false;
+      const res = await messageService.getNewerMessages(
+        id,
+        currentUserId,
+        prevCursor,
+        20,
+      );
+      if (res.success && res.data.messages.length) {
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m._id));
+          return [
+            ...prev,
+            ...res.data.messages.filter((m) => !existingIds.has(m._id)),
+          ];
+        });
+        setPrevCursor(res.data.messages[res.data.messages.length - 1]._id);
+      } else {
+        setPrevCursor(null);
       }
+      isFetchingNewerRef.current = false;
     }
   };
 
-  // --- LOGIC MESSAGE ACTIONS ---
-  const onSendFiles = async (files: FileList) => {
-    if (!id || !currentUserId || !files.length) return;
+  // --- ACTIONS ---
+  const onSendMessage = async (text: string) => {
+    if (!id || !currentUserId || !text.trim()) return;
     try {
-      const promises = Array.from(files).map((file) =>
-        messageService.sendMessage(id, currentUserId, undefined, file),
+      await messageService.sendMessage(
+        id,
+        currentUserId,
+        replyingMessage?._id,
+        { text },
       );
-      await Promise.all(promises);
-      requestAnimationFrame(() => {
-        if (containerRef.current)
-          containerRef.current.scrollTop = containerRef.current.scrollHeight;
-      });
+      if (replyingMessage) dispatch(clearReplyingMessage());
     } catch (error) {
       console.error(error);
     }
   };
 
+  const onSendFiles = async (files: FileList) => {
+    if (!id || !currentUserId || !files.length) return;
+    try {
+      const filesArray = Array.from(files);
+      const mediaFiles = filesArray.filter(
+        (f) => f.type.startsWith("image/") || f.type.startsWith("video/"),
+      );
+      const docFiles = filesArray.filter(
+        (f) => !f.type.startsWith("image/") && !f.type.startsWith("video/"),
+      );
+
+      const promises: Promise<any>[] = [];
+      if (mediaFiles.length > 0)
+        promises.push(
+          messageService.sendMessage(
+            id,
+            currentUserId,
+            replyingMessage?._id,
+            undefined,
+            mediaFiles,
+          ),
+        );
+      docFiles.forEach((file) =>
+        promises.push(
+          messageService.sendMessage(
+            id,
+            currentUserId,
+            replyingMessage?._id,
+            undefined,
+            [file],
+          ),
+        ),
+      );
+
+      await Promise.all(promises);
+      if (replyingMessage) dispatch(clearReplyingMessage());
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleRecalledMessage = async (messageId: string) => {
+    try {
+      await messageService.recalledMessage(currentUserId, messageId, id!);
+    } catch (err) {
+      toastAlert("Bạn chỉ có thể thu hồi tin nhắn trong vòng 24 giờ");
+    }
+  };
+
+  const handlePinnedMessage = async (messageId: string) => {
+    try {
+      await messageService.pinnedMessage(currentUserId, messageId, id!);
+    } catch (err) {
+      toastAlert("Bạn chỉ có thể ghim tối đa 3 tin nhắn");
+    }
+  };
+
+  const handleDeleteMessageForMe = async (messageId: string) => {
+    const res = await messageService.deleteMessageForMe(
+      currentUserId,
+      messageId,
+      id!,
+    );
+    if (res.success) {
+      setMessages((prev) => prev.filter((m) => m._id !== messageId));
+      const convs =
+        await conversationService.getConversationsFromUserId(currentUserId);
+      if (convs.success) dispatch(setConversations(convs.data));
+    }
+  };
+
   const handleForwardMessages = async (targetConversationIds: string[]) => {
-    if (!currentUserId) return;
     try {
       setLoadingForward(true);
       await messageService.forwardMessagesToConversations(
@@ -181,14 +307,29 @@ const ConversationPage = () => {
       );
       setShowForwardModal(false);
       setSelectedMessages([]);
-    } catch (error) {
-      console.log(error);
+      setIsSelected(false);
     } finally {
       setLoadingForward(false);
     }
   };
 
-  // --- SOCKET LISTENERS ---
+  // --- EFFECTS ---
+  useEffect(() => {
+    setMessages([]);
+    handleLoadMessagesFromConversation();
+    handleLoadPinnedMessages();
+    messageService.readReceipt(currentUserId, id!);
+    dispatch(clearReplyingMessage());
+    isFirstLoad.current = true;
+  }, [id, currentUserId]);
+
+  useEffect(() => {
+    if (containerRef.current && isFirstLoad.current && messages.length) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      isFirstLoad.current = false;
+    }
+  }, [messages]);
+
   useEffect(() => {
     if (!socket || !id) return;
     socket.emit("join_room", id);
@@ -216,15 +357,14 @@ const ConversationPage = () => {
           ? prev
           : [...prev, newMessage],
       );
+      const container = containerRef.current;
       if (
-        containerRef.current &&
-        containerRef.current.scrollHeight -
-          containerRef.current.scrollTop -
-          containerRef.current.clientHeight <
-          100
+        container &&
+        container.scrollHeight - container.scrollTop - container.clientHeight <
+          150
       ) {
         requestAnimationFrame(() => {
-          containerRef.current!.scrollTop = containerRef.current!.scrollHeight;
+          container.scrollTop = container.scrollHeight;
         });
       }
     };
@@ -235,10 +375,11 @@ const ConversationPage = () => {
           data.messages.map((m: any) => [m._id, m.readReceipts]),
         );
         setMessages((prev) =>
-          prev.map((m) => {
-            const receipts = updatedMap.get(m._id);
-            return receipts ? { ...m, readReceipts: receipts } : m;
-          }),
+          prev.map((m) =>
+            updatedMap.has(m._id)
+              ? { ...m, readReceipts: updatedMap.get(m._id) }
+              : m,
+          ),
         );
       }
     };
@@ -280,16 +421,6 @@ const ConversationPage = () => {
     };
   }, [socket, id]);
 
-  useEffect(() => {
-    if (!id || !currentUserId) return;
-    setMessages([]);
-    handleLoadMessagesFromConversation();
-    messageService
-      .getPinnedMessages(id, currentUserId)
-      .then((res) => res.success && setPinnedMessages(res.data.messages));
-    messageService.readReceipt(currentUserId, id);
-  }, [id, currentUserId]);
-
   if (!conversation)
     return (
       <div className="flex-1 flex items-center justify-center text-gray-500 italic">
@@ -298,19 +429,15 @@ const ConversationPage = () => {
     );
 
   return (
-    <div className="flex flex-1 h-full">
+    <div className="flex flex-1 h-full overflow-hidden">
       <div className="flex-1 flex flex-col h-full bg-[#EBECF0] min-w-0">
         <ChatHeader
           conversation={conversation}
           isInfoOpen={isInfoOpen}
           toggleInfo={() => setIsInfoOpen(!isInfoOpen)}
           pinnedMessages={pinnedMessages}
-          handlePinnedMessage={(mid) =>
-            messageService.pinnedMessage(currentUserId, mid, id!)
-          }
-          handleJumpToMessage={(mid) => {
-            /* Logic jump */
-          }}
+          handlePinnedMessage={handlePinnedMessage}
+          handleJumpToMessage={handleJumpToMessage}
         />
 
         <MessageList
@@ -325,15 +452,9 @@ const ConversationPage = () => {
           removeReaction={(mid) =>
             messageService.removeReaction(currentUserId, mid, id!)
           }
-          handleRecalledMessage={(mid) =>
-            messageService.recalledMessage(currentUserId, mid, id!)
-          }
-          handlePinnedMessage={(mid) =>
-            messageService.pinnedMessage(currentUserId, mid, id!)
-          }
-          handleDeleteMessageForMe={(mid) => {
-            /* Logic delete */
-          }}
+          handleRecalledMessage={handleRecalledMessage}
+          handlePinnedMessage={handlePinnedMessage}
+          handleDeleteMessageForMe={handleDeleteMessageForMe}
           isSelected={isSelected}
           setIsSelected={setIsSelected}
           selectedMessages={selectedMessages}
@@ -343,13 +464,13 @@ const ConversationPage = () => {
             )
           }
           lastMessageId={lastMessageId || ""}
+          isGroup={isGroup}
+          onJumpToMessage={handleJumpToMessage}
         />
 
         <ChatInput
           chatName={conversation.name}
-          onSendMessage={(text) =>
-            messageService.sendMessage(id!, currentUserId, { text })
-          }
+          onSendMessage={onSendMessage}
           onSendFiles={onSendFiles}
           isSelected={isSelected}
           setIsSelected={setIsSelected}
@@ -360,16 +481,14 @@ const ConversationPage = () => {
         />
       </div>
 
-      {showForwardModal && (
-        <ForwardModal
-          open={showForwardModal}
-          onClose={() => setShowForwardModal(false)}
-          conversations={conversations}
-          selectedMessageIds={selectedMessages}
-          loadingForward={loadingForward}
-          onSubmit={handleForwardMessages}
-        />
-      )}
+      <ForwardModal
+        open={showForwardModal}
+        onClose={() => setShowForwardModal(false)}
+        conversations={conversations}
+        selectedMessageIds={selectedMessages}
+        loadingForward={loadingForward}
+        onSubmit={handleForwardMessages}
+      />
 
       <ConversationInfoPanel
         isOpen={isInfoOpen}

@@ -16,12 +16,15 @@ export interface ConversationItemType {
     content: {
       text: string;
       icon: string;
-      file: File;
+      files: File[];
     };
     recalled: boolean;
+    expired?: boolean;
   };
+  unreadCount: number;
   lastMessageAt: string;
 }
+
 
 export interface File {
   fileKey: string;

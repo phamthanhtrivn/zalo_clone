@@ -1,3 +1,6 @@
+/* eslint-disable prettier/prettier */
+
+import { ConfigService } from '@nestjs/config';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -9,8 +12,14 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { MessagesService } from '../messages/messages.service';
+
 import { CallStatus } from 'src/common/types/enums/call-status';
+
 import { forwardRef, Inject } from '@nestjs/common';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { RedisService } from 'src/common/redis/redis.service';
+import { REDIS_CHANNEL_SOCKET_EVENTS } from 'src/common/constants/redis.constant';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @WebSocketGateway({
   cors: {
@@ -23,7 +32,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(
     @Inject(forwardRef(() => MessagesService))
-    private readonly messageService: MessagesService,
+    private readonly messagesService: MessagesService,
+    private readonly redisService: RedisService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   handleConnection(socket: Socket) {
@@ -39,6 +50,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     socket.join(userId); // Join a room of userId update online event for sidebar
 
     console.log(`\nUser ${userId} connected with socket ${socket.id}`);
+
     console.log(`User ${userId} join room: ${userId}`);
   }
 
@@ -53,8 +65,41 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
     }
   }
+  async afterInit() {
+    const pubClient = this.redisService.getClient();
+    const subClient = this.redisService.createDuplicateClient();
 
-  // Tham gia phòng chat
+    this.server.adapter(createAdapter(pubClient, subClient));
+
+    // Subscribe to custom redis events for multi-instance support
+    this.redisService.subscribe(REDIS_CHANNEL_SOCKET_EVENTS, (payload: any) => {
+      const { event, room, data } = payload;
+
+      if (event === 'internal_force_read_receipt') {
+        const { senderId, conversationId } = data;
+        const roomSockets = this.server.sockets.adapter.rooms.get(room);
+        if (roomSockets) {
+          for (const socketId of roomSockets) {
+            const socket: any = this.server.sockets.sockets.get(socketId);
+            if (socket?.data?.userId !== senderId) {
+              this.eventEmitter.emit('message.force_read_receipt', {
+                userId: socket.data.userId,
+                conversationId,
+              });
+            }
+          }
+        }
+        return;
+      }
+
+      if (event && room) {
+        this.server.to(room).emit(event, data);
+      }
+    });
+
+    console.log('Redis adapter and custom pub/sub listener connected'); // for chat gateway to serve multiple instances (server when deploy)
+  }
+  // Conversation room
   @SubscribeMessage('join_room')
   handleJoinRoom(
     @MessageBody() conversationId: string,
@@ -118,7 +163,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       reason: data.reason,
     });
     if (data.messageId) {
-      await this.messageService.updateCallMessage({
+      await this.messagesService.updateCallMessage({
         messageId: data.messageId,
         conversationId: data.conversationId,
         status: CallStatus.REJECTED,
@@ -146,7 +191,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     if (data.messageId) {
       const finalStatus = data.status || CallStatus.ENDED;
-      await this.messageService.updateCallMessage({
+      await this.messagesService.updateCallMessage({
         messageId: data.messageId,
         conversationId: data.conversationId,
         status: finalStatus,
@@ -170,5 +215,37 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   emitUpdateGroup(conversationId: string, updatedData: any) {
     this.server.to(conversationId).emit('group_updated', updatedData);
+  }
+
+  // Trong chat.gateway.ts
+  @SubscribeMessage('mark_as_read')
+  handleMarkAsRead(
+    client: Socket,
+    data: { userId: string; conversationId: string },
+  ) {
+    return this.messagesService.readReceiptMessage(data);
+  }
+
+  @SubscribeMessage('mark_as_unread')
+  handleMarkAsUnread(
+    client: Socket,
+    data: { userId: string; conversationId: string },
+  ) {
+    return this.messagesService.markAsUnread(data.userId, data.conversationId);
+  }
+  emitConversationUpdated(userId: string, conversation: any) {
+    this.server.to(userId).emit('conversation_setting:update', conversation);
+  }
+
+  emitConversationDeleted(
+    userId: string,
+    payload: {
+      conversationId: string;
+      deletedAt: Date | null;
+      clearAt: Date | null;
+    },
+  ) {
+    console.log('EMIT DELETE:', userId, payload);
+    this.server.to(userId).emit('conversation_setting:delete', payload);
   }
 }

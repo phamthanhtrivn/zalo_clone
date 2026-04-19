@@ -25,6 +25,8 @@ type Props = {
   selectedMessages: string[];
   toggleSelectMessage: (messageId: string) => void;
   lastMessageId: string;
+  isGroup: boolean;
+  onJumpToMessage?: (messageId: string) => void;
 };
 
 const MessageList = ({
@@ -43,6 +45,8 @@ const MessageList = ({
   selectedMessages,
   toggleSelectMessage,
   lastMessageId,
+  isGroup,
+  onJumpToMessage,
 }: Props) => {
   const [selectedMessageReactions, setSelectedMessageReactions] = useState<
     ReactionType[] | null
@@ -135,15 +139,19 @@ const MessageList = ({
               setIsSelected={setIsSelected}
               selectedMessages={selectedMessages}
               toggleSelectMessage={toggleSelectMessage}
+              isGroup={isGroup}
+              onJumpToMessage={onJumpToMessage}
             />
 
-            {/* Read Receipts logic từ PhamThanhTri */}
+            {/* Read Receipts logic */}
             {isLastMessage &&
               !message.recalled &&
               message.readReceipts &&
               message.readReceipts.length > 0 && (
                 <div
-                  className={`flex ${isMe ? "justify-end" : "justify-start ml-11"} mt-1 pr-1`}
+                  className={`flex ${
+                    isMe ? "justify-end" : "justify-start ml-11"
+                  } mt-1 pr-1`}
                 >
                   <div className="flex items-center">
                     {message.readReceipts.slice(0, 3).map((user: any, idx) => (
@@ -152,6 +160,7 @@ const MessageList = ({
                         src={user?.userId?.profile?.avatarUrl}
                         className="w-4 h-4 rounded-full border border-white -ml-1 first:ml-0"
                         title={user?.userId?.profile?.name}
+                        alt="avatar"
                       />
                     ))}
                     {message.readReceipts.length > 3 && (

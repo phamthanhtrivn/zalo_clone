@@ -1,8 +1,18 @@
 import { formatDuration, formatTime } from "@/utils/format-message-time..util";
 import type { MessagesType } from "@/types/messages.type";
-import { Download, Phone, PhoneMissed, Video } from "lucide-react";
+import {
+  Download,
+  Phone,
+  PhoneMissed,
+  Video,
+  ChevronLeft,
+  ChevronRight,
+  X,
+} from "lucide-react";
 import { getFileIcon } from "@/utils/file-icon.util";
 import { saveAs } from "file-saver";
+import { useState } from "react";
+import { truncateFileName } from "@/utils/render-file";
 
 interface Props {
   message: MessagesType;
@@ -11,6 +21,7 @@ interface Props {
   isSelected: boolean;
   selectedMessages: string[];
   toggleSelectMessage: (messageId: string) => void;
+  onJumpToMessage?: (messageId: string) => void;
 }
 
 const renderTextWithLinks = (text: string) => {
@@ -40,13 +51,31 @@ export const MessageBubble = ({
   isSelected,
   selectedMessages,
   toggleSelectMessage,
+  onJumpToMessage,
 }: Props) => {
   const content = message.content;
-  const file = content?.file;
   const call = message.call;
 
-  const handleDownload = async () => {
-    if (!file?.fileKey) return;
+  // Hỗ trợ cả 2 chuẩn: array files (mới) và single file (cũ)
+  const files = content?.files || (content?.file ? [content.file] : []);
+
+  // Tách riêng Media (Ảnh/Video) để hiển thị Grid và Document để hiển thị List
+  const mediaFiles = files.filter(
+    (f: any) => f.type === "IMAGE" || f.type === "VIDEO",
+  );
+  const documentFiles = files.filter(
+    (f: any) => f.type === "FILE" || !["IMAGE", "VIDEO"].includes(f.type),
+  );
+
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+
+  const dispatchMediaLoaded = () => {
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("message-media-loaded"));
+    });
+  };
+
+  const handleDownload = async (file: any) => {
     try {
       const response = await fetch(file.fileKey);
       const blob = await response.blob();
@@ -56,12 +85,7 @@ export const MessageBubble = ({
     }
   };
 
-  const dispatchMediaLoaded = () => {
-    requestAnimationFrame(() => {
-      window.dispatchEvent(new Event("message-media-loaded"));
-    });
-  };
-
+  // --- Logic Call từ nhánh HEAD ---
   const renderCallContent = () => {
     if (!call) return null;
     const isVideo = call.type === "VIDEO";
@@ -108,14 +132,42 @@ export const MessageBubble = ({
     );
   };
 
+  // --- Logic Hết hạn từ nhánh KhongVanTam ---
+  if (message.expired) {
+    return (
+      <div className="flex items-center gap-1.5 bg-[#f0f0f0] rounded-xl px-3 py-2 max-w-xs">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#999"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="shrink-0"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span className="text-[13px] text-gray-400 italic">
+          Tin nhắn đã hết hạn
+        </span>
+      </div>
+    );
+  }
+
   if (message.recalled) {
     return (
       <div
-        className={`rounded-lg px-3 py-2 max-w-md border shadow-sm text-gray-500 ${isMe ? "bg-[#E5F1FF]" : "bg-white"}`}
+        className={`rounded-lg px-3 py-2 max-w-md border shadow-sm text-gray-500 ${
+          isMe ? "bg-[#E5F1FF]" : "bg-white"
+        }`}
       >
         <p>Tin nhắn đã được thu hồi</p>
         {showTime && (
-          <div className="text-[12px] text-gray-400 mt-1 text-right not-italic">
+          <div className="text-[10px] mt-1 text-right text-gray-400">
             {formatTime(message.createdAt)}
           </div>
         )}
@@ -125,7 +177,9 @@ export const MessageBubble = ({
 
   return (
     <div
-      onClick={() => isSelected && toggleSelectMessage(message._id)}
+      onClick={() => {
+        if (isSelected) toggleSelectMessage(message._id);
+      }}
       className={`rounded-lg px-3 py-2 max-w-md border shadow-sm transition-colors ${
         isSelected ? "cursor-pointer" : ""
       } ${
@@ -139,60 +193,185 @@ export const MessageBubble = ({
       }`}
     >
       <div className="space-y-2 wrap-break-word">
+        {/* REPLY BLOCK */}
+        {message.repliedId && (
+          <div
+            className="mb-2 p-2 rounded border-l-4 border-blue-400 bg-black/5 cursor-pointer hover:bg-black/10 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onJumpToMessage && message.repliedId?._id) {
+                onJumpToMessage(message.repliedId._id);
+              }
+            }}
+          >
+            <div className="text-[11px] font-bold text-blue-600 truncate">
+              {message.repliedId.senderId?.profile?.name || "Người dùng"}
+            </div>
+            <div className="text-[12px] text-gray-600 truncate">
+              {message.repliedId.content?.text ||
+                (message.repliedId.content?.files?.length > 0
+                  ? message.repliedId.content.files[0].fileName
+                  : "Đính kèm")}
+            </div>
+          </div>
+        )}
+
+        {/* MAIN CONTENT */}
         {call ? (
           renderCallContent()
         ) : (
           <>
+            {/* TEXT */}
             {content?.text && (
               <p className="text-[15px]">{renderTextWithLinks(content.text)}</p>
             )}
+
+            {/* ICON */}
             {content?.icon && <p className="text-3xl">{content.icon}</p>}
-            {file?.type === "IMAGE" && (
-              <img
-                src={file.fileKey}
-                alt="img"
-                className="max-w-xs rounded-lg object-cover"
-                onLoad={dispatchMediaLoaded}
-              />
+
+            {/* MEDIA GRID (Ảnh/Video) */}
+            {mediaFiles.length > 0 && (
+              <div
+                className={`grid gap-1 ${
+                  mediaFiles.length === 1
+                    ? "grid-cols-1"
+                    : mediaFiles.length === 2
+                      ? "grid-cols-2"
+                      : "grid-cols-3"
+                }`}
+              >
+                {mediaFiles.map((file: any, index: number) => (
+                  <div
+                    key={index}
+                    className="relative overflow-hidden rounded-xl border bg-black group cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPreviewIndex(index); // Mở Modal tại vị trí ảnh tương ứng
+                    }}
+                  >
+                    {file.type === "IMAGE" && (
+                      <img
+                        src={file.fileKey}
+                        className="w-full h-32 object-cover group-hover:scale-105 transition"
+                        onLoad={dispatchMediaLoaded}
+                        alt="attachment"
+                      />
+                    )}
+                    {file.type === "VIDEO" && (
+                      <video
+                        src={file.fileKey}
+                        className="w-full h-32 object-cover"
+                        onLoadedMetadata={dispatchMediaLoaded}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
-            {file?.type === "VIDEO" && (
-              <video
-                src={file.fileKey}
-                controls
-                className="max-w-xs rounded-lg"
-                onLoadedMetadata={dispatchMediaLoaded}
-              />
-            )}
-            {file?.type === "FILE" && (
-              <div className="flex items-center gap-3 p-2 bg-black/5 rounded-md">
-                <div>{getFileIcon(file.fileName)}</div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {file.fileName}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {(file.fileSize / 1024).toFixed(1)} KB
-                  </p>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDownload();
-                  }}
-                  className="p-1 border border-gray-300 rounded-md bg-white"
-                >
-                  <Download className="w-4 h-4" />
-                </button>
+
+            {/* DOCUMENT LIST (File Text/PDF/Zip...) */}
+            {documentFiles.length > 0 && (
+              <div className="space-y-1 mt-1">
+                {documentFiles.map((file: any, index: number) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-3 p-2 bg-black/5 rounded-md"
+                  >
+                    <div>{getFileIcon(file.fileName)}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {truncateFileName(file.fileName, 40)}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {(file.fileSize / 1024).toFixed(1)} KB
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownload(file);
+                      }}
+                      className="p-1 border border-gray-300 rounded-md bg-white hover:bg-gray-50"
+                    >
+                      <Download className="w-4 h-4 text-gray-600" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </>
         )}
       </div>
+
+      {/* TIME */}
       {showTime && (
         <div
-          className={`text-[10px] mt-1 text-right ${isMe ? "text-blue-400" : "text-gray-400"}`}
+          className={`text-[10px] mt-1 text-right ${
+            isMe ? "text-blue-500/80" : "text-gray-400"
+          }`}
         >
           {formatTime(message.createdAt)}
+        </div>
+      )}
+
+      {/* IMAGE / VIDEO PREVIEW MODAL */}
+      {previewIndex !== null && mediaFiles[previewIndex] && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* CLOSE */}
+          <button
+            className="absolute top-4 right-4 text-white cursor-pointer hover:text-gray-300"
+            onClick={() => setPreviewIndex(null)}
+          >
+            <X size={28} />
+          </button>
+
+          <button
+            className="absolute top-4 left-4 text-white cursor-pointer hover:text-gray-300"
+            onClick={() => handleDownload(mediaFiles[previewIndex])}
+          >
+            <Download size={28} />
+          </button>
+
+          {/* PREV */}
+          {previewIndex > 0 && (
+            <button
+              className="absolute left-4 text-white cursor-pointer p-2 bg-black/50 rounded-full hover:bg-black/70"
+              onClick={() => setPreviewIndex(previewIndex - 1)}
+            >
+              <ChevronLeft size={32} />
+            </button>
+          )}
+
+          {/* NEXT */}
+          {previewIndex < mediaFiles.length - 1 && (
+            <button
+              className="absolute right-4 text-white cursor-pointer p-2 bg-black/50 rounded-full hover:bg-black/70"
+              onClick={() => setPreviewIndex(previewIndex + 1)}
+            >
+              <ChevronRight size={32} />
+            </button>
+          )}
+
+          {/* CONTENT */}
+          <div className="max-w-4xl w-full flex justify-center">
+            {mediaFiles[previewIndex].type === "IMAGE" ? (
+              <img
+                src={mediaFiles[previewIndex].fileKey}
+                className="max-h-[85vh] object-contain rounded"
+                alt="preview"
+              />
+            ) : (
+              <video
+                src={mediaFiles[previewIndex].fileKey}
+                controls
+                autoPlay
+                className="max-h-[85vh] rounded"
+              />
+            )}
+          </div>
         </div>
       )}
     </div>
