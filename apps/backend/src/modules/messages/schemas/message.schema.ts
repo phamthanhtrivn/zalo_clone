@@ -28,8 +28,8 @@ export class Content {
   @Prop()
   icon?: string;
 
-  @Prop({ type: File })
-  file?: File;
+  @Prop({ type: [File] })
+  files?: File[];
 }
 
 @Schema({ _id: false })
@@ -117,7 +117,7 @@ export const MessageSchema = SchemaFactory.createForClass(Message);
 MessageSchema.index({ conversationId: 1, createdAt: -1 });
 MessageSchema.index({
   conversationId: 1,
-  'content.file.type': 1,
+  'content.files.type': 1,
   createdAt: -1,
 });
 MessageSchema.index({ senderId: 1 });

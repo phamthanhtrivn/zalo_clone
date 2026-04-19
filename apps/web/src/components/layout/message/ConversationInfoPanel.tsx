@@ -22,6 +22,7 @@ import {
   useFloating, offset, flip, shift,
   autoUpdate, FloatingPortal,
 } from "@floating-ui/react";
+import { useSocket } from "@/contexts/SocketContext";
 
 interface ConversationInfoPanelProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ const MUTE_OPTIONS = [
 ];
 
 const ConversationInfoPanel = ({ isOpen, conversation, onClose }: ConversationInfoPanelProps) => {
+  const { socket } = useSocket();
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
   const [showMuteOptions, setShowMuteOptions] = useState(false);
@@ -165,6 +167,41 @@ const ConversationInfoPanel = ({ isOpen, conversation, onClose }: ConversationIn
     return () => window.removeEventListener("keydown", handleKey);
   }, [preview.isOpen, medias.length]);
 
+  useEffect(() => {
+    if (!socket || !isOpen || !currentConversation?.conversationId) return;
+
+    const conversationId = currentConversation.conversationId;
+    const mediaRooms = [
+      `media_${conversationId}_IMAGE_VIDEO`,
+      `media_${conversationId}_FILE`,
+      `media_${conversationId}_LINK`,
+    ];
+
+    // Join specialized media rooms
+    mediaRooms.forEach((room) => socket.emit("join_room", room));
+
+    const handleNewMedia = (payload: { type: string; data: any }) => {
+      const { type, data } = payload;
+      if (type === "IMAGE_VIDEO") {
+        setMedias((prev) => [data, ...prev].slice(0, 6));
+      }
+      if (type === "FILE") {
+        setFiles((prev) => [data, ...prev].slice(0, 3));
+      }
+      if (type === "LINK") {
+        setLinks((prev) => [data, ...prev].slice(0, 3));
+      }
+    };
+
+    socket.on("new_media", handleNewMedia);
+
+    return () => {
+      // Leave rooms and cleanup listener
+      mediaRooms.forEach((room) => socket.emit("leave_room", room));
+      socket.off("new_media", handleNewMedia);
+    };
+  }, [socket, isOpen, currentConversation?.conversationId]);
+
   if (!isOpen) return <div className="w-0 overflow-hidden" />;
 
   return (
@@ -268,7 +305,7 @@ const ConversationInfoPanel = ({ isOpen, conversation, onClose }: ConversationIn
           {expandedSections.media && (
             <div className="px-4 pb-4">
               {medias.length > 0 ? (
-                <div className="grid grid-cols-3 gap-0.5">
+                <div className="grid grid-cols-3 gap-1">
                   {medias.slice(0, 6).map((media, idx) => {
                     const file = media?.content?.file;
                     const isVideo = file?.type === "VIDEO";
@@ -276,7 +313,7 @@ const ConversationInfoPanel = ({ isOpen, conversation, onClose }: ConversationIn
                       <div key={idx} className="aspect-square bg-gray-100 overflow-hidden relative cursor-pointer" onClick={() => setPreview({ isOpen: true, index: idx })}>
                         {isVideo ? (
                           <>
-                            <video src={file?.fileKey} className="w-full h-full object-cover" muted />
+                            <video src={file?.fileKey} className="w-full h-full object-cover border-gray-300 rounded-md" muted />
                             <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                               <div className="w-7 h-7 rounded-full bg-black/50 flex items-center justify-center">
                                 <div className="ml-1 border-l-8 border-l-white border-y-6 border-y-transparent" />
@@ -284,7 +321,7 @@ const ConversationInfoPanel = ({ isOpen, conversation, onClose }: ConversationIn
                             </div>
                           </>
                         ) : (
-                          <img src={file?.fileKey} className="w-full h-full object-cover" />
+                          <img src={file?.fileKey} className="w-full h-full object-cover border border-gray-300 rounded-md  " />
                         )}
                       </div>
                     );
@@ -383,7 +420,7 @@ const ConversationInfoPanel = ({ isOpen, conversation, onClose }: ConversationIn
       </div>
 
       {preview.isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
+        <div className="fixed inset-0 z-100 bg-black/90 flex items-center justify-center">
           <button onClick={() => setPreview({ isOpen: false, index: 0 })} className="absolute top-5 right-5 text-white hover:opacity-70 cursor-pointer"><X size={28} /></button>
           <button onClick={() => handleDownload(medias[preview.index]?.content?.file)} className="absolute top-5 left-5 text-white hover:opacity-70 cursor-pointer"><Download size={24} /></button>
           {preview.index > 0 && (

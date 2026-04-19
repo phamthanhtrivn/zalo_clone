@@ -13,12 +13,13 @@ export interface MessagesType {
   content: {
     text: string | null;
     icon: string | null;
-    file: File;
+    files: File[];
   };
   pinned: boolean;
   recalled: boolean;
   reactions: ReactionType[];
   readReceipts: ReadReceiptType[];
+
   repliedId: string | null;
   call: string | null;
   createdAt: string;

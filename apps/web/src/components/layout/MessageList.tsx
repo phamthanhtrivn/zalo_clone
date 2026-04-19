@@ -32,7 +32,9 @@ const MessageList = ({
         const next = messages[index + 1];
 
         const isMe = message.senderId._id === currentUserId;
-        const isExpired = message.expired === true;
+        const isExpired =
+          message.expiresAt &&
+          new Date(message.expiresAt) < new Date();
         const showDivider =
           !prev ||
           new Date(prev.createdAt).toDateString() !==

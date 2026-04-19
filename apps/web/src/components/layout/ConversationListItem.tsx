@@ -1,4 +1,8 @@
-import type { ConversationCategory, ConversationItemType } from "@/types/conversation-item.type";
+
+import type {
+  ConversationCategory,
+  ConversationItemType,
+} from "@/types/conversation-item.type";
 import { Link, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { cn } from "@/lib/utils";
@@ -6,18 +10,39 @@ import { formatMessageTime } from "@/utils/format-message-time..util";
 import { MoreHorizontal } from "lucide-react";
 import { MdGroups, MdNotificationsOff } from "react-icons/md";
 import React, { useMemo, useState } from "react";
-import { autoUpdate, flip, FloatingPortal, offset, shift, useFloating } from "@floating-ui/react";
 import {
-  pinConversation, unpinConversation,
-  hideConversation, unhideConversation,
-  muteConversation, unmuteConversation,
+  autoUpdate,
+  flip,
+  FloatingPortal,
+  offset,
+  shift,
+  useFloating,
+} from "@floating-ui/react";
+import {
+  pinConversation,
+  unpinConversation,
+  hideConversation,
+  unhideConversation,
+  muteConversation,
+  unmuteConversation,
   setCategory,
-  deleteConversation, expireMessage
+  deleteConversation,
+  expireMessage,
 } from "@/services/conversation-settings.service";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { updateConversationSetting, setCategoryLocal, removeConversation, setUnreadCount } from "@/store/slices/conversationSlice";
+import {
+  updateConversationSetting,
+  setCategoryLocal,
+  removeConversation,
+  setUnreadCount,
+} from "@/store/slices/conversationSlice";
 import { PiPushPinFill } from "react-icons/pi";
 import { IoCheckmark } from "react-icons/io5";
+import { CiImageOn } from "react-icons/ci";
+import { RiVideoLine } from "react-icons/ri";
+import { LuSticker } from "react-icons/lu";
+import { HiMiniLink } from "react-icons/hi2";
+import { GoFileSymlinkFile } from "react-icons/go";
 import { useSocket } from "@/contexts/SocketContext";
 
 type Props = {
@@ -98,10 +123,43 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
     if (lastMsg.expired) return "Tin nhắn đã hết hạn";
     const content = lastMsg.content;
     if (!content) return "";
-    if (content.text) return content.text;
-    if (content.icon) return "[Sticker]";
-    if (content.file) return content.file.fileKey;
-    return "";
+
+    let icon = null;
+    let text = "";
+
+    if (content.text && /https?:\/\//.test(content.text)) {
+      icon = <HiMiniLink />;
+      text = content.text;
+    } else if (content.icon) {
+      icon = <LuSticker />;
+      text = "Sticker";
+    } else if (Array.isArray(content.files) && content.files.length > 0) {
+      switch (content.files[content.files.length - 1].type) {
+        case "IMAGE":
+          icon = <CiImageOn />;
+          text = "Hình ảnh";
+          break;
+        case "VIDEO":
+          icon = <RiVideoLine />;
+          text = "Video";
+          break;
+        case "FILE":
+          icon = <GoFileSymlinkFile />;
+          text = content.files[0].fileName;
+          break;
+        default:
+          text = "";
+      }
+    } else if (content.text) {
+      text = content.text;
+    }
+
+    return (
+      <span className="flex items-center gap-1 truncate">
+        {icon}
+        <span className="truncate">{text}</span>
+      </span>
+    );
   }, [conversation.lastMessage]);
 
   const isDirect = conversation.type === "DIRECT";
@@ -316,7 +374,6 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
                       className="p-3 hover:bg-gray-100 cursor-pointer flex justify-between relative"
                     >
                       Phân loại <span>›</span>
-
                       {hoverMenu === "category" && (
                         <div
                           ref={subRefs.setFloating}
@@ -382,7 +439,6 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
                         className="p-3 hover:bg-gray-100 cursor-pointer flex justify-between relative"
                       >
                         Tắt thông báo <span>›</span>
-
                         {hoverMenu === "mute" && (
                           <div
                             onMouseEnter={() => setHoverMenu("mute")}
@@ -430,7 +486,6 @@ const ConversationListItem = ({ conversation, isActive, openMenu, setOpenMenu }:
                       className="p-3 hover:bg-gray-100 cursor-pointer flex justify-between relative"
                     >
                       Tin nhắn tự xóa <span>›</span>
-
                       {hoverMenu === "delete" && (
                         <div className="absolute left-full ml-1 top-0 w-44 bg-white rounded-xl shadow-lg border">
                           {[

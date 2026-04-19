@@ -9,6 +9,7 @@ import {
   Image as RNImage,
   Linking,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { Image } from "expo-image";
 import { Video } from "expo-av";
@@ -18,7 +19,18 @@ import { messageService } from "@/services/message.service";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { getDateLabel } from "@/utils/format-message-time..util";
 import { updateConversationSetting } from "@/store/slices/conversationSlice";
-import { muteConversation, pinConversation, unmuteConversation, unpinConversation } from "@/services/conversation-settings.service";
+
+import {
+  muteConversation,
+  pinConversation,
+  unmuteConversation,
+  unpinConversation,
+} from "@/services/conversation-settings.service";
+import { useSocket } from "@/contexts/SocketContext";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
+import { truncateFileName } from "@/utils/render-file";
+import { formatFileSize } from "@/utils/format-file.util";
 
 interface Props {
   visible: boolean;
@@ -49,7 +61,10 @@ const SectionHeader = ({
   >
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
       {icon}
-      <Text style={{ fontSize: 14, fontWeight: "600", color: "#1f2937" }}>{title}</Text>
+
+      <Text style={{ fontSize: 14, fontWeight: "600", color: "#1f2937" }}>
+        {title}
+      </Text>
     </View>
     <Ionicons
       name={expanded ? "chevron-down" : "chevron-forward"}
@@ -59,7 +74,12 @@ const SectionHeader = ({
   </TouchableOpacity>
 );
 
-const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation }) => {
+const ConversationInfoSheet: React.FC<Props> = ({
+  visible,
+  onClose,
+  conversation,
+}) => {
+  const { socket } = useSocket();
   const user = useAppSelector((state) => state.auth.user);
   const [medias, setMedias] = useState<any[]>([]);
   const [files, setFiles] = useState<any[]>([]);
@@ -74,20 +94,22 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   const isGroup = conversation?.type === "GROUP";
-  const currentConversation = useAppSelector((state) =>
-    state.conversation.conversations.find(
-      (c) => c.conversationId === conversation.conversationId
-    )
-  ) || conversation;
+
+  const currentConversation =
+    useAppSelector((state) =>
+      state.conversation.conversations.find(
+        (c) => c.conversationId === conversation.conversationId,
+      ),
+    ) || conversation;
 
   const isPinned = currentConversation?.pinned;
 
   const isMuted =
     currentConversation?.muted &&
-    (
-      !currentConversation?.mutedUntil ||
-      new Date(currentConversation.mutedUntil).getTime() > Date.now()
-    );
+
+    (!currentConversation?.mutedUntil ||
+      new Date(currentConversation.mutedUntil).getTime() > Date.now());
+
   useEffect(() => {
     if (!visible || !conversation?.conversationId || !user?.userId) return;
     const fetch = async () => {
@@ -95,7 +117,8 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
       try {
         const res: any = await messageService.getMediasPreview(
           user.userId,
-          conversation.conversationId
+
+          conversation.conversationId,
         );
         if (res.success) {
           setMedias(res.data.images_videos || []);
@@ -111,14 +134,52 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
     fetch();
   }, [visible, conversation?.conversationId]);
 
-  const getFileExt = (name: string) => name.split(".").pop()?.toUpperCase() || "FILE";
+
+  useEffect(() => {
+    if (!socket || !visible || !conversation?.conversationId) return;
+
+    const conversationId = conversation.conversationId;
+    const mediaRooms = [
+      `media_${conversationId}_IMAGE_VIDEO`,
+      `media_${conversationId}_FILE`,
+      `media_${conversationId}_LINK`,
+    ];
+
+    mediaRooms.forEach((room) => socket.emit("join_room", room));
+
+    const handleNewMedia = (payload: { type: string; data: any }) => {
+      const { type, data } = payload;
+      if (type === "IMAGE_VIDEO") {
+        setMedias((prev) => [data, ...prev].slice(0, 6));
+      }
+
+      if (type === "FILE") {
+        setFiles((prev) => [data, ...prev].slice(0, 6));
+      }
+
+      if (type === "LINK") {
+        setLinks((prev) => [data, ...prev].slice(0, 6));
+      }
+    };
+
+    socket.on("new_media", handleNewMedia);
+
+    return () => {
+      // Leave rooms and cleanup listener
+      mediaRooms.forEach((room) => socket.emit("leave_room", room));
+      socket.off("new_media", handleNewMedia);
+    };
+  }, [socket, visible, conversation?.conversationId]);
+
   const handlePin = () => {
     const newPinned = !conversation.pinned;
 
-    dispatch(updateConversationSetting({
-      conversationId: conversation.conversationId,
-      pinned: newPinned,
-    }));
+    dispatch(
+      updateConversationSetting({
+        conversationId: conversation.conversationId,
+        pinned: newPinned,
+      }),
+    );
 
     (async () => {
       try {
@@ -128,14 +189,19 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
           await unpinConversation(user?.userId, conversation.conversationId);
         }
       } catch (err) {
-        dispatch(updateConversationSetting({
-          conversationId: conversation.conversationId,
-          pinned: !newPinned,
-        }));
+
+        dispatch(
+          updateConversationSetting({
+            conversationId: conversation.conversationId,
+            pinned: !newPinned,
+          }),
+        );
         console.error(err);
       }
     })();
   };
+
+
   const handleMute = (duration: number) => {
     let mutedUntil: string | null = null;
 
@@ -155,30 +221,85 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
 
     const newMuted = duration !== 0;
 
-    dispatch(updateConversationSetting({
-      conversationId: conversation.conversationId,
-      muted: newMuted,
-      mutedUntil,
-    }));
+
+    dispatch(
+      updateConversationSetting({
+        conversationId: conversation.conversationId,
+        muted: newMuted,
+        mutedUntil,
+      }),
+    );
 
     (async () => {
       try {
         if (duration === 0) {
           await unmuteConversation(user?.userId, conversation.conversationId);
         } else {
-          await muteConversation(user?.userId, conversation.conversationId, duration);
+
+          await muteConversation(
+            user?.userId,
+            conversation.conversationId,
+            duration,
+          );
         }
       } catch (err) {
-        dispatch(updateConversationSetting({
-          conversationId: conversation.conversationId,
-          muted: !newMuted,
-          mutedUntil: null,
-        }));
+        dispatch(
+          updateConversationSetting({
+            conversationId: conversation.conversationId,
+            muted: !newMuted,
+            mutedUntil: null,
+          }),
+        );
       }
     })();
   };
+
+  const getFileExt = (name: string) =>
+    name.split(".").pop()?.toUpperCase() || "FILE";
+
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownload = async (file: any) => {
+    try {
+      setDownloadingId(file.fileKey);
+
+      const safeFileName = decodeURIComponent(file.fileName || "file");
+
+      const downloadUrl = encodeURI(file.fileKey);
+
+      const fileUri = FileSystem.documentDirectory + safeFileName;
+
+      const { uri } = await FileSystem.downloadAsync(downloadUrl, fileUri);
+
+      const canShare = await Sharing.isAvailableAsync();
+
+      if (canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: file.mimeType || "application/octet-stream",
+          dialogTitle: safeFileName,
+        });
+      } else {
+        Alert.alert("Thành công", `Đã tải: ${safeFileName}`);
+      }
+
+    } catch (err: any) {
+      console.error("Download error:", err?.response || err);
+      Alert.alert(
+        "Lỗi",
+        "Không thể tải file. Có thể do link hết hạn hoặc cần đăng nhập."
+      );
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   return (
-    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal
+      transparent
+      visible={visible}
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <Pressable
         style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
         onPress={onClose}
@@ -207,7 +328,9 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               borderBottomColor: "#f3f4f6",
             }}
           >
-            <Text style={{ fontSize: 16, fontWeight: "600" }}>Thông tin hội thoại</Text>
+            <Text style={{ fontSize: 16, fontWeight: "600" }}>
+              Thông tin hội thoại
+            </Text>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={22} color="#6b7280" />
             </TouchableOpacity>
@@ -323,11 +446,21 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               {expandedMedia && (
                 <View style={{ paddingHorizontal: 12, paddingBottom: 16 }}>
                   {medias.length === 0 ? (
-                    <Text style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", paddingVertical: 8 }}>
+
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#9ca3af",
+                        textAlign: "center",
+                        paddingVertical: 8,
+                      }}
+                    >
                       Chưa có ảnh/video trong cuộc trò chuyện
                     </Text>
                   ) : (
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2 }}>
+                    <View
+                      style={{ flexDirection: "row", flexWrap: "wrap", gap: 2 }}
+                    >
                       {medias.slice(0, 6).map((media, idx) => {
                         const file = media?.content?.file;
                         const isVideo = file?.type === "VIDEO";
@@ -335,14 +468,36 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                           <TouchableOpacity
                             key={idx}
                             onPress={() => setPreviewIndex(idx)}
-                            style={{ width: "32%", aspectRatio: 1, backgroundColor: "#e5e7eb", overflow: "hidden" }}
+
+                            style={{
+                              width: "32%",
+                              aspectRatio: 1,
+                              backgroundColor: "#e5e7eb",
+                              overflow: "hidden",
+                            }}
                           >
                             {isVideo ? (
-                              <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#000" }}>
-                                <Ionicons name="play-circle" size={36} color="white" />
+                              <View
+                                style={{
+                                  flex: 1,
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  backgroundColor: "#000",
+                                }}
+                              >
+                                <Ionicons
+                                  name="play-circle"
+                                  size={36}
+                                  color="white"
+                                />
                               </View>
                             ) : (
-                              <Image source={{ uri: file?.fileKey }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                              <Image
+                                source={{ uri: file?.fileKey }}
+                                style={{ width: "100%", height: "100%" }}
+                                contentFit="cover"
+                              />
+
                             )}
                           </TouchableOpacity>
                         );
@@ -356,7 +511,14 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
 
             <View style={{ backgroundColor: "white", marginBottom: 2 }}>
               <SectionHeader
-                icon={<MaterialIcons name="insert-drive-file" size={18} color="#374151" />}
+                icon={
+                  <MaterialIcons
+                    name="insert-drive-file"
+                    size={18}
+                    color="#374151"
+                  />
+                }
+
                 title="File"
                 expanded={expandedFile}
                 onToggle={() => setExpandedFile((v) => !v)}
@@ -364,7 +526,15 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               {expandedFile && (
                 <View style={{ paddingHorizontal: 12, paddingBottom: 16 }}>
                   {files.length === 0 ? (
-                    <Text style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", paddingVertical: 8 }}>
+
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#9ca3af",
+                        textAlign: "center",
+                        paddingVertical: 8,
+                      }}
+                    >
                       Chưa có file trong cuộc trò chuyện
                     </Text>
                   ) : (
@@ -373,7 +543,10 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                       return (
                         <TouchableOpacity
                           key={idx}
-                          onPress={() => Linking.openURL(file.fileKey)}
+
+                          onPress={() => handleDownload(file)}
+                          disabled={downloadingId === file.fileKey}
+
                           style={{
                             flexDirection: "row",
                             alignItems: "center",
@@ -396,19 +569,40 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                               justifyContent: "center",
                             }}
                           >
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#1d4ed8" }}>
+
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: "700",
+                                color: "#1d4ed8",
+                              }}
+                            >
+
                               {getFileExt(file.fileName)}
                             </Text>
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "500", color: "#111" }}>
-                              {file.fileName}
+
+                            <Text
+                              numberOfLines={1}
+                              style={{
+                                fontSize: 13,
+                                fontWeight: "500",
+                                color: "#111",
+                              }}
+                            >
+                              {truncateFileName(file.fileName, 30)}
                             </Text>
                             <Text style={{ fontSize: 11, color: "#9ca3af" }}>
-                              {getDateLabel(item.createdAt)} • {(file.fileSize / 1024).toFixed(1)} KB
+                              {getDateLabel(item.createdAt)} •{" "}
+                              {formatFileSize(file.fileSize)}
                             </Text>
                           </View>
-                          <Ionicons name="download-outline" size={18} color="#6b7280" />
+                          {downloadingId === file.fileKey
+                            ? <ActivityIndicator size="small" color="blue" />
+                            : <Ionicons name="download-outline" size={17} color="blue" />
+                          }
+
                         </TouchableOpacity>
                       );
                     })
@@ -416,8 +610,6 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                 </View>
               )}
             </View>
-
-
             <View style={{ backgroundColor: "white", marginBottom: 2 }}>
               <SectionHeader
                 icon={<MaterialIcons name="link" size={18} color="#374151" />}
@@ -428,14 +620,27 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               {expandedLink && (
                 <View style={{ paddingHorizontal: 12, paddingBottom: 16 }}>
                   {links.length === 0 ? (
-                    <Text style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", paddingVertical: 8 }}>
+
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#9ca3af",
+                        textAlign: "center",
+                        paddingVertical: 8,
+                      }}
+                    >
+
                       Chưa có link trong cuộc trò chuyện
                     </Text>
                   ) : (
                     links.slice(0, 6).map((item, idx) => {
                       const url = item.content?.text;
                       let domain = url;
-                      try { domain = new URL(url).hostname.replace("www.", ""); } catch { }
+
+                      try {
+                        domain = new URL(url).hostname.replace("www.", "");
+                      } catch { }
+
                       return (
                         <TouchableOpacity
                           key={idx}
@@ -462,11 +667,24 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                               justifyContent: "center",
                             }}
                           >
-                            <MaterialIcons name="link" size={20} color="#6b7280" />
+
+                            <MaterialIcons
+                              name="link"
+                              size={20}
+                              color="#6b7280"
+                            />
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Text numberOfLines={1} style={{ fontSize: 13, color: "#0068ff" }}>{url}</Text>
-                            <Text style={{ fontSize: 11, color: "#9ca3af" }}>{domain}</Text>
+                            <Text
+                              numberOfLines={1}
+                              style={{ fontSize: 13, color: "#0068ff" }}
+                            >
+                              {url}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: "#9ca3af" }}>
+                              {domain}
+                            </Text>
+
                           </View>
                         </TouchableOpacity>
                       );
@@ -475,6 +693,7 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                 </View>
               )}
             </View>
+
 
 
             <View style={{ backgroundColor: "white", marginTop: 8 }}>
@@ -503,19 +722,60 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
 
 
           {previewIndex !== null && (
-            <Modal transparent visible animationType="fade" onRequestClose={() => setPreviewIndex(null)}>
-              <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.95)", alignItems: "center", justifyContent: "center" }}>
+            <Modal
+              transparent
+              visible
+              animationType="fade"
+              onRequestClose={() => setPreviewIndex(null)}
+            >
+              <View
+                style={{
+                  flex: 1,
+                  backgroundColor: "rgba(0,0,0,0.95)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 <TouchableOpacity
-                  style={{ position: "absolute", top: 50, right: 20, zIndex: 10 }}
+                  style={{
+                    position: "absolute",
+                    top: 50,
+                    right: 20,
+                    zIndex: 10,
+                  }}
+
                   onPress={() => setPreviewIndex(null)}
                 >
                   <Ionicons name="close" size={30} color="white" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{
+                    position: "absolute",
+                    top: 48,
+                    left: 20,
+                    zIndex: 10,
+                  }}
+                  onPress={() => {
+                    const file = medias[previewIndex!]?.content?.file;
+                    if (file) handleDownload(file);
+                  }}
+                  disabled={
+                    downloadingId === medias[previewIndex!]?.content?.file?.fileKey
+                  }
+                >
+                  {downloadingId === medias[previewIndex!]?.content?.file?.fileKey ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Ionicons name="download-outline" size={28} color="white" />
+                  )}
                 </TouchableOpacity>
 
                 {previewIndex > 0 && (
                   <TouchableOpacity
                     style={{ position: "absolute", left: 20, zIndex: 10 }}
-                    onPress={() => setPreviewIndex((p) => (p !== null ? p - 1 : p))}
+                    onPress={() =>
+                      setPreviewIndex((p) => (p !== null ? p - 1 : p))
+                    }
                   >
                     <Ionicons name="chevron-back" size={36} color="white" />
                   </TouchableOpacity>
@@ -524,7 +784,10 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
                 {previewIndex < medias.length - 1 && (
                   <TouchableOpacity
                     style={{ position: "absolute", right: 20, zIndex: 10 }}
-                    onPress={() => setPreviewIndex((p) => (p !== null ? p + 1 : p))}
+
+                    onPress={() =>
+                      setPreviewIndex((p) => (p !== null ? p + 1 : p))
+                    }
                   >
                     <Ionicons name="chevron-forward" size={36} color="white" />
                   </TouchableOpacity>
@@ -574,12 +837,15 @@ const ConversationInfoSheet: React.FC<Props> = ({ visible, onClose, conversation
               paddingBottom: 20,
             }}
           >
-            <Text style={{
-              textAlign: "center",
-              fontSize: 15,
-              fontWeight: "600",
-              paddingVertical: 14
-            }}>
+
+            <Text
+              style={{
+                textAlign: "center",
+                fontSize: 15,
+                fontWeight: "600",
+                paddingVertical: 14,
+              }}
+            >
               Tắt thông báo
             </Text>
 

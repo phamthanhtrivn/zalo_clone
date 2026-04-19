@@ -16,7 +16,10 @@ import { ChatModule } from '../chat/chat.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { ConversationSettingSchema } from '../conversation-settings/schemas/conversation-setting.schema';
 import { ConversationSetting } from '../conversation-settings/schemas/conversation-setting.schema';
-
+import { MessagesQueryService } from './services/query.service';
+import { MessagesActionService } from './services/action.service';
+import { MessagesCallService } from './services/call.service';
+import { MessagesTransformService } from './services/transform.service';
 
 @Module({
   imports: [
@@ -29,9 +32,16 @@ import { ConversationSetting } from '../conversation-settings/schemas/conversati
     ]),
     MembersModule,
     StorageModule,
+    ChatModule,
     ConversationsModule,
   ],
-  providers: [MessagesService],
+  providers: [
+    MessagesService,
+    MessagesQueryService,
+    MessagesActionService,
+    MessagesCallService,
+    MessagesTransformService,
+  ],
   controllers: [MessagesController],
   exports: [MessagesService],
 })

@@ -10,7 +10,6 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Text,
-
   ToastAndroid,
   TouchableOpacity,
   View,

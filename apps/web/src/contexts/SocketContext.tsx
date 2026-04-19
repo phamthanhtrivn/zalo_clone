@@ -156,7 +156,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         "conversation_setting:update",
         handleConversationUpdate,
       );
-
       socketInstance.off(
         "conversation_setting:delete",
         handleConversationDelete,

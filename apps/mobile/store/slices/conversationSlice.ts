@@ -1,12 +1,18 @@
-import type { ConversationCategory, ConversationItemType } from "@/types/conversation-item.type";
+
+import type {
+  ConversationCategory,
+  ConversationItemType,
+} from "@/types/conversation-item.type";
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
 type ConversationState = {
   conversations: ConversationItemType[];
+  replyingMessage: any | null;
 };
 
 const initialState: ConversationState = {
   conversations: [],
+  replyingMessage: null,
 };
 
 const conversationSlice = createSlice({
@@ -19,10 +25,13 @@ const conversationSlice = createSlice({
 
     updateConversation(
       state,
-      action: PayloadAction<Partial<ConversationItemType> & { conversationId: string }>
+
+      action: PayloadAction<
+        Partial<ConversationItemType> & { conversationId: string }
+      >,
     ) {
       const index = state.conversations.findIndex(
-        (c) => c.conversationId === action.payload.conversationId
+        (c) => c.conversationId === action.payload.conversationId,
       );
       if (index !== -1) {
         const updated = { ...state.conversations[index], ...action.payload };
@@ -113,7 +122,14 @@ const conversationSlice = createSlice({
       if (c) {
         c.unreadCount = action.payload.unreadCount;
       }
-    }
+    },
+    setReplyingMessage(state, action: PayloadAction<any | null>) {
+      state.replyingMessage = action.payload;
+    },
+
+    clearReplyingMessage(state) {
+      state.replyingMessage = null;
+    },
   },
 });
 
@@ -126,7 +142,9 @@ export const {
   setCategoryLocal,
   removeConversation,
   removeExpiredMessages,
-  setUnreadCount
+  setUnreadCount,
+  setReplyingMessage,
+  clearReplyingMessage,
 } = conversationSlice.actions;
 
 export default conversationSlice.reducer;

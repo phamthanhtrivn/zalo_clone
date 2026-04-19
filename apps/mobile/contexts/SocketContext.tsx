@@ -15,6 +15,7 @@ import {
   removeConversation,
   removeExpiredMessages,
   setUnreadCount,
+
 } from "@/store/slices/conversationSlice";
 
 interface SocketContextType {
@@ -39,32 +40,44 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const user = useAppSelector((state) => state.auth.user);
   const socketRef = useRef<Socket | null>(null);
 
+
+  const handleNewMessageSidebar = (data: any) => {
+    dispatch(updateConversation(data));
+  };
+
+  const handleRecallMessageSidebar = (data: {
+    conversationId: string;
+    messageId: string;
+  }) => {
+    dispatch(updateRecallMessageInConversation(data));
+  };
+
   useEffect(() => {
-    if (!user?.userId) return;
+    if (!user?.userId || !apiUrl) return;
 
     if (!socketRef.current) {
       socketRef.current = io(apiUrl, {
-        transports: ["websocket"],
-        auth: { userId: user.userId },
+        auth: {
+          userId: user.userId,
+        },
       });
     }
 
     const socketInstance = socketRef.current;
     setSocket(socketInstance);
 
-    const onConnect = () => {
+
+    socketInstance.on("connect", () => {
       console.log("Connected:", socketInstance.id);
       setIsConnected(true);
-      socketInstance.emit("join", user.userId);
-    };
+    });
 
-    const onDisconnect = () => {
+    socketInstance.on("disconnect", () => {
       console.log("Disconnected");
       setIsConnected(false);
-    };
+    });
 
     const handleNewMessageSidebar = (data: any) => {
-      console.log('sidebar data:', JSON.stringify(data)); // thêm dòng này
       dispatch(updateConversation(data));
     };
 
@@ -75,6 +88,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       dispatch(removeExpiredMessages(data.messageIds));
 
     };
+
+
     const handleConversationUpdate = (data: any) => {
       if (data.unreadCount !== undefined && Object.keys(data).length === 2) {
         console.log('Skip unreadCount broadcast from server');
@@ -101,9 +116,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     const handleConversationDelete = (data: any) => {
       dispatch(removeConversation(data.conversationId));
     };
-
-    socketInstance.on("connect", onConnect);
-    socketInstance.on("disconnect", onDisconnect);
     socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
     socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
     socketInstance.on("conversation_setting:update", handleConversationUpdate);
@@ -111,8 +123,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on('messages_expired', handleMessagesExpired);
 
     return () => {
-      socketInstance.off("connect", onConnect);
-      socketInstance.off("disconnect", onDisconnect);
       socketInstance.off("new_message_sidebar", handleNewMessageSidebar);
       socketInstance.off("message_recalled_sidebar", handleRecallMessageSidebar);
       socketInstance.off("conversation_setting:update", handleConversationUpdate);
@@ -127,4 +137,5 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       {children}
     </SocketContext.Provider>
   );
+
 };

@@ -35,6 +35,7 @@
     "react-router-dom": "^7.13.1",
     "react-toastify": "^11.0.5",
     "shadcn-ui": "^0.9.5",
+    "shared-types": "*",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.5.0"

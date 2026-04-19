@@ -1,7 +1,6 @@
 import { ThumbsUp, X } from "lucide-react";
 import { REACTION_EMOJIS, EMOJI_MAP, EmojiType } from "@/constants/emoji.constant";
 import type { ReactionType } from "@/types/messages.type";
-
 import { useAppSelector } from "@/store";
 
 interface Props {
@@ -11,8 +10,6 @@ interface Props {
   isMe: boolean;
   removeReaction: (messageId: string) => void;
 }
-
-const CURRENT_USER_ID = "699d2b94f9075fe800282901"
 
 export const ReactionPicker = ({ messageId, reactionMessage, messageReactions, isMe, removeReaction }: Props) => {
   const user = useAppSelector(state => state.auth.user)
@@ -50,7 +47,6 @@ export const ReactionPicker = ({ messageId, reactionMessage, messageReactions, i
               {EMOJI_MAP[emoji]}
             </button>
           ))}
-
           {messageReactions.length > 0 && messageReactions.some(r => r.userId._id === user?.userId) && (
             <button
               onClick={() => removeReaction(messageId)}

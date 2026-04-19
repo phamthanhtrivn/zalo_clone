@@ -114,20 +114,27 @@ export const messageService = {
   sendMessage: async (
     conversationId: string,
     senderId: string,
+    repliedId?: string,
     content?: { text?: string; icon?: string },
-    file?: File | null,
+    files?: File[] | null,
   ) => {
-    if (file) {
+    if (files && files.length > 0) {
       const formData = new FormData();
+
       formData.append("conversationId", conversationId);
       formData.append("senderId", senderId);
-      if (content?.text) {
-        formData.append("content[text]", content.text);
+
+      if (repliedId) {
+        formData.append("repliedId", repliedId);
       }
-      if (content?.icon) {
-        formData.append("content[icon]", content.icon);
+
+      if (content) {
+        formData.append("content", JSON.stringify(content));
       }
-      formData.append("file", file);
+
+      files.forEach((file) => {
+        formData.append("files", file);
+      });
 
       const response = await apiClient.post(`/api/messages`, formData, {
         headers: {
@@ -140,6 +147,7 @@ export const messageService = {
     const response = await apiClient.post(`/api/messages`, {
       conversationId,
       senderId,
+      repliedId,
       content,
     });
     return response.data;

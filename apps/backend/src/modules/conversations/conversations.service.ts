@@ -459,14 +459,12 @@ export class ConversationsService {
                   },
                 },
               },
-
               {
                 $sort: {
                   isLastMessage: -1,
                   createdAt: -1,
                 },
               },
-
               { $limit: 1 },
             ],
             as: 'lastMessage',
@@ -495,7 +493,6 @@ export class ConversationsService {
             preserveNullAndEmptyArrays: true,
           },
         },
-
         {
           $lookup: {
             from: 'members',
@@ -504,8 +501,6 @@ export class ConversationsService {
             as: 'members',
           },
         },
-
-
         {
           $lookup: {
             from: 'users',
@@ -641,6 +636,29 @@ export class ConversationsService {
           },
         },
         {
+
+          $lookup: {
+            from: 'conversationsettings',
+            let: {
+              conversationId: '$conversation._id',
+              userId: '$userId',
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$conversationId', '$$conversationId'] },
+                      { $eq: ['$userId', '$$userId'] },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: 'settings',
+          },
+        },
+        {
           $unwind: {
             path: '$settings',
             preserveNullAndEmptyArrays: true,
@@ -654,10 +672,10 @@ export class ConversationsService {
             ]
           }
         },
+
         {
           $project: {
             _id: 0,
-
             conversationId: '$conversation._id',
             type: '$conversation.type',
             pinned: { $ifNull: ['$settings.pinned', false] },
@@ -701,12 +719,12 @@ export class ConversationsService {
                   '$sender.profile.name',
                 ],
               },
-
               content: '$lastMessage.content',
               recalled: '$lastMessage.recalled',
             },
             unreadCount: {
               $ifNull: [{ $arrayElemAt: ['$unreadData.count', 0] }, 0],
+
             },
             lastMessageAt: '$conversation.lastMessageAt',
           },

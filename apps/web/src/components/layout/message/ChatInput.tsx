@@ -9,6 +9,11 @@ import { useEffect, useRef, useState } from "react";
 import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
 import { RiShareForward2Fill } from "react-icons/ri";
 
+import { useAppDispatch, useAppSelector } from "@/store";
+import { clearReplyingMessage } from "@/store/slices/conversationSlice";
+import { X, Quote } from "lucide-react";
+
+
 type Props = {
   chatName: string;
   onSendMessage: (text: string) => void;
@@ -30,6 +35,12 @@ const ChatInput = ({
   setSelectedMessages,
   onOpenForwardModal,
 }: Props) => {
+
+  const dispatch = useAppDispatch();
+  const replyingMessage = useAppSelector(
+    (state) => state.conversation.replyingMessage,
+  );
+
   const [text, setText] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -77,6 +88,9 @@ const ChatInput = ({
     if (text.trim()) {
       onSendMessage(text);
       setText("");
+      if (replyingMessage) {
+        dispatch(clearReplyingMessage());
+      }
     }
   };
 
@@ -135,6 +149,28 @@ const ChatInput = ({
               Hủy
             </button>
           </div>
+        </div>
+      )}
+
+      {replyingMessage && (
+        <div className="px-4 py-2 border-b flex items-stretch gap-3 bg-gray-50/80 animate-in slide-in-from-bottom-2 duration-200">
+          <div className="w-1 bg-[#0068ff] rounded-full" />
+          <div className="flex-1 min-w-0 py-1">
+            <div className="text-[13px] font-semibold text-[#0068ff] mb-0.5 flex items-center gap-1.5">
+              <Quote size={12} className="fill-current" />
+              Trả lời {replyingMessage.senderId.profile?.name}
+            </div>
+            <p className="text-sm text-gray-500 truncate">
+              {replyingMessage.content?.text ||
+                (replyingMessage.content?.file ? replyingMessage.content.file.fileName : "")}
+            </p>
+          </div>
+          <button
+            onClick={() => dispatch(clearReplyingMessage())}
+            className="p-1 hover:bg-gray-200 rounded-full h-fit self-center transition-colors cursor-pointer"
+          >
+            <X size={18} className="text-gray-400" />
+          </button>
         </div>
       )}
 

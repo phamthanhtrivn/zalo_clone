@@ -23,8 +23,6 @@ export const formatMessageTime = (dateString: string) => {
     const hours = Math.floor(diffMs / hour);
     return `${hours} giờ`;
   }
-
-
   const startOfToday = new Date(
     now.getFullYear(),
     now.getMonth(),

@@ -9,12 +9,11 @@ import {
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 
-
 import cookieParser from 'cookie-parser';
 
 import * as dns from 'node:dns';
 dns.setServers(['1.1.1.1']);
-dns.setServers(['1.1.1.1']);
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 

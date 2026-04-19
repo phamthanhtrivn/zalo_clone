@@ -9,6 +9,7 @@ import SearchLabel from "@/components/common/SearchLabel";
 import ConversationItem from "@/components/chat/ConversationItem";
 import { useEffect, useState } from "react";
 import { conversationService } from "@/services/conversation.service";
+
 import { setConversations, updateConversation } from "@/store/slices/conversationSlice";
 import { useSocket } from "@/contexts/SocketContext";
 import { router } from "expo-router";
@@ -16,6 +17,7 @@ import { createSelector } from "@reduxjs/toolkit";
 import type { RootState } from "@/store/store";
 
 // Memoized selector — only recomputes when conversations array changes
+
 const selectVisibleConversations = createSelector(
   (state: RootState) => state.conversation.conversations,
   (conversations) =>
@@ -27,7 +29,9 @@ const selectVisibleConversations = createSelector(
           new Date(b.lastMessageAt).getTime() -
           new Date(a.lastMessageAt).getTime()
         );
-      })
+
+      }),
+
 );
 
 export default function Home() {
@@ -89,8 +93,6 @@ export default function Home() {
         centerChild={<SearchLabel />}
         leftChild={<SearchIcon />}
       />
-
-
       <View className="flex-1 bg-white">
         {/* Tabs */}
         <View className="flex-row items-center justify-between px-4 py-2 border-b border-gray-100">

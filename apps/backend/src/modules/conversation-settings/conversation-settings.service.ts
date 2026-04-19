@@ -140,6 +140,7 @@ export class ConversationSettingsService {
         this.gateway.emitConversationDeleted(userId.toString(), {
             conversationId: conversationId.toString(),
             deletedAt: setting.deletedAt,
+
             clearAt: setting.clearAt,
         });
 

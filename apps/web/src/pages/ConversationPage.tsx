@@ -12,15 +12,11 @@ import { toast, Zoom } from "react-toastify";
 import { useSocket } from "@/contexts/SocketContext";
 import { conversationService } from "@/services/conversation.service";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { setConversations } from "@/store/slices/conversationSlice";
+import { setConversations, clearReplyingMessage } from "@/store/slices/conversationSlice";
 import ForwardModal from "@/components/layout/message/ForwardModal";
-
-
 
 const ConversationPage = () => {
   const { id } = useParams();
-  const location = useLocation();
-  // const { conversation: conversationFromState } = location.state || {};
   const dispatch = useAppDispatch();
   const conversations = useAppSelector(
     (state) => state.conversation.conversations,
@@ -28,11 +24,13 @@ const ConversationPage = () => {
   const user = useAppSelector((state) => state.auth.user);
   const conversation = useAppSelector((state) => {
     const found = state.conversation.conversations.find(
-      (c) => c.conversationId === id
+      (c) => c.conversationId === id,
     );
-    console.log("[ConversationPage] id:", id, "found:", found?.conversationId, "store size:", state.conversation.conversations.length);
     return found ?? null;
   });
+
+  const isGroup = conversation?.type === "GROUP"
+  const replyingMessage = useAppSelector((state) => state.conversation.replyingMessage);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
   const [messages, setMessages] = useState<MessagesType[]>([]);
@@ -48,7 +46,6 @@ const ConversationPage = () => {
   const [isSelected, setIsSelected] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [showForwardModal, setShowForwardModal] = useState(false);
-
   const [loadingForward, setLoadingForward] = useState(false);
   const lastMessageId = messages[messages.length - 1]?._id;
 
@@ -72,7 +69,6 @@ const ConversationPage = () => {
       try {
         const res = await messageService.getMessagesFromConversation(
           id,
-
           user?.userId || "",
           nextCursor,
           20,
@@ -123,7 +119,6 @@ const ConversationPage = () => {
       try {
         const res = await messageService.getNewerMessages(
           id,
-
           user?.userId || "",
           prevCursor,
           20,
@@ -192,7 +187,6 @@ const ConversationPage = () => {
 
     const res = await messageService.getMessagesAroundPinnedMessage(
       id,
-
       user?.userId || "",
       messageId,
       15,
@@ -223,7 +217,6 @@ const ConversationPage = () => {
     try {
       const res = await messageService.getMessagesFromConversation(
         id,
-
         user?.userId || "",
         null,
         20,
@@ -245,8 +238,10 @@ const ConversationPage = () => {
     if (!id) return;
 
     try {
-
-      const res = await messageService.getPinnedMessages(id, user?.userId || "");
+      const res = await messageService.getPinnedMessages(
+        id,
+        user?.userId || "",
+      );
 
       if (res.success) {
         setPinnedMessages(res.data.messages);
@@ -262,7 +257,6 @@ const ConversationPage = () => {
     try {
       const res = await messageService.reactionMessage(
         id,
-
         user?.userId || "",
         emojiType,
         messageId,
@@ -280,7 +274,6 @@ const ConversationPage = () => {
 
     try {
       const res = await messageService.removeReaction(
-
         user?.userId || "",
         messageId,
         id,
@@ -318,7 +311,6 @@ const ConversationPage = () => {
     if (!id) return;
 
     try {
-
       await messageService.recalledMessage(user?.userId || "", messageId, id);
     } catch (error) {
       toastAlert("Bạn chỉ có thể thu hồi tin nhắn trong vòng 24 giờ");
@@ -330,7 +322,6 @@ const ConversationPage = () => {
     if (!id) return;
 
     try {
-
       await messageService.pinnedMessage(user?.userId || "", messageId, id);
     } catch (error) {
       toastAlert("Bạn chỉ có thể ghim tối đa 3 tin nhắn");
@@ -340,12 +331,14 @@ const ConversationPage = () => {
 
   const onSendMessage = async (text: string) => {
     if (!id || !text.trim()) return;
-    // console.log("Sending message:", { conversationId: id, userId: user?.userId, text });
-    try {
 
-      await messageService.sendMessage(id, user?.userId || "", {
+    try {
+      await messageService.sendMessage(id, user?.userId || "", replyingMessage?._id, {
         text,
       });
+      if (replyingMessage) {
+        dispatch(clearReplyingMessage());
+      }
     } catch (error) {
       console.error(error);
     }
@@ -355,17 +348,46 @@ const ConversationPage = () => {
     if (!id || !files.length) return;
 
     try {
-      const promises = Array.from(files).map((file) =>
+      const filesArray = Array.from(files);
 
-        messageService.sendMessage(id, user?.userId || "", undefined, file),
-
+      const mediaFiles = filesArray.filter(
+        (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
       );
+      const documentFiles = filesArray.filter(
+        (file) => !file.type.startsWith("image/") && !file.type.startsWith("video/"),
+      );
+
+      const promises: Promise<any>[] = [];
+
+      if (mediaFiles.length > 0) {
+        promises.push(
+          messageService.sendMessage(
+            id,
+            user?.userId || "",
+            replyingMessage?._id,
+            undefined,
+            mediaFiles
+          )
+        );
+      }
+
+      documentFiles.forEach((file) => {
+        promises.push(
+          messageService.sendMessage(
+            id,
+            user?.userId || "",
+            replyingMessage?._id,
+            undefined,
+            [file]
+          )
+        );
+      });
 
       const results = await Promise.all(promises);
 
-      results.forEach((res, index) => {
+      results.forEach((res) => {
         if (!res.success) {
-          console.error(`Lỗi file ${files[index].name}`);
+          console.error("Gửi file thất bại");
         }
       });
 
@@ -383,7 +405,6 @@ const ConversationPage = () => {
     if (!id) return;
 
     const res = await messageService.deleteMessageForMe(
-
       user?.userId || "",
       messageId,
       id,
@@ -392,9 +413,9 @@ const ConversationPage = () => {
     if (res.success) {
       setMessages((prev) => prev.filter((m) => m._id !== messageId));
 
-      const res =
-
-        await conversationService.getConversationsFromUserId(user?.userId || "");
+      const res = await conversationService.getConversationsFromUserId(
+        user?.userId || "",
+      );
 
       if (res.success) {
         dispatch(setConversations(res.data));
@@ -405,7 +426,6 @@ const ConversationPage = () => {
   const handleOpenConversation = async () => {
     try {
       if (!id) return;
-
 
       await messageService.readReceipt(user?.userId || "", id);
     } catch (error) {
@@ -450,6 +470,7 @@ const ConversationPage = () => {
     handleLoadMessagesFromConversation();
     handleLoadPinnedMessages();
     handleOpenConversation();
+    dispatch(clearReplyingMessage());
   }, [id]);
 
   useEffect(() => {
@@ -503,8 +524,8 @@ const ConversationPage = () => {
       if (!container) return;
 
       const isMedia =
-        newMessage.content?.file?.type === "IMAGE" ||
-        newMessage.content?.file?.type === "VIDEO";
+        newMessage.content?.files?.type === "IMAGE" ||
+        newMessage.content?.files?.type === "VIDEO";
 
       const isNearBottom =
         container.scrollHeight - container.scrollTop - container.clientHeight <
@@ -573,19 +594,12 @@ const ConversationPage = () => {
         });
       }
     };
-    const handleMessagesExpired = (data: { messageIds: string[] }) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          data.messageIds.includes(m._id) ? { ...m, expired: true } : m,
-        ),
-      );
-    };
+
     socket.on("new_message", handleNewMessage);
     socket.on("message_reacted", handleMessageReacted);
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
     socket.on("read_receipt", handleReadReceipt);
-    socket.on("messages_expired", handleMessagesExpired);
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -593,7 +607,6 @@ const ConversationPage = () => {
       socket.off("message_recalled", handleMessageRecalled);
       socket.off("message_pinned", handleMessagePinned);
       socket.off("read_receipt", handleReadReceipt);
-      socket.off("messages_expired", handleMessagesExpired);
       socket.emit("leave_room", id);
     };
   }, [socket, id]);
@@ -613,7 +626,6 @@ const ConversationPage = () => {
 
           <MessageList
             messages={messages}
-
             currentUserId={user?.userId || ""}
             containerRef={containerRef}
             handleScrollToTop={handleScrollToTop}
@@ -627,8 +639,9 @@ const ConversationPage = () => {
             setIsSelected={setIsSelected}
             selectedMessages={selectedMessages}
             toggleSelectMessage={toggleSelectMessage}
-            onForwardMessages={handleForwardMessages}
             lastMessageId={lastMessageId}
+            isGroup={isGroup}
+            onJumpToMessage={handleJumpToMessage}
           />
 
           <ChatInput
@@ -650,7 +663,6 @@ const ConversationPage = () => {
           onClose={() => setShowForwardModal(false)}
           conversations={conversations}
           selectedMessageIds={selectedMessages}
-
           loadingForward={loadingForward}
           onSubmit={handleForwardMessages}
         />
