@@ -51,7 +51,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [myRole, setMyRole] = useState<string>("MEMBER");
   const inputRef = useRef<TextInput>(null);
 
-  // --- LOGIC PHÂN QUYỀN (Từ nhánh HEAD) ---
+  // --- 1. LOGIC PHÂN QUYỀN (Từ HEAD) ---
   const currentConversation = useAppSelector((state) =>
     state.conversation.items?.find((c) => c.conversationId === conversationId),
   );
@@ -80,13 +80,20 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const isManager = myRole === "OWNER" || myRole === "ADMIN";
   const isMutedByAdmin = isGroup && !allowSend && !isManager;
 
-  // --- HÀM XỬ LÝ GỬI (Gộp logic 2 nhánh) ---
+  // --- 2. UX: TỰ ĐÓNG EMOJI (Từ KhongVanTam) ---
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", () => {
+      setShowEmoji(false);
+    });
+    return () => showSub.remove();
+  }, []);
+
+  // --- 3. HÀM XỬ LÝ GỬI (Hợp nhất) ---
   const handleSend = () => {
     if (text.trim()) {
       onSendMessage(text.trim());
       setText("");
     }
-
     if (selectedFiles.length > 0) {
       onSendFiles(selectedFiles);
       setSelectedFiles([]);
@@ -98,19 +105,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // --- CHỌN ẢNH/VIDEO (Từ nhánh KhongVanTam) ---
   const pickImages = async () => {
     try {
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          "Quyền truy cập",
-          "Cần quyền truy cập thư viện ảnh để chọn ảnh.",
-        );
+        Alert.alert("Quyền truy cập", "Cần quyền truy cập thư viện ảnh.");
         return;
       }
-
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images", "videos"],
         allowsMultipleSelection: true,
@@ -119,17 +121,17 @@ const ChatInput: React.FC<ChatInputProps> = ({
       });
 
       if (!result.canceled && result.assets?.length > 0) {
-        const newFiles = result.assets.map((asset, index) => {
-          const isVideo = asset.type === "video";
-          const fileName = asset.fileName || `media_${Date.now()}_${index}`;
-          return {
-            uri: asset.uri.startsWith("file://")
-              ? asset.uri
-              : `file://${asset.uri}`,
-            name: encodeURIComponent(fileName),
-            type: asset.mimeType || (isVideo ? "video/mp4" : "image/jpeg"),
-          };
-        });
+        const newFiles = result.assets.map((asset, index) => ({
+          uri: asset.uri.startsWith("file://")
+            ? asset.uri
+            : `file://${asset.uri}`,
+          name: encodeURIComponent(
+            asset.fileName || `media_${Date.now()}_${index}`,
+          ),
+          type:
+            asset.mimeType ||
+            (asset.type === "video" ? "video/mp4" : "image/jpeg"),
+        }));
         setSelectedFiles((prev) => [...prev, ...newFiles]);
       }
     } catch (err) {
@@ -137,17 +139,17 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  // --- CHỌN FILE TÀI LIỆU (Từ nhánh KhongVanTam) ---
   const pickDocuments = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: "*/*",
         multiple: true,
       });
-
       if (!result.canceled && result.assets?.length > 0) {
         const newFiles = result.assets.map((asset, index) => ({
-          uri: asset.uri,
+          uri: asset.uri.startsWith("file://")
+            ? asset.uri
+            : `file://${asset.uri}`,
           name: asset.name || `file_${Date.now()}_${index}`,
           type: asset.mimeType || "application/octet-stream",
         }));
@@ -160,11 +162,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   // --- RENDER GIAO DIỆN ---
 
-  // 1. SELECT MODE
   if (isSelectMode) {
     return (
       <View style={styles.selectModeContainer}>
-        <TouchableOpacity onPress={onCancelSelect} style={{ padding: 4 }}>
+        <TouchableOpacity onPress={onCancelSelect}>
           <Text style={styles.cancelText}>Hủy</Text>
         </TouchableOpacity>
         <Text style={styles.selectCountText}>
@@ -173,10 +174,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         <TouchableOpacity
           onPress={onOpenForwardModal}
           disabled={selectedMessages.length === 0}
-          style={[
-            styles.forwardBtn,
-            { opacity: selectedMessages.length === 0 ? 0.5 : 1 },
-          ]}
+          style={{ opacity: selectedMessages.length === 0 ? 0.5 : 1 }}
         >
           <Ionicons name="arrow-redo-outline" size={22} color="#0068ff" />
           <Text style={styles.forwardText}>Tiếp tục</Text>
@@ -185,7 +183,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     );
   }
 
-  // 2. BỊ KHÓA CHAT (Logic HEAD)
   if (isMutedByAdmin) {
     return (
       <View style={styles.mutedContainer}>
@@ -204,11 +201,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <View style={{ backgroundColor: "white" }}>
-      {/* Preview Bar (Từ KhongVanTam) */}
+      {/* 4. PREVIEW BAR (Từ KhongVanTam) */}
       {selectedFiles.length > 0 && (
         <ScrollView
           horizontal
-          showsHorizontalScrollIndicator={false}
           style={styles.previewScroll}
           contentContainerStyle={{ gap: 12, paddingHorizontal: 10 }}
         >
@@ -221,7 +217,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   contentFit="cover"
                 />
               ) : (
-                <View style={styles.previewFileIcon}>
+                <View style={styles.previewFilePlaceholder}>
                   <Ionicons
                     name={
                       file.type.startsWith("video/")
@@ -247,7 +243,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         </ScrollView>
       )}
 
-      {/* Input Row */}
+      {/* 5. INPUT ROW */}
       <View style={styles.inputRow}>
         <TouchableOpacity
           onPress={() => {
@@ -272,7 +268,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
         <TouchableOpacity onPress={pickImages} style={{ padding: 6 }}>
           <MaterialIcons name="image" size={26} color="#6b7280" />
         </TouchableOpacity>
-
         <TouchableOpacity onPress={pickDocuments} style={{ padding: 6 }}>
           <Ionicons name="attach-outline" size={26} color="#6b7280" />
         </TouchableOpacity>
@@ -308,25 +303,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderTopWidth: 1,
     borderTopColor: "#e5e7eb",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
   },
   cancelText: { color: "#ef4444", fontWeight: "600", fontSize: 15 },
   selectCountText: { fontWeight: "600", fontSize: 15, color: "#1f2937" },
-  forwardBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    padding: 4,
-  },
+  forwardBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
   forwardText: { color: "#0068ff", fontWeight: "600", fontSize: 15 },
   mutedContainer: {
     flexDirection: "row",
     backgroundColor: "#f3f4f6",
-    paddingVertical: 16,
+    padding: 16,
     alignItems: "center",
     justifyContent: "center",
     borderTopWidth: 1,
@@ -341,7 +330,7 @@ const styles = StyleSheet.create({
   },
   previewItem: { width: 80, height: 80, position: "relative" },
   previewImage: { width: 80, height: 80, borderRadius: 8 },
-  previewFileIcon: {
+  previewFilePlaceholder: {
     width: 80,
     height: 80,
     borderRadius: 8,
@@ -363,7 +352,6 @@ const styles = StyleSheet.create({
     height: 22,
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 10,
   },
   inputRow: {
     flexDirection: "row",

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -15,7 +15,6 @@ import { createSelector } from "@reduxjs/toolkit";
 
 import Container from "@/components/common/Container";
 import Header from "@/components/common/Header";
-import SearchIcon from "@/components/common/SearchIcon";
 import SearchLabel from "@/components/common/SearchLabel";
 
 import { useAppDispatch, useAppSelector } from "@/store/store";
@@ -28,7 +27,7 @@ import {
 import type { RootState } from "@/store/store";
 import CreateGroupModal from "@/components/chat/CreateGroupModal";
 
-// --- HELPERS (Giữ từ HEAD) ---
+// --- HELPERS ---
 function formatConversationTime(value?: string) {
   if (!value) return "";
   const date = new Date(value);
@@ -67,7 +66,7 @@ function getAvatarFallback(name?: string) {
   return name.trim().charAt(0).toUpperCase();
 }
 
-// --- SELECTOR TỐI ƯU (Từ KhongVanTam) ---
+// --- SELECTOR TỐI ƯU (Khôi phục logic lọc ghim của Tung kết hợp Memoize) ---
 const selectVisibleConversations = createSelector(
   (state: RootState) => state.conversation.items,
   (items) =>
@@ -85,18 +84,19 @@ const selectVisibleConversations = createSelector(
 export default function ChatTabScreen() {
   const dispatch = useAppDispatch();
   const { socket } = useSocket();
-  const items = useAppSelector(selectVisibleConversations);
-  const { loading } = useAppSelector((state) => state.conversation);
+  const visibleConversations = useAppSelector(selectVisibleConversations);
+  // Khôi phục biến error từ nhánh Tung
+  const { loading, error, items } = useAppSelector(
+    (state) => state.conversation,
+  );
 
   const [activeTab, setActiveTab] = useState<"PRIORITY" | "OTHER">("PRIORITY");
   const [isCreateGroupVisible, setIsCreateGroupVisible] = useState(false);
 
-  // Khởi tạo dữ liệu
   useEffect(() => {
     dispatch(fetchConversations());
   }, [dispatch]);
 
-  // Real-time cập nhật danh sách qua Socket (Giữ từ HEAD)
   useEffect(() => {
     if (!socket) return;
 
@@ -143,7 +143,6 @@ export default function ChatTabScreen() {
         onPress={() => router.push(`/private/chat/${item.conversationId}`)}
         className={`flex-row items-center px-4 py-3 ${item.pinned ? "bg-[#f0f7ff]" : "bg-white"}`}
       >
-        {/* Avatar Area */}
         <View className="w-14 h-14 rounded-full overflow-hidden mr-3 bg-[#dbeafe] items-center justify-center relative">
           {item.avatar ? (
             <Image source={{ uri: item.avatar }} className="w-full h-full" />
@@ -156,7 +155,6 @@ export default function ChatTabScreen() {
           )}
         </View>
 
-        {/* Info Area */}
         <View className="flex-1 min-w-0">
           <View className="flex-row items-center justify-between mb-1">
             <View className="flex-row items-center flex-1 mr-2">
@@ -202,7 +200,7 @@ export default function ChatTabScreen() {
 
   return (
     <Container className="bg-[#f5f6f8]">
-      {/* 1. HEADER */}
+      {/* 1. BLUE HEADER (Đồng bộ style Zalo từ Tung vào Header develop) */}
       <Header
         gradient
         leftChild={
@@ -252,14 +250,24 @@ export default function ChatTabScreen() {
         <Ionicons name="filter-outline" size={18} color="#6b7280" />
       </View>
 
-      {/* 3. CONVERSATION LIST */}
+      {/* 3. CONVERSATION LIST & ERROR HANDLING */}
       {loading && items.length === 0 ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color="#0068ff" />
         </View>
+      ) : error ? (
+        <View className="flex-1 items-center justify-center px-10">
+          <Text className="text-red-500 text-center">{error}</Text>
+          <TouchableOpacity
+            onPress={onRefresh}
+            className="mt-4 bg-blue-500 px-4 py-2 rounded-lg"
+          >
+            <Text className="text-white">Thử lại</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <FlatList
-          data={items}
+          data={visibleConversations}
           keyExtractor={(item) => item.conversationId}
           renderItem={renderItem}
           refreshControl={
@@ -271,7 +279,7 @@ export default function ChatTabScreen() {
           ListEmptyComponent={
             <View className="py-20 items-center px-10">
               <Text className="text-gray-400 text-center">
-                Chưa có cuộc trò chuyện nào.
+                Chưa có cuộc trò chuyện nào. Hãy kết nối với bạn bè!
               </Text>
             </View>
           }

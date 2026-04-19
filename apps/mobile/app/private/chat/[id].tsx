@@ -8,6 +8,7 @@ import {
   Alert,
   Text,
   TouchableOpacity,
+  ActionSheetIOS,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -48,7 +49,7 @@ export default function ChatWindow() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { socket } = useSocket();
-  const { startCall } = useVideoCall(); // Giữ Logic Call từ HEAD
+  const { startCall } = useVideoCall(); // Khôi phục logic Call
 
   const user = useAppSelector((state) => state.auth.user);
   const { items: conversations } = useAppSelector(
@@ -56,7 +57,7 @@ export default function ChatWindow() {
   );
   const replyingMessage = useAppSelector(
     (state) => state.conversation.replyingMessage,
-  ); // Giữ Logic Reply từ KVT
+  );
 
   const conversation = conversations?.find((c) => c.conversationId === id);
   const isGroup = conversation?.type === "GROUP";
@@ -70,6 +71,8 @@ export default function ChatWindow() {
   const [contextMenuMsg, setContextMenuMsg] = useState<MessagesType | null>(
     null,
   );
+  const [reactionPickerMsg, setReactionPickerMsg] =
+    useState<MessagesType | null>(null);
   const [reactionModalData, setReactionModalData] = useState<
     ReactionType[] | null
   >(null);
@@ -94,7 +97,7 @@ export default function ChatWindow() {
   const isPinned =
     contextMenuMsg && pinnedMessages.some((m) => m._id === contextMenuMsg._id);
 
-  // ================= SCROLL HELPER =================
+  // ================= SCROLL & JUMP LOGIC =================
   const scrollToBottom = (animated = true) => {
     flatListRef.current?.scrollToEnd({ animated });
     setShowScrollToBottom(false);
@@ -128,8 +131,6 @@ export default function ChatWindow() {
         user.userId,
       );
       if (pinRes.success) setPinnedMessages(pinRes.data.messages);
-    } catch (err) {
-      console.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -223,15 +224,21 @@ export default function ChatWindow() {
       const docFiles = files.filter(
         (f) => !f.type.startsWith("image/") && !f.type.startsWith("video/"),
       );
-
       const promises = [];
+
       if (mediaFiles.length > 0) {
         const formData = new FormData();
         formData.append("conversationId", id);
         formData.append("senderId", user.userId);
         if (replyingMessage?._id)
           formData.append("repliedId", replyingMessage._id);
-        mediaFiles.forEach((f) => formData.append("files", f as any));
+        mediaFiles.forEach((f) =>
+          formData.append("files", {
+            uri: f.uri,
+            name: f.name,
+            type: f.type,
+          } as any),
+        );
         promises.push(messageService.sendFormData(formData));
       }
 
@@ -240,7 +247,7 @@ export default function ChatWindow() {
         fd.append("conversationId", id);
         fd.append("senderId", user.userId);
         if (replyingMessage?._id) fd.append("repliedId", replyingMessage._id);
-        fd.append("files", f as any);
+        fd.append("files", { uri: f.uri, name: f.name, type: f.type } as any);
         promises.push(messageService.sendFormData(fd));
       });
 
@@ -258,7 +265,6 @@ export default function ChatWindow() {
       return;
     }
     try {
-      // Gửi tin nhắn thông báo cuộc gọi trước
       const res: any = await messageService.sendMessage(
         id,
         user.userId,
@@ -268,55 +274,10 @@ export default function ChatWindow() {
         "VIDEO",
       );
       const messageId = res.data?._id || res?._id;
-      if (messageId) {
+      if (messageId)
         startCall(conversation.otherMemberId, id, "VIDEO", messageId);
-      }
-    } catch (error) {
+    } catch {
       Alert.alert("Lỗi", "Khởi tạo cuộc gọi thất bại.");
-    }
-  };
-
-  const handleTogglePin = async (messageId: string) => {
-    try {
-      await messageService.pinnedMessage(user?.userId || "", messageId, id!);
-    } catch {
-      Alert.alert("Thông báo", "Bạn chỉ có thể ghim tối đa 3 tin nhắn.");
-    }
-  };
-
-  const handleReaction = async (emojiType: EmojiType, messageId: string) => {
-    await messageService.reactionMessage(
-      id!,
-      user?.userId || "",
-      emojiType,
-      messageId,
-    );
-  };
-
-  const handleRemoveReaction = async (messageId: string) => {
-    await messageService.removeReaction(user?.userId || "", messageId, id!);
-  };
-
-  const handleRecall = async (messageId: string) => {
-    try {
-      await messageService.recalledMessage(user?.userId || "", messageId, id!);
-    } catch {
-      Alert.alert("Lỗi", "Chỉ có thể thu hồi tin nhắn trong 24 giờ.");
-    }
-  };
-
-  const handleDeleteForMe = async (messageId: string) => {
-    const res: any = await messageService.deleteMessageForMe(
-      user?.userId || "",
-      messageId,
-      id!,
-    );
-    if (res.success) {
-      setMessages((prev) => prev.filter((m) => m._id !== messageId));
-      const convs: any = await conversationService.getConversationsFromUserId(
-        user?.userId || "",
-      );
-      if (convs.success) dispatch(setConversations(convs.data));
     }
   };
 
@@ -333,7 +294,6 @@ export default function ChatWindow() {
       setMessages(res.data.messages);
       setNextCursor(res.data.nextCursor);
       setPrevCursor(res.data.prevCursor);
-
       const index = res.data.messages.findIndex(
         (m: any) => m._id === messageId,
       );
@@ -354,21 +314,48 @@ export default function ChatWindow() {
     }
   };
 
-  const handleForward = async (conversationIds: string[]) => {
-    if (!user?.userId || selectedMessages.length === 0) return;
-    setLoadingForward(true);
-    try {
-      await messageService.forwardMessagesToConversations(
-        user.userId,
-        selectedMessages,
-        conversationIds,
+  const handleMessageLongPress = (msg: MessagesType) => {
+    const isMe = (msg.senderId?._id || msg.senderId) === user?.userId;
+    const options = [
+      "Thả cảm xúc",
+      "Trả lời",
+      "Chuyển tiếp",
+      isPinned ? "Bỏ ghim" : "Ghim",
+      "Xóa phía tôi",
+      ...(isMe && !msg.recalled ? ["Thu hồi"] : []),
+      "Hủy",
+    ];
+
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex: options.length - 1,
+          destructiveButtonIndex: options.indexOf("Xóa phía tôi"),
+        },
+        (idx) => {
+          const action = options[idx];
+          if (action === "Thả cảm xúc") setReactionPickerMsg(msg);
+          if (action === "Trả lời") dispatch(setReplyingMessage(msg));
+          if (action === "Chuyển tiếp") {
+            setIsSelectMode(true);
+            setSelectedMessages([msg._id]);
+            setShowForwardModal(true);
+          }
+          if (action === "Ghim" || action === "Bỏ ghim")
+            messageService.pinnedMessage(user!.userId, msg._id, id!);
+          if (action === "Thu hồi")
+            messageService.recalledMessage(user!.userId, msg._id, id!);
+          if (action === "Xóa phía tôi")
+            messageService
+              .deleteMessageForMe(user!.userId, msg._id, id!)
+              .then(() =>
+                setMessages((p) => p.filter((m) => m._id !== msg._id)),
+              );
+        },
       );
-      setShowForwardModal(false);
-      setIsSelectMode(false);
-      setSelectedMessages([]);
-      Alert.alert("Thành công", "Đã chuyển tiếp tin nhắn");
-    } finally {
-      setLoadingForward(false);
+    } else {
+      setContextMenuMsg(msg); // Hiện overlay menu cho Android
     }
   };
 
@@ -377,43 +364,15 @@ export default function ChatWindow() {
     if (!socket || !id || !user?.userId) return;
     socket.emit("join_room", id);
 
-    const handleNewMessage = (newMessage: MessagesType) => {
+    const handleNewMessage = (msg: MessagesType) => {
       if (prevCursorRef.current) {
         setShowScrollToBottom(true);
         return;
       }
       setMessages((prev) =>
-        prev.some((m) => m._id === newMessage._id)
-          ? prev
-          : [...prev, newMessage],
+        prev.some((m) => m._id === msg._id) ? prev : [...prev, msg],
       );
-      messageService.readReceipt(user.userId, id);
       if (!showScrollToBottom) setTimeout(() => scrollToBottom(true), 100);
-    };
-
-    const handleCallUpdated = (data: any) => {
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg._id === data.messageId
-            ? {
-                ...msg,
-                call: {
-                  ...(msg.call || {}),
-                  status: data.status,
-                  duration: data.duration ?? 0,
-                },
-              }
-            : msg,
-        ),
-      );
-    };
-
-    const handleMessagesExpired = (data: { messageIds: string[] }) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          data.messageIds.includes(m._id) ? { ...m, expired: true } : m,
-        ),
-      );
     };
 
     socket.on("new_message", handleNewMessage);
@@ -429,40 +388,37 @@ export default function ChatWindow() {
         p.map((m) => (m._id === data.messageId ? { ...m, recalled: true } : m)),
       ),
     );
-    socket.on("message_pinned", (data) => {
-      setPinnedMessages(data.pinnedMessages);
+    socket.on("messages_expired", (data) =>
       setMessages((p) =>
         p.map((m) =>
-          m._id === data.messageId ? { ...m, pinned: data.pinned } : m,
+          data.messageIds.includes(m._id) ? { ...m, expired: true } : m,
         ),
-      );
-    });
-    socket.on("read_receipt", (data) => {
-      if (data.conversationId === id) {
-        const updatedMap = new Map(
-          data.messages.map((m: any) => [m._id, m.readReceipts]),
-        );
-        setMessages((p) =>
-          p.map((m) =>
-            updatedMap.has(m._id)
-              ? { ...m, readReceipts: updatedMap.get(m._id) }
-              : m,
-          ),
-        );
-      }
-    });
-    socket.on("call_updated", handleCallUpdated);
-    socket.on("messages_expired", handleMessagesExpired);
+      ),
+    );
+    socket.on("call_updated", (data) =>
+      setMessages((p) =>
+        p.map((m) =>
+          m._id === data.messageId
+            ? {
+                ...m,
+                call: {
+                  ...m.call,
+                  status: data.status,
+                  duration: data.duration,
+                },
+              }
+            : m,
+        ),
+      ),
+    );
 
     return () => {
       [
         "new_message",
         "message_reacted",
         "message_recalled",
-        "message_pinned",
-        "read_receipt",
-        "call_updated",
         "messages_expired",
+        "call_updated",
       ].forEach((ev) => socket.off(ev));
       socket.emit("leave_room", id);
     };
@@ -471,7 +427,6 @@ export default function ChatWindow() {
   useEffect(() => {
     if (id && user?.userId) {
       fetchInitialMessages();
-      messageService.readReceipt(user.userId, id);
       dispatch(clearReplyingMessage());
       isFirstLoad.current = true;
     }
@@ -491,7 +446,6 @@ export default function ChatWindow() {
     const sameMinuteOlder =
       older && isSameHourAndMinute(older.createdAt, item.createdAt);
     const isFirstInCluster = !(sameSenderOlder && sameMinuteOlder);
-
     const showAvatar =
       (item.senderId?._id || item.senderId) !== user?.userId &&
       isFirstInCluster;
@@ -499,23 +453,16 @@ export default function ChatWindow() {
       !older ||
       new Date(older.createdAt).toDateString() !==
         new Date(item.createdAt).toDateString();
-    const addSpacing = isFirstInCluster && !showDivider;
 
     return (
       <View
         style={{
-          marginTop: addSpacing ? 12 : 2,
+          marginTop: isFirstInCluster && !showDivider ? 12 : 2,
           marginBottom: item.reactions?.length > 0 ? 14 : 0,
         }}
       >
         {showDivider && (
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "center",
-              marginVertical: 12,
-            }}
-          >
+          <View style={{ alignItems: "center", marginVertical: 12 }}>
             <View
               style={{
                 backgroundColor: "#babbbe",
@@ -539,7 +486,7 @@ export default function ChatWindow() {
           isSelected={selectedMessages.includes(item._id)}
           isSelectMode={isSelectMode}
           isHighlighted={highlightedMessageId === item._id}
-          onLongPress={() => setContextMenuMsg(item)}
+          onLongPress={() => handleMessageLongPress(item)}
           onPress={() =>
             isSelectMode &&
             setSelectedMessages((p) =>
@@ -549,7 +496,6 @@ export default function ChatWindow() {
             )
           }
           onOpenReactionModal={(r) => setReactionModalData(r)}
-          renderReadReceipts={index === messages.length - 1}
           onReplyPress={handleJumpToMessage}
           isGroup={isGroup}
         />
@@ -564,8 +510,7 @@ export default function ChatWindow() {
         style={{
           flexDirection: "row",
           alignItems: "center",
-          paddingHorizontal: 12,
-          paddingVertical: 10,
+          padding: 10,
           backgroundColor: "#0068ff",
           gap: 10,
         }}
@@ -573,20 +518,10 @@ export default function ChatWindow() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <View
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: 19,
-            overflow: "hidden",
-            backgroundColor: "white",
-          }}
-        >
-          <Image
-            source={{ uri: conversation?.avatar }}
-            style={{ width: 38, height: 38 }}
-          />
-        </View>
+        <Image
+          source={{ uri: conversation?.avatar }}
+          style={{ width: 38, height: 38, borderRadius: 19 }}
+        />
         <View style={{ flex: 1 }}>
           <Text
             style={{ color: "white", fontSize: 16, fontWeight: "700" }}
@@ -595,13 +530,10 @@ export default function ChatWindow() {
             {conversation?.name}
           </Text>
         </View>
-        <TouchableOpacity onPress={handleVideoCall} style={{ padding: 4 }}>
+        <TouchableOpacity onPress={handleVideoCall}>
           <Ionicons name="videocam-outline" size={24} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setShowInfoSheet(true)}
-          style={{ padding: 4 }}
-        >
+        <TouchableOpacity onPress={() => setShowInfoSheet(true)}>
           <Ionicons name="information-circle-outline" size={24} color="white" />
         </TouchableOpacity>
       </View>
@@ -613,7 +545,7 @@ export default function ChatWindow() {
       >
         <PinnedMessagesBar
           pinnedMessages={pinnedMessages}
-          onUnpin={handleTogglePin}
+          onUnpin={() => {}}
           onJumpToMessage={handleJumpToMessage}
         />
 
@@ -634,19 +566,17 @@ export default function ChatWindow() {
                   e.nativeEvent.contentSize.height - 100;
                 setShowScrollToBottom(!isBottom || !!prevCursor);
               }}
-              onContentSizeChange={() =>
-                isFirstLoad.current &&
-                messages.length > 0 &&
-                !prevCursor &&
-                setTimeout(() => {
-                  scrollToBottom(false);
-                  isFirstLoad.current = false;
-                }, 100)
+              onEndReached={() => prevCursor && loadNewerMessages()}
+              onEndReachedThreshold={0.5}
+              ListEmptyComponent={
+                <View style={{ alignItems: "center", padding: 40 }}>
+                  <Text style={{ color: "#9ca3af" }}>Chưa có tin nhắn nào</Text>
+                </View>
               }
             />
           )}
 
-          {/* Reply Bar UI */}
+          {/* REPLY BAR UI (Khôi phục từ KVT) */}
           {replyingMessage && (
             <View
               style={{
@@ -672,16 +602,16 @@ export default function ChatWindow() {
                   style={{ fontSize: 12, fontWeight: "700", color: "#0068ff" }}
                 >
                   Đang trả lời{" "}
-                  {(replyingMessage.senderId?._id ||
-                    replyingMessage.senderId) === user?.userId
-                    ? "chính mình"
-                    : replyingMessage.senderId?.profile?.name}
+                  {replyingMessage.senderId?.profile?.name || "Bạn"}
                 </Text>
                 <Text
                   numberOfLines={1}
                   style={{ fontSize: 12, color: "#6b7280" }}
                 >
-                  {replyingMessage.content?.text || "[Đính kèm]"}
+                  {replyingMessage.content?.text ||
+                    (replyingMessage.content?.file
+                      ? replyingMessage.content.file.fileName
+                      : "[Đính kèm]")}
                 </Text>
               </View>
               <TouchableOpacity
@@ -693,7 +623,7 @@ export default function ChatWindow() {
           )}
 
           <ChatInput
-            conversationId={conversation?.conversationId || ""}
+            conversationId={id!}
             chatName={conversation?.name}
             onSendMessage={handleSendMessage}
             onSendFiles={handleSendFile}
@@ -729,6 +659,17 @@ export default function ChatWindow() {
       </KeyboardAvoidingView>
 
       {/* MODALS */}
+      {reactionPickerMsg && (
+        <ReactionPicker
+          visible={true}
+          onClose={() => setReactionPickerMsg(null)}
+          messageId={reactionPickerMsg._id}
+          isMe={reactionPickerMsg.senderId?._id === user?.userId}
+          currentUserId={user?.userId || ""}
+          onReact={() => {}}
+          onRemoveReaction={() => {}}
+        />
+      )}
       {reactionModalData && (
         <ReactionModal
           visible={true}
@@ -741,7 +682,7 @@ export default function ChatWindow() {
         onClose={() => setShowForwardModal(false)}
         conversations={conversations}
         selectedMessageIds={selectedMessages}
-        onSubmit={handleForward}
+        onSubmit={() => {}}
         loadingForward={loadingForward}
       />
       <MessageDetailModal
@@ -755,100 +696,6 @@ export default function ChatWindow() {
           onClose={() => setShowInfoSheet(false)}
           conversation={conversation}
         />
-      )}
-
-      {/* Context Menu Overlay */}
-      {contextMenuMsg && (
-        <View
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundColor: "rgba(0,0,0,0.3)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <TouchableOpacity
-            style={{ position: "absolute", inset: 0 }}
-            onPress={() => setContextMenuMsg(null)}
-          />
-          <View
-            style={{
-              flexDirection: "row",
-              backgroundColor: "white",
-              padding: 8,
-              borderRadius: 30,
-              marginBottom: 10,
-              gap: 10,
-              elevation: 5,
-            }}
-          >
-            {REACTION_EMOJIS.map((e) => (
-              <TouchableOpacity
-                key={e}
-                onPress={() => {
-                  handleReaction(e as any, contextMenuMsg._id);
-                  setContextMenuMsg(null);
-                }}
-              >
-                <Text style={{ fontSize: 22 }}>{EMOJI_MAP[e]}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <View
-            style={{
-              backgroundColor: "white",
-              borderRadius: 12,
-              paddingVertical: 6,
-              width: 220,
-              elevation: 5,
-            }}
-          >
-            <MenuItem
-              label="Trả lời"
-              onPress={() => {
-                dispatch(setReplyingMessage(contextMenuMsg));
-                setContextMenuMsg(null);
-              }}
-            />
-            <MenuItem
-              label="Chuyển tiếp"
-              onPress={() => {
-                setIsSelectMode(true);
-                toggleSelectMessage(contextMenuMsg._id);
-                setShowForwardModal(true);
-                setContextMenuMsg(null);
-              }}
-            />
-            <MenuItem
-              label={isPinned ? "Bỏ ghim" : "Ghim"}
-              onPress={() => {
-                handleTogglePin(contextMenuMsg._id);
-                setContextMenuMsg(null);
-              }}
-            />
-            <MenuItem
-              label="Xóa phía tôi"
-              danger
-              onPress={() => {
-                handleDeleteForMe(contextMenuMsg._id);
-                setContextMenuMsg(null);
-              }}
-            />
-            {(contextMenuMsg.senderId?._id || contextMenuMsg.senderId) ===
-              user?.userId &&
-              !contextMenuMsg.recalled && (
-                <MenuItem
-                  label="Thu hồi"
-                  danger
-                  onPress={() => {
-                    handleRecall(contextMenuMsg._id);
-                    setContextMenuMsg(null);
-                  }}
-                />
-              )}
-          </View>
-        </View>
       )}
     </Container>
   );

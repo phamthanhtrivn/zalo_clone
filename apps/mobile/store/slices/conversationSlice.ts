@@ -11,8 +11,8 @@ import { conversationService } from "@/services/conversation.service";
 
 // --- TYPES ---
 type ConversationState = {
-  items: ConversationItemType[];
-  replyingMessage: any | null;
+  items: ConversationItemType[]; // Thống nhất dùng "items"
+  replyingMessage: any | null;   // Khôi phục tính năng Reply
   loading: boolean;
   error: string | null;
 };
@@ -49,21 +49,15 @@ const conversationSlice = createSlice({
 
     // 2. Cập nhật Real-time từ Socket (Dùng cho tin nhắn mới/cuộc gọi)
     updateConversationFromSocket(state, action: PayloadAction<any>) {
-      const { conversationId, lastMessage, unreadCount, lastMessageAt } =
-        action.payload;
-      const index = state.items.findIndex(
-        (c) => c.conversationId === conversationId,
-      );
+      const { conversationId, lastMessage, unreadCount, lastMessageAt } = action.payload;
+      const index = state.items.findIndex((c) => c.conversationId === conversationId);
 
       if (index !== -1) {
-        // Cập nhật và đưa lên đầu danh sách
+        // Cập nhật và đưa lên đầu danh sách (Logic từ HEAD + Unshift)
         const updated = {
           ...state.items[index],
           lastMessage: lastMessage ?? state.items[index].lastMessage,
-          unreadCount:
-            unreadCount !== undefined
-              ? unreadCount
-              : state.items[index].unreadCount,
+          unreadCount: unreadCount !== undefined ? unreadCount : state.items[index].unreadCount,
           lastMessageAt: lastMessageAt ?? new Date().toISOString(),
         };
         state.items.splice(index, 1);
@@ -71,7 +65,7 @@ const conversationSlice = createSlice({
       }
     },
 
-    // 3. Cập nhật Cài đặt (Ghim, Ẩn, Tắt thông báo, Hẹn giờ xóa)
+    // 3. Cập nhật Cài đặt (Ghim, Ẩn, Mute, Hẹn giờ xóa)
     updateConversationSetting(
       state,
       action: PayloadAction<{
@@ -85,34 +79,24 @@ const conversationSlice = createSlice({
         category?: ConversationCategory | null;
         expireDuration?: number;
         group?: any;
-      }>,
+      }>
     ) {
-      const c = state.items.find(
-        (i) => i.conversationId === action.payload.conversationId,
-      );
+      const c = state.items.find((i) => i.conversationId === action.payload.conversationId);
       if (!c) return;
 
-      if (action.payload.name !== undefined) c.name = action.payload.name;
-      if (action.payload.avatar !== undefined) c.avatar = action.payload.avatar;
-      if (action.payload.pinned !== undefined) c.pinned = action.payload.pinned;
-      if (action.payload.hidden !== undefined) c.hidden = action.payload.hidden;
-      if (action.payload.muted !== undefined) c.muted = action.payload.muted;
-      if (action.payload.mutedUntil !== undefined)
-        c.mutedUntil = action.payload.mutedUntil;
-      if (action.payload.category !== undefined)
-        c.category = action.payload.category;
-      if (action.payload.expireDuration !== undefined)
-        c.expireDuration = action.payload.expireDuration;
-
-      if (action.payload.group !== undefined) {
-        c.group = {
-          ...(c.group || {}),
-          ...action.payload.group,
-        };
-      }
+      const p = action.payload;
+      if (p.name !== undefined) c.name = p.name;
+      if (p.avatar !== undefined) c.avatar = p.avatar;
+      if (p.pinned !== undefined) c.pinned = p.pinned;
+      if (p.hidden !== undefined) c.hidden = p.hidden;
+      if (p.muted !== undefined) c.muted = p.muted;
+      if (p.mutedUntil !== undefined) c.mutedUntil = p.mutedUntil;
+      if (p.category !== undefined) c.category = p.category;
+      if (p.expireDuration !== undefined) c.expireDuration = p.expireDuration;
+      if (p.group !== undefined) c.group = { ...(c.group || {}), ...p.group };
     },
 
-    // 4. Xử lý tin nhắn hết hạn
+    // 4. Xử lý tin nhắn hết hạn (Khôi phục từ KhongVanTam)
     removeExpiredMessages(state, action: PayloadAction<string[]>) {
       for (const c of state.items) {
         if (c.lastMessage && action.payload.includes(c.lastMessage._id)) {
@@ -128,67 +112,45 @@ const conversationSlice = createSlice({
       }
     },
 
-    // 5. Thu hồi tin nhắn cuối cùng (Sidebar)
-    updateRecallMessageInConversation(
-      state,
-      action: PayloadAction<{ conversationId: string; messageId: string }>,
-    ) {
+    // 5. Thu hồi tin nhắn
+    updateRecallMessageInConversation(state, action: PayloadAction<{ conversationId: string; messageId: string }>) {
       const { conversationId, messageId } = action.payload;
-      const conversation = state.items.find(
-        (c) => c.conversationId === conversationId,
-      );
+      const conversation = state.items.find((c) => c.conversationId === conversationId);
       if (conversation && conversation.lastMessage?._id === messageId) {
         conversation.lastMessage.recalled = true;
       }
     },
 
-    // 6. Ẩn hội thoại local
+    // 6. Action bổ trợ Local (Khôi phục từ KhongVanTam)
     hideConversationLocal(state, action: PayloadAction<string>) {
       const c = state.items.find((i) => i.conversationId === action.payload);
       if (c) c.hidden = !c.hidden;
     },
 
-    // 7. Xóa hội thoại khỏi danh sách
-    removeConversation(
-      state,
-      action: PayloadAction<{ conversationId: string } | string>,
-    ) {
-      const id =
-        typeof action.payload === "string"
-          ? action.payload
-          : action.payload.conversationId;
-      state.items = state.items.filter((c) => c.conversationId !== id);
-    },
-
-    // 8. Quản lý tin nhắn chưa đọc
     resetUnreadCount(state, action: PayloadAction<string>) {
       const c = state.items.find((i) => i.conversationId === action.payload);
       if (c) c.unreadCount = 0;
     },
 
-    setUnreadCount(
-      state,
-      action: PayloadAction<{ conversationId: string; unreadCount: number }>,
-    ) {
-      const c = state.items.find(
-        (i) => i.conversationId === action.payload.conversationId,
-      );
+    setUnreadCount(state, action: PayloadAction<{ conversationId: string; unreadCount: number }>) {
+      const c = state.items.find((i) => i.conversationId === action.payload.conversationId);
       if (c) c.unreadCount = action.payload.unreadCount;
     },
 
-    // 9. Thêm hội thoại mới lên đầu
+    // 7. Thêm hội thoại mới lên đầu
     addConversationToTop: (state, action: PayloadAction<any>) => {
       const newConv = action.payload;
-      const index = state.items.findIndex(
-        (c) => c.conversationId === newConv.conversationId,
-      );
-      if (index !== -1) {
-        state.items.splice(index, 1);
-      }
+      const index = state.items.findIndex((c) => c.conversationId === newConv.conversationId);
+      if (index !== -1) state.items.splice(index, 1);
       state.items = [newConv, ...state.items];
     },
 
-    // 10. Tính năng Reply
+    removeConversation(state, action: PayloadAction<{ conversationId: string } | string>) {
+      const id = typeof action.payload === "string" ? action.payload : action.payload.conversationId;
+      state.items = state.items.filter((c) => c.conversationId !== id);
+    },
+
+    // 8. Tính năng Reply (Khôi phục từ KhongVanTam)
     setReplyingMessage(state, action: PayloadAction<any | null>) {
       state.replyingMessage = action.payload;
     },
@@ -197,16 +159,8 @@ const conversationSlice = createSlice({
       state.replyingMessage = null;
     },
 
-    setCategoryLocal(
-      state,
-      action: PayloadAction<{
-        conversationId: string;
-        category: ConversationCategory | null;
-      }>,
-    ) {
-      const c = state.items.find(
-        (i) => i.conversationId === action.payload.conversationId,
-      );
+    setCategoryLocal(state, action: PayloadAction<{ conversationId: string; category: ConversationCategory | null }>) {
+      const c = state.items.find((i) => i.conversationId === action.payload.conversationId);
       if (c) c.category = action.payload.category;
     },
   },

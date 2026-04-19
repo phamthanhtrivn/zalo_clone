@@ -2,20 +2,20 @@ import { EmojiType } from "@/constants/emoji.constant";
 import { api } from "./api";
 
 export const messageService = {
-  // Lấy tin nhắn cũ hơn (phục vụ scroll up)
+  // 1. Lấy tin nhắn cũ hơn (phục vụ scroll up)
   getMessagesFromConversation: async (
     conversationId: string,
     userId: string,
     cursor?: string | null,
-    limit: number = 20,
+    limit: number = 20, // Giữ chuẩn limit 20 từ develop
   ) => {
     const response = await api.get(`/messages/conversation/${conversationId}`, {
       params: { userId, cursor, limit },
     });
-    return response.data;
+    return response.data; // Đồng bộ trả về .data
   },
 
-  // Lấy tin nhắn mới hơn (phục vụ scroll down khi đang ở giữa cuộc hội thoại)
+  // 2. Lấy tin nhắn mới hơn (phục vụ scroll down khi đang ở giữa cuộc hội thoại)
   getNewerMessages: async (
     conversationId: string,
     userId: string,
@@ -31,7 +31,7 @@ export const messageService = {
     return response.data;
   },
 
-  // Lấy danh sách tin nhắn đã ghim
+  // 3. Lấy danh sách tin nhắn đã ghim
   getPinnedMessages: async (conversationId: string, userId: string) => {
     const response = await api.get(
       `/messages/conversation/${conversationId}/pinned`,
@@ -42,7 +42,7 @@ export const messageService = {
     return response.data;
   },
 
-  // Lấy các tin nhắn xung quanh một tin nhắn cụ thể (phục vụ nhảy tới tin nhắn ghim)
+  // 4. Lấy các tin nhắn xung quanh một tin nhắn cụ thể (phục vụ nhảy tới tin nhắn ghim)
   getMessagesAroundPinnedMessage: async (
     conversationId: string,
     userId: string,
@@ -58,7 +58,7 @@ export const messageService = {
     return response.data;
   },
 
-  // Thả cảm xúc
+  // 5. Thả cảm xúc
   reactionMessage: async (
     conversationId: string,
     userId: string,
@@ -74,7 +74,7 @@ export const messageService = {
     return response.data;
   },
 
-  // Gỡ cảm xúc
+  // 6. Gỡ cảm xúc
   removeReaction: async (
     userId: string,
     messageId: string,
@@ -88,7 +88,7 @@ export const messageService = {
     return response.data;
   },
 
-  // Thu hồi tin nhắn
+  // 7. Thu hồi tin nhắn
   recalledMessage: async (
     userId: string,
     messageId: string,
@@ -102,7 +102,7 @@ export const messageService = {
     return response.data;
   },
 
-  // Ghim tin nhắn
+  // 8. Ghim tin nhắn
   pinnedMessage: async (
     userId: string,
     messageId: string,
@@ -116,10 +116,7 @@ export const messageService = {
     return response.data;
   },
 
-  /**
-   * Gửi tin nhắn
-   * Hỗ trợ nhiều file, Trả lời tin nhắn (repliedId) và FormData cho React Native
-   */
+  // 9. Gửi tin nhắn (Khôi phục bản nâng cao từ KhongVanTam: Hỗ trợ nhiều file & Reply)
   sendMessage: async (
     conversationId: string,
     senderId: string,
@@ -127,7 +124,6 @@ export const messageService = {
     content?: { text?: string; icon?: string },
     files?: any[] | null,
   ) => {
-    // Trường hợp gửi kèm file (Dùng FormData)
     if (files && files.length > 0) {
       const formData = new FormData();
       formData.append("conversationId", conversationId);
@@ -138,7 +134,6 @@ export const messageService = {
       }
 
       if (content) {
-        // Backend yêu cầu stringify content khi dùng multipart
         formData.append("content", JSON.stringify(content));
       }
 
@@ -147,12 +142,13 @@ export const messageService = {
       });
 
       const response = await api.post(`/messages`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
       return response.data;
     }
 
-    // Trường hợp gửi text/sticker thông thường
     const response = await api.post(`/messages`, {
       conversationId,
       senderId,
@@ -162,7 +158,7 @@ export const messageService = {
     return response.data;
   },
 
-  // Upload file chuyên dụng cho React Native (Object: {uri, name, type})
+  // 10. Mobile-specific: upload files bằng React Native FormData (Khôi phục từ KhongVanTam)
   sendFormData: async (formData: FormData) => {
     const response = await api.post(`/messages`, formData, {
       headers: {
@@ -172,7 +168,7 @@ export const messageService = {
     return response.data;
   },
 
-  // Xóa tin nhắn ở phía người dùng hiện tại
+  // 11. Xóa tin nhắn ở phía người dùng hiện tại
   deleteMessageForMe: async (
     userId: string,
     messageId: string,
@@ -186,7 +182,7 @@ export const messageService = {
     return response.data;
   },
 
-  // Gửi tín hiệu đã đọc tin nhắn
+  // 12. Gửi tín hiệu đã đọc tin nhắn
   readReceipt: async (userId: string, conversationId: string) => {
     const response = await api.patch(`/messages/read-receipt`, {
       userId,
@@ -195,7 +191,7 @@ export const messageService = {
     return response.data;
   },
 
-  // Lấy xem trước các file đa phương tiện trong hội thoại
+  // 13. Lấy xem trước các file đa phương tiện trong hội thoại
   getMediasPreview: async (userId: string, conversationId: string) => {
     const response = await api.get(
       `/messages/conversation/${conversationId}/medias/preview`,
@@ -206,7 +202,7 @@ export const messageService = {
     return response.data;
   },
 
-  // Lấy danh sách file theo loại (FILE | LINK)
+  // 14. Lấy danh sách file theo loại (FILE | LINK) (Khôi phục từ KhongVanTam)
   getMediasFileType: async (
     conversationId: string,
     userId: string,
@@ -221,7 +217,7 @@ export const messageService = {
     return response.data;
   },
 
-  // Chuyển tiếp tin nhắn sang các hội thoại khác
+  // 15. Chuyển tiếp tin nhắn sang các hội thoại khác
   forwardMessagesToConversations: async (
     userId: string,
     messageIds: string[],
@@ -235,7 +231,7 @@ export const messageService = {
     return response.data;
   },
 
-  // Cập nhật trạng thái cuộc gọi (Logic quan trọng từ HEAD)
+  // 16. Cập nhật trạng thái cuộc gọi (Khôi phục từ HEAD)
   async updateCallStatus(
     messageId: string,
     status: string,

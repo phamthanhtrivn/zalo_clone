@@ -8,13 +8,14 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  StyleSheet,
 } from "react-native";
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
+
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
-
 import { formatTime } from "@/utils/format-message-time..util";
 import type { MessagesType, ReactionType } from "@/types/messages.type";
 import ReactionSummary from "./ReactionSummary";
@@ -107,7 +108,7 @@ export default function MessageBubble({
 }: Props) {
   const content = message.content;
   const call = message.call;
-  // Hợp nhất cả 2 chuẩn dữ liệu: single file và multiple files
+  // Hợp nhất dữ liệu file: hỗ trợ cả file đơn (HEAD) và mảng files (KhongVanTam)
   const allFiles = content?.files || (content?.file ? [content.file] : []);
 
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
@@ -147,56 +148,21 @@ export default function MessageBubble({
         ? "#E5F1FF"
         : "white";
 
-  // --- 0. LOGIC: TIN NHẮN HẾT HẠN ---
-  if (message.expired) {
+  // --- LOGIC TIN NHẮN HẾT HẠN / THU HỒI (Merge HEAD & KVT) ---
+  if (message.expired || message.recalled) {
+    const isRecall = message.recalled;
     return (
       <View
-        style={{
-          flexDirection: isMe ? "row-reverse" : "row",
-          alignItems: "flex-end",
-          paddingHorizontal: 8,
-          marginBottom: 2,
-        }}
+        style={[
+          styles.container,
+          { flexDirection: isMe ? "row-reverse" : "row" },
+        ]}
       >
         {!isMe &&
           (showAvatar ? (
             <View style={styles.avatarWrap}>
               <Image
-                source={{ uri: message.senderId?.profile.avatarUrl }}
-                style={styles.avatarImg}
-              />
-            </View>
-          ) : (
-            <View style={{ width: 32, marginRight: 6 }} />
-          ))}
-        <View style={styles.expiredContainer}>
-          <Ionicons
-            name="information-circle-outline"
-            size={14}
-            color="#9ca3af"
-          />
-          <Text style={styles.expiredText}>Tin nhắn đã hết hạn</Text>
-        </View>
-      </View>
-    );
-  }
-
-  // --- 1. LOGIC: THU HỒI ---
-  if (message.recalled) {
-    return (
-      <View
-        style={{
-          flexDirection: isMe ? "row-reverse" : "row",
-          alignItems: "flex-end",
-          marginBottom: 2,
-          paddingHorizontal: 8,
-        }}
-      >
-        {!isMe &&
-          (showAvatar ? (
-            <View style={styles.avatarWrap}>
-              <Image
-                source={{ uri: message.senderId?.profile.avatarUrl }}
+                source={{ uri: message.senderId?.profile?.avatarUrl }}
                 style={styles.avatarImg}
               />
             </View>
@@ -209,16 +175,15 @@ export default function MessageBubble({
             { backgroundColor: bubbleBg, borderColor: "#e5e7eb" },
           ]}
         >
-          <Text style={styles.recalledText}>Tin nhắn đã được thu hồi</Text>
-          {showTime && (
-            <Text style={styles.timeText}>{formatTime(message.createdAt)}</Text>
-          )}
+          <Text style={styles.italicText}>
+            {isRecall ? "Tin nhắn đã được thu hồi" : "Tin nhắn đã hết hạn"}
+          </Text>
         </View>
       </View>
     );
   }
 
-  // --- 2. RENDER LOGIC CHÍNH ---
+  // --- RENDER LOGIC: CUỘC GỌI (Từ HEAD) ---
   const renderCallContent = () => {
     if (!call) return null;
     const isVideo = call.type === "VIDEO";
@@ -262,12 +227,10 @@ export default function MessageBubble({
 
   return (
     <View
-      style={{
-        flexDirection: isMe ? "row-reverse" : "row",
-        alignItems: "flex-end",
-        marginBottom: 2,
-        paddingHorizontal: 8,
-      }}
+      style={[
+        styles.container,
+        { flexDirection: isMe ? "row-reverse" : "row" },
+      ]}
     >
       {!isMe &&
         (showAvatar ? (
@@ -289,7 +252,7 @@ export default function MessageBubble({
       >
         {!isMe && isGroup && showName && (
           <Text style={styles.senderName}>
-            {message.senderId?.profile.name}
+            {message.senderId?.profile?.name}
           </Text>
         )}
 
@@ -305,10 +268,9 @@ export default function MessageBubble({
             },
           ]}
         >
-          {/* REPLY PREVIEW */}
+          {/* REPLY BOX (Khôi phục từ KVT) */}
           {message.repliedId && (
             <TouchableOpacity
-              activeOpacity={0.7}
               onPress={() => onReplyPress?.(message.repliedId?._id || "")}
               style={styles.replyBox}
             >
@@ -324,7 +286,6 @@ export default function MessageBubble({
             </TouchableOpacity>
           )}
 
-          {/* MAIN CONTENT */}
           {call ? (
             renderCallContent()
           ) : (
@@ -334,7 +295,7 @@ export default function MessageBubble({
                 <Text style={{ fontSize: 32 }}>{content.icon}</Text>
               )}
 
-              {/* MEDIA GRID */}
+              {/* MEDIA GRID (Khôi phục từ KVT) */}
               {mediaFiles.length > 0 && (
                 <View style={styles.mediaGrid}>
                   {mediaFiles.map((file: any, index: number) => {
@@ -346,7 +307,6 @@ export default function MessageBubble({
                     return (
                       <TouchableOpacity
                         key={index}
-                        activeOpacity={0.85}
                         onPress={() =>
                           setPreviewIndex(mediaFiles.indexOf(file))
                         }
@@ -355,26 +315,18 @@ export default function MessageBubble({
                           height: 110,
                           borderRadius: 8,
                           overflow: "hidden",
-                          backgroundColor: "#000",
                         }}
                       >
                         {file.type === "IMAGE" ? (
                           <Image
                             source={{ uri: file.fileKey }}
-                            style={{ width: "100%", height: "100%" }}
-                            contentFit="cover"
+                            style={styles.fullSize}
                           />
                         ) : (
-                          <View
-                            style={{
-                              flex: 1,
-                              justifyContent: "center",
-                              alignItems: "center",
-                            }}
-                          >
+                          <View style={styles.fullSize}>
                             <Video
                               source={{ uri: file.fileKey }}
-                              style={{ width: "100%", height: "100%" }}
+                              style={styles.fullSize}
                               resizeMode={ResizeMode.COVER}
                             />
                             <View style={styles.playIcon}>
@@ -388,57 +340,48 @@ export default function MessageBubble({
                 </View>
               )}
 
-              {/* DOC FILES */}
-              {docFiles.map((file: any, index: number) => {
-                const { name: iconName, color: iconColor } = getFileIconName(
-                  file.fileName,
-                );
-                return (
-                  <View
-                    key={index}
-                    style={[
-                      styles.docRow,
-                      {
-                        backgroundColor: isMe
-                          ? "rgba(255,255,255,0.6)"
-                          : "#f3f4f6",
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.docIcon,
-                        { backgroundColor: iconColor + "20" },
-                      ]}
-                    >
-                      <Ionicons name={iconName} size={22} color={iconColor} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text numberOfLines={1} style={styles.docName}>
-                        {truncateFileName(file.fileName, 17)}
-                      </Text>
-                      <Text style={styles.docSize}>
-                        {formatFileSize(file.fileSize)}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => handleDownload(file)}
-                      disabled={downloading}
-                      style={styles.downloadBtn}
-                    >
-                      {downloading ? (
-                        <ActivityIndicator size="small" color="white" />
-                      ) : (
-                        <Ionicons
-                          name="download-outline"
-                          size={17}
-                          color="white"
-                        />
-                      )}
-                    </TouchableOpacity>
+              {/* DOC FILES (Khôi phục từ KVT) */}
+              {docFiles.map((file: any, index: number) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.docRow,
+                    {
+                      backgroundColor: isMe
+                        ? "rgba(255,255,255,0.6)"
+                        : "#f3f4f6",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={getFileIconName(file.fileName).name}
+                    size={22}
+                    color={getFileIconName(file.fileName).color}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text numberOfLines={1} style={styles.docName}>
+                      {truncateFileName(file.fileName, 17)}
+                    </Text>
+                    <Text style={styles.docSize}>
+                      {formatFileSize(file.fileSize)}
+                    </Text>
                   </View>
-                );
-              })}
+                  <TouchableOpacity
+                    onPress={() => handleDownload(file)}
+                    style={styles.downloadBtn}
+                  >
+                    {downloading ? (
+                      <ActivityIndicator size="small" color="white" />
+                    ) : (
+                      <Ionicons
+                        name="download-outline"
+                        size={17}
+                        color="white"
+                      />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ))}
             </>
           )}
 
@@ -451,26 +394,19 @@ export default function MessageBubble({
           )}
         </TouchableOpacity>
 
-        {/* FOOTER: REACTIONS & READ RECEIPTS */}
+        {/* FOOTER */}
         {message.reactions?.length > 0 && (
-          <View style={{ marginTop: 4 }}>
-            <ReactionSummary
-              reactions={message.reactions}
-              onClick={() => onOpenReactionModal?.(message.reactions)}
-            />
-          </View>
+          <ReactionSummary
+            reactions={message.reactions}
+            onClick={() => onOpenReactionModal?.(message.reactions)}
+          />
         )}
-
         {renderReadReceipts && message.readReceipts?.length > 0 && (
-          <View style={[styles.receiptsWrap, { marginLeft: isMe ? 0 : 4 }]}>
+          <View style={styles.receiptsWrap}>
             {message.readReceipts.slice(0, 3).map((rr: any, idx: number) => (
               <Image
-                key={rr.userId?._id || idx}
-                source={{
-                  uri:
-                    rr.userId?.profile?.avatarUrl ||
-                    "https://via.placeholder.com/150",
-                }}
+                key={idx}
+                source={{ uri: rr.userId?.profile?.avatarUrl }}
                 style={[styles.receiptAvatar, { marginLeft: idx > 0 ? -4 : 0 }]}
               />
             ))}
@@ -478,11 +414,11 @@ export default function MessageBubble({
         )}
       </View>
 
-      {/* MEDIA PREVIEW MODAL */}
+      {/* MEDIA PREVIEW MODAL (Khôi phục từ KVT) */}
       <Modal visible={previewIndex !== null} transparent animationType="fade">
         <View style={styles.previewOverlay}>
           <TouchableOpacity
-            style={styles.previewClose}
+            style={styles.closePreview}
             onPress={() => setPreviewIndex(null)}
           >
             <Ionicons name="close-circle" size={34} color="white" />
@@ -509,13 +445,13 @@ export default function MessageBubble({
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
+  container: { alignItems: "flex-end", marginBottom: 2, paddingHorizontal: 8 },
   avatarWrap: {
     width: 32,
     height: 32,
     borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#e5e7eb",
     marginRight: 6,
   },
   avatarImg: { width: 32, height: 32 },
@@ -532,25 +468,10 @@ const styles = {
     marginBottom: 2,
     marginLeft: 4,
   },
-  timeText: { fontSize: 10, marginTop: 4, textAlign: "right" as const },
-  recalledText: {
-    color: "#9ca3af",
-    fontStyle: "italic" as const,
-    fontSize: 13,
-  },
-  expiredContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 6,
-    backgroundColor: "#f0f0f0",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  expiredText: { fontSize: 13, color: "#9ca3af", fontStyle: "italic" as const },
+  italicText: { fontSize: 13, color: "#9ca3af", fontStyle: "italic" },
   callContent: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     paddingVertical: 4,
   },
@@ -559,8 +480,8 @@ const styles = {
     height: 36,
     borderRadius: 18,
     backgroundColor: "rgba(255,255,255,0.8)",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
+    alignItems: "center",
+    justifyContent: "center",
   },
   replyBox: {
     backgroundColor: "rgba(0,0,0,0.05)",
@@ -569,57 +490,40 @@ const styles = {
     padding: 6,
     borderRadius: 4,
     marginBottom: 6,
-    minWidth: 100,
   },
-  replySender: {
-    fontSize: 11,
-    fontWeight: "bold" as const,
-    color: "#0068ff",
-    marginBottom: 2,
-  },
+  replySender: { fontSize: 11, fontWeight: "bold", color: "#0068ff" },
   replyText: { fontSize: 12, color: "#4b5563" },
-  mediaGrid: {
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    gap: 1,
-    marginTop: 6,
-  },
+  mediaGrid: { flexDirection: "row", flexWrap: "wrap", gap: 1, marginTop: 6 },
+  fullSize: { width: "100%", height: "100%" },
   playIcon: {
-    position: "absolute" as const,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    position: "absolute",
+    alignSelf: "center",
+    top: "40%",
     backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center" as const,
-    alignItems: "center" as const,
+    borderRadius: 20,
+    padding: 5,
   },
   docRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: 8,
     padding: 8,
     marginTop: 6,
     gap: 8,
     minWidth: 230,
   },
-  docIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 8,
-    justifyContent: "center" as const,
-    alignItems: "center" as const,
-  },
-  docName: { fontSize: 13, fontWeight: "600" as const, color: "#111827" },
-  docSize: { fontSize: 11, color: "#6b7280", marginTop: 2 },
+  docName: { fontSize: 13, fontWeight: "600", color: "#111827" },
+  docSize: { fontSize: 11, color: "#6b7280" },
   downloadBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
     backgroundColor: "#0068ff",
-    justifyContent: "center" as const,
-    alignItems: "center" as const,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  receiptsWrap: { flexDirection: "row" as const, marginTop: 4 },
+  timeText: { fontSize: 10, marginTop: 4, textAlign: "right" },
+  receiptsWrap: { flexDirection: "row", marginTop: 4 },
   receiptAvatar: {
     width: 14,
     height: 14,
@@ -630,14 +534,9 @@ const styles = {
   previewOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.95)",
-    justifyContent: "center" as const,
-    alignItems: "center" as const,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  previewClose: {
-    position: "absolute" as const,
-    top: 48,
-    right: 20,
-    zIndex: 10,
-  },
-  previewContent: { width: "90%", height: "70%" },
-};
+  closePreview: { position: "absolute", top: 50, right: 20, zIndex: 10 },
+  previewContent: { width: "95%", height: "80%" },
+});

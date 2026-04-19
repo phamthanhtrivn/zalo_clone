@@ -15,7 +15,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { conversationService } from "@/services/conversation.service";
 import { userService } from "@/services/user.service";
-import { useRouter } from "expo-router"; // Sửa lại router
+import { useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker"; // Khôi phục phần thiếu
 
 interface Props {
   visible: boolean;
@@ -36,16 +37,29 @@ const CreateGroupModal: React.FC<Props> = ({
 }) => {
   const router = useRouter();
   const [groupName, setGroupName] = useState("");
+  const [groupAvatar, setGroupAvatar] = useState<string | null>(null); // Khôi phục state ảnh
   const [searchText, setSearchText] = useState("");
   const [friends, setFriends] = useState<any[]>([]);
   const [selectedFriends, setSelectedFriends] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // --- 1. ĐỊNH NGHĨA BIẾN HELPER ---
   const isAddMode = mode === "ADD_MEMBER";
 
-  // --- 2. FETCH DATA ---
+  // --- 1. KHÔI PHỤC LOGIC CHỌN ẢNH NHÓM ---
+  const pickGroupImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setGroupAvatar(result.assets[0].uri);
+    }
+  };
+
   useEffect(() => {
     if (visible) {
       setLoading(true);
@@ -60,76 +74,66 @@ const CreateGroupModal: React.FC<Props> = ({
             avatar: f.avatarUrl || f.profile?.avatarUrl || "",
           }));
           setFriends(cleanFriends);
-          setLoading(false);
         })
-        .catch(() => {
-          setFriends([]);
-          setLoading(false);
-        });
+        .finally(() => setLoading(false));
     }
   }, [visible]);
 
-  // --- 3. LOGIC LỌC ---
+  // --- 2. KHÔI PHỤC LOGIC SẮP XẾP A-Z (Tính năng bổ sung của Tùng) ---
   const filteredFriends = useMemo(() => {
     if (!Array.isArray(friends)) return [];
-    return friends.filter((f: any) => {
-      const isNotExcluded = !excludedIds.includes(f.id);
-      const matchesSearch = f.name
-        .toLowerCase()
-        .includes(searchText.toLowerCase());
-      return isNotExcluded && matchesSearch;
-    });
+    return friends
+      .filter((f: any) => {
+        const isNotExcluded = !excludedIds.includes(f.id);
+        const matchesSearch = f.name
+          .toLowerCase()
+          .includes(searchText.toLowerCase());
+        return isNotExcluded && matchesSearch;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name)); // Sắp xếp tên
   }, [friends, searchText, excludedIds]);
 
   const toggleSelect = (item: any) => {
     const isSelected = selectedFriends.some((f) => f.id === item.id);
-    if (isSelected) {
-      setSelectedFriends((prev) => prev.filter((f) => f.id !== item.id));
-    } else {
-      setSelectedFriends((prev) => [...prev, item]);
-    }
+    setSelectedFriends((prev) =>
+      isSelected ? prev.filter((f) => f.id !== item.id) : [...prev, item],
+    );
   };
 
-  // --- 4. ACTION CHÍNH ---
   const handleAction = async () => {
-    // Logic validate theo mode
     const minRequired = isAddMode ? 1 : 2;
     if (selectedFriends.length < minRequired) {
-      return Alert.alert(
-        "Thông báo",
-        `Vui lòng chọn ít nhất ${minRequired} thành viên`,
-      );
+      return Alert.alert("Thông báo", `Chọn ít nhất ${minRequired} thành viên`);
     }
 
     setSubmitting(true);
     try {
       if (isAddMode && conversationId) {
-        // CHẾ ĐỘ THÊM TV
-        const res: any = await conversationService.addMembers(
+        await conversationService.addMembers(
           conversationId,
           selectedFriends.map((f) => f.id),
         );
-        if (res.success) {
-          Alert.alert("Thành công", "Đã thêm thành viên vào nhóm");
-          onSuccess?.();
-          handleClose();
-        }
+        Alert.alert("Thành công", "Đã thêm thành viên");
       } else {
-        // CHẾ ĐỘ TẠO NHÓM
-        const res: any = await conversationService.createGroup({
+        // TẠO NHÓM: Hỗ trợ cả file ảnh nếu có
+        const payload = {
           name: groupName.trim() || undefined,
           memberIds: selectedFriends.map((f) => f.id),
-        });
-
+          avatar: groupAvatar, // Sẵn sàng cho backend xử lý
+        };
+        const res: any = await conversationService.createGroup(payload);
         const newId =
           res?.data?.data?.conversation?._id || res?.data?.conversation?._id;
         if (newId) {
           handleClose();
           setTimeout(() => router.push(`/private/chat/${newId}`), 300);
+          return;
         }
       }
+      onSuccess?.();
+      handleClose();
     } catch (error) {
-      Alert.alert("Lỗi", "Không thể thực hiện thao tác");
+      Alert.alert("Lỗi", "Thao tác thất bại");
     } finally {
       setSubmitting(false);
     }
@@ -137,6 +141,7 @@ const CreateGroupModal: React.FC<Props> = ({
 
   const handleClose = () => {
     setGroupName("");
+    setGroupAvatar(null);
     setSearchText("");
     setSelectedFriends([]);
     onClose();
@@ -144,44 +149,23 @@ const CreateGroupModal: React.FC<Props> = ({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
-      <SafeAreaView style={{ flex: 0, backgroundColor: "#0068ff" }} />
-      <View style={styles.container}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "white" }}>
         {/* HEADER */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleClose} style={styles.headerBtn}>
+          <TouchableOpacity onPress={handleClose}>
             <Text style={styles.headerBtnText}>Hủy</Text>
           </TouchableOpacity>
-          <View style={styles.headerTitleContainer}>
+          <View style={{ alignItems: "center" }}>
             <Text style={styles.headerTitle}>
-              {isAddMode ? "Thêm vào nhóm" : "Nhóm mới"}
+              {isAddMode ? "Thêm thành viên" : "Nhóm mới"}
             </Text>
             <Text style={styles.headerSubTitle}>
               Đã chọn: {selectedFriends.length}
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={handleAction}
-            disabled={
-              submitting ||
-              (isAddMode
-                ? selectedFriends.length < 1
-                : selectedFriends.length < 2)
-            }
-            style={[
-              styles.headerBtn,
-              {
-                opacity: (
-                  isAddMode
-                    ? selectedFriends.length < 1
-                    : selectedFriends.length < 2
-                )
-                  ? 0.5
-                  : 1,
-              },
-            ]}
-          >
+          <TouchableOpacity onPress={handleAction} disabled={submitting}>
             {submitting ? (
-              <ActivityIndicator size="small" color="white" />
+              <ActivityIndicator color="white" />
             ) : (
               <Text style={styles.headerBtnText}>
                 {isAddMode ? "Thêm" : "Tạo"}
@@ -190,16 +174,25 @@ const CreateGroupModal: React.FC<Props> = ({
           </TouchableOpacity>
         </View>
 
-        {/* TOP SECTION */}
         <View style={styles.topSection}>
           {!isAddMode && (
             <View style={styles.groupInputRow}>
-              <View style={styles.cameraIcon}>
-                <Ionicons name="camera" size={20} color="#666" />
-              </View>
+              <TouchableOpacity
+                onPress={pickGroupImage}
+                style={styles.cameraIcon}
+              >
+                {groupAvatar ? (
+                  <Image
+                    source={{ uri: groupAvatar }}
+                    style={styles.selectedAvatar}
+                  />
+                ) : (
+                  <Ionicons name="camera" size={22} color="#666" />
+                )}
+              </TouchableOpacity>
               <TextInput
                 style={styles.inputName}
-                placeholder="Đặt tên nhóm (không bắt buộc)"
+                placeholder="Đặt tên nhóm"
                 value={groupName}
                 onChangeText={setGroupName}
               />
@@ -209,42 +202,14 @@ const CreateGroupModal: React.FC<Props> = ({
             <Ionicons name="search" size={18} color="#999" />
             <TextInput
               style={styles.searchInput}
-              placeholder="Tìm tên bạn bè"
+              placeholder="Tìm tên hoặc số điện thoại"
               value={searchText}
               onChangeText={setSearchText}
             />
           </View>
         </View>
 
-        {/* SELECTED LIST */}
-        {selectedFriends.length > 0 && (
-          <View style={styles.selectedContainer}>
-            <FlatList
-              horizontal
-              data={selectedFriends}
-              keyExtractor={(item) => "sel-" + item.id}
-              showsHorizontalScrollIndicator={false}
-              renderItem={({ item }) => (
-                <View style={styles.selectedAvatarWrapper}>
-                  <Image
-                    source={{
-                      uri: item.avatar || "https://via.placeholder.com/150",
-                    }}
-                    style={styles.selectedAvatar}
-                  />
-                  <TouchableOpacity
-                    onPress={() => toggleSelect(item)}
-                    style={styles.removeIcon}
-                  >
-                    <Ionicons name="close-circle" size={18} color="#999" />
-                  </TouchableOpacity>
-                </View>
-              )}
-            />
-          </View>
-        )}
-
-        {/* FRIENDS LIST */}
+        {/* DANH SÁCH BẠN BÈ */}
         {loading ? (
           <ActivityIndicator style={{ flex: 1 }} color="#0068ff" />
         ) : (
@@ -265,7 +230,7 @@ const CreateGroupModal: React.FC<Props> = ({
                     ]}
                   >
                     {isSelected && (
-                      <Ionicons name="checkmark" size={16} color="white" />
+                      <Ionicons name="checkmark" size={14} color="white" />
                     )}
                   </View>
                   <Image
@@ -280,7 +245,7 @@ const CreateGroupModal: React.FC<Props> = ({
             }}
           />
         )}
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 };
@@ -295,9 +260,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
   },
-  headerBtn: { minWidth: 40 },
   headerBtnText: { color: "white", fontSize: 16, fontWeight: "500" },
-  headerTitleContainer: { flex: 1, alignItems: "center" },
   headerTitle: { color: "white", fontSize: 17, fontWeight: "bold" },
   headerSubTitle: { color: "white", fontSize: 12, opacity: 0.8 },
   topSection: {
@@ -311,13 +274,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   cameraIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: "#f0f0f0",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
+  selectedAvatar: { width: 50, height: 50 },
   inputName: {
     flex: 1,
     marginLeft: 12,
@@ -335,22 +300,6 @@ const styles = StyleSheet.create({
     height: 40,
   },
   searchInput: { flex: 1, marginLeft: 8, fontSize: 15 },
-  selectedContainer: {
-    paddingVertical: 12,
-    paddingLeft: 16,
-    backgroundColor: "white",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  selectedAvatarWrapper: { marginRight: 15, position: "relative" },
-  selectedAvatar: { width: 44, height: 44, borderRadius: 22 },
-  removeIcon: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    backgroundColor: "white",
-    borderRadius: 10,
-  },
   friendRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -367,7 +316,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   checkboxSelected: { backgroundColor: "#0068ff", borderColor: "#0068ff" },
-  avatar: { width: 48, height: 48, borderRadius: 24, marginLeft: 16 },
+  avatar: { width: 45, height: 45, borderRadius: 22.5, marginLeft: 16 },
   friendName: { marginLeft: 12, fontSize: 16 },
 });
 
