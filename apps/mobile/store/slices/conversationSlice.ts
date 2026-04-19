@@ -1,101 +1,62 @@
-import {
-  createSlice,
-  createAsyncThunk,
-  type PayloadAction,
-} from "@reduxjs/toolkit";
 import type {
-  ConversationItemType,
   ConversationCategory,
+  ConversationItemType,
 } from "@/types/conversation-item.type";
-import { conversationService } from "@/services/conversation.service";
+import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
-// --- TYPES ---
 type ConversationState = {
-  items: ConversationItemType[];
-  loading: boolean;
-  error: string | null;
+  conversations: ConversationItemType[];
+  replyingMessage: any | null;
 };
 
 const initialState: ConversationState = {
-  items: [],
-  loading: false,
-  error: null,
+  conversations: [],
+  replyingMessage: null,
 };
-
-// --- ASYNC THUNKS (Dùng để fetch dữ liệu khi mở App) ---
-export const fetchConversations = createAsyncThunk(
-  "conversation/fetchConversations",
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await conversationService.getMyConversations();
-      // Chú ý: response trả về từ Service đã qua Interceptor nên thường là object chứa .success
-      if (response?.success) return response.data;
-      return rejectWithValue(response?.message || "Lỗi tải dữ liệu");
-    } catch (error: any) {
-      return rejectWithValue(error.message || "Không thể kết nối đến server");
-    }
-  },
-);
 
 const conversationSlice = createSlice({
   name: "conversation",
   initialState,
   reducers: {
-    // 1. Cập nhật toàn bộ danh sách
     setConversations(state, action: PayloadAction<ConversationItemType[]>) {
-      state.items = action.payload;
+      state.conversations = action.payload;
     },
 
-    // 2. Cập nhật Real-time từ Socket (Dùng cho tin nhắn mới/cuộc gọi)
-    updateConversationFromSocket(state, action: PayloadAction<any>) {
-      const { conversationId, lastMessage, unreadCount, lastMessageAt } =
-        action.payload;
-      const index = state.items.findIndex(
-        (c) => c.conversationId === conversationId,
-      );
+    updateConversation(
+      state,
 
+      action: PayloadAction<
+        Partial<ConversationItemType> & { conversationId: string }
+      >,
+    ) {
+      const index = state.conversations.findIndex(
+        (c) => c.conversationId === action.payload.conversationId,
+      );
       if (index !== -1) {
-        // Cập nhật và đưa lên đầu danh sách
-        const updated = {
-          ...state.items[index],
-          lastMessage: lastMessage ?? state.items[index].lastMessage,
-          unreadCount:
-            unreadCount !== undefined
-              ? unreadCount
-              : state.items[index].unreadCount,
-          lastMessageAt: lastMessageAt ?? new Date().toISOString(),
-        };
-        state.items.splice(index, 1);
-        state.items.unshift(updated);
+        const updated = { ...state.conversations[index], ...action.payload };
+        state.conversations.splice(index, 1);
+        state.conversations.unshift(updated);
       } else {
-        // Nếu hội thoại chưa có trong danh sách (người lạ nhắn tin), có thể gọi fetch lại hoặc push vào
-        // Tạm thời để dispatch fetch lại bên SocketContext cho an toàn
+        state.conversations.unshift(action.payload as ConversationItemType);
       }
     },
 
-    // 3. Cập nhật Cài đặt (Ghim, Ẩn, Tắt thông báo)
     updateConversationSetting(
       state,
       action: PayloadAction<{
         conversationId: string;
-        name?: string;
-        avatar?: string;
         pinned?: boolean;
         hidden?: boolean;
         muted?: boolean;
         mutedUntil?: string | null;
         category?: ConversationCategory | null;
         expireDuration?: number;
-        group?: any;
       }>,
     ) {
-      const c = state.items.find(
-        (i) => i.conversationId === action.payload.conversationId,
+      const c = state.conversations.find(
+        (c) => c.conversationId === action.payload.conversationId,
       );
       if (!c) return;
-
-      if (action.payload.name !== undefined) c.name = action.payload.name;
-      if (action.payload.avatar !== undefined) c.avatar = action.payload.avatar;
 
       if (action.payload.pinned !== undefined) c.pinned = action.payload.pinned;
       if (action.payload.hidden !== undefined) c.hidden = action.payload.hidden;
@@ -106,41 +67,39 @@ const conversationSlice = createSlice({
         c.category = action.payload.category;
       if (action.payload.expireDuration !== undefined)
         c.expireDuration = action.payload.expireDuration;
-      if (action.payload.group !== undefined) {
-        c.group = {
-          ...(c.group || {}),
-          ...action.payload.group,
+    },
+    removeExpiredMessages(state, action: PayloadAction<string[]>) {
+      for (const c of state.conversations) {
+        if (c.lastMessage && action.payload.includes(c.lastMessage._id)) {
+          c.lastMessage = {
+            ...c.lastMessage,
+            expired: true,
+            content: {
+              text: "Tin nhắn đã hết hạn",
+            },
+          };
+        }
+      }
+    },
+    updateRecallMessageInConversation(state, action) {
+      const index = state.conversations.findIndex(
+        (c) => c.conversationId === action.payload.conversationId,
+      );
+      if (index !== -1) {
+        state.conversations[index] = {
+          ...state.conversations[index],
+          ...action.payload,
         };
       }
     },
 
-    // 4. Thu hồi tin nhắn cuối cùng (Cập nhật text ở Sidebar)
-    updateRecallMessageInConversation(
-      state,
-      action: PayloadAction<{ conversationId: string; messageId: string }>,
-    ) {
-      const { conversationId, messageId } = action.payload;
-      const conversation = state.items.find(
-        (c) => c.conversationId === conversationId,
+    hideConversationLocal(state, action: PayloadAction<string>) {
+      const c = state.conversations.find(
+        (c) => c.conversationId === action.payload,
       );
-      if (conversation && conversation.lastMessage?._id === messageId) {
-        conversation.lastMessage.recalled = true;
-      }
+      if (c) c.hidden = !c.hidden;
     },
 
-    // 5. Xóa hội thoại khỏi danh sách
-    removeConversation(
-      state,
-      action: PayloadAction<{ conversationId: string } | string>,
-    ) {
-      const id =
-        typeof action.payload === "string"
-          ? action.payload
-          : action.payload.conversationId;
-      state.items = state.items.filter((c) => c.conversationId !== id);
-    },
-
-    // 6. Các action bổ trợ khác
     setCategoryLocal(
       state,
       action: PayloadAction<{
@@ -148,55 +107,50 @@ const conversationSlice = createSlice({
         category: ConversationCategory | null;
       }>,
     ) {
-      const c = state.items.find(
-        (i) => i.conversationId === action.payload.conversationId,
+      const c = state.conversations.find(
+        (c) => c.conversationId === action.payload.conversationId,
       );
       if (c) c.category = action.payload.category;
     },
 
-    resetUnreadCount(state, action: PayloadAction<string>) {
-      const c = state.items.find((i) => i.conversationId === action.payload);
-      if (c) c.unreadCount = 0;
-    },
-    addConversationToTop: (state, action: PayloadAction<any>) => {
-      const newConv = action.payload;
-      const index = state.items.findIndex(
-        (c) => c.conversationId === newConv.conversationId,
+    removeConversation(state, action: PayloadAction<string>) {
+      state.conversations = state.conversations.filter(
+        (c) => c.conversationId !== action.payload,
       );
-
-      if (index !== -1) {
-        state.items.splice(index, 1);
-      }
-
-      state.items = [newConv, ...state.items];
     },
-  },
-  extraReducers: (builder) => {
-    builder
-      .addCase(fetchConversations.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchConversations.fulfilled, (state, action) => {
-        state.loading = false;
-        state.items = action.payload || [];
-      })
-      .addCase(fetchConversations.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-      });
+    setUnreadCount(
+      state,
+      action: PayloadAction<{ conversationId: string; unreadCount: number }>,
+    ) {
+      const c = state.conversations.find(
+        (c) => c.conversationId === action.payload.conversationId,
+      );
+      if (c) {
+        c.unreadCount = action.payload.unreadCount;
+      }
+    },
+    setReplyingMessage(state, action: PayloadAction<any | null>) {
+      state.replyingMessage = action.payload;
+    },
+
+    clearReplyingMessage(state) {
+      state.replyingMessage = null;
+    },
   },
 });
 
 export const {
   setConversations,
-  updateConversationFromSocket,
+  updateConversation,
   updateConversationSetting,
   updateRecallMessageInConversation,
-  removeConversation,
+  hideConversationLocal,
   setCategoryLocal,
-  resetUnreadCount,
-  addConversationToTop,
+  removeConversation,
+  removeExpiredMessages,
+  setUnreadCount,
+  setReplyingMessage,
+  clearReplyingMessage,
 } = conversationSlice.actions;
 
 export default conversationSlice.reducer;

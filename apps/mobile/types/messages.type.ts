@@ -26,8 +26,6 @@ export interface MessagesType {
   createdAt: string;
   updatedAt: string;
   expired?: boolean;
-
-
 }
 
 export interface ReactionType {

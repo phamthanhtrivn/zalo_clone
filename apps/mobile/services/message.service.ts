@@ -2,211 +2,216 @@ import { EmojiType } from "@/constants/emoji.constant";
 import { api } from "./api";
 
 export const messageService = {
-  // Lấy tin nhắn cũ hơn (phục vụ scroll up)
   getMessagesFromConversation: async (
     conversationId: string,
     userId: string,
     cursor?: string | null,
-    limit: number = 20,
+    limit: number = 15,
   ) => {
-    const res = await api.get(`/messages/conversation/${conversationId}`, {
-      params: { userId, cursor, limit },
+    const response = await api.get(`/messages/conversation/${conversationId}`, {
+      params: {
+        userId,
+        cursor,
+        limit,
+      },
     });
-    return res;
+    return response;
   },
-
-  // Lấy tin nhắn mới hơn (phục vụ scroll down khi đang ở giữa cuộc hội thoại)
   getNewerMessages: async (
     conversationId: string,
     userId: string,
     cursor?: string | null,
-    limit: number = 20,
+    limit: number = 15,
   ) => {
-    const res = await api.get(
+    const response = await api.get(
       `/messages/conversation/${conversationId}/newer`,
       {
-        params: { userId, cursor, limit },
+        params: {
+          userId,
+          cursor,
+          limit,
+        },
       },
     );
-    return res;
+    return response;
   },
-
-  // Lấy danh sách tin nhắn đã ghim
   getPinnedMessages: async (conversationId: string, userId: string) => {
-    const res = await api.get(
+    const response = await api.get(
       `/messages/conversation/${conversationId}/pinned`,
       {
         params: { userId },
       },
     );
-    return res;
+    return response;
   },
-
-  // Lấy các tin nhắn xung quanh một tin nhắn cụ thể (phục vụ nhảy tới tin nhắn ghim)
   getMessagesAroundPinnedMessage: async (
     conversationId: string,
     userId: string,
     messageId: string,
-    limit: number = 20,
+    limit: number = 15,
   ) => {
-    const res = await api.get(
+    const response = await api.get(
       `/messages/conversation/${conversationId}/around`,
       {
         params: { userId, messageId, limit },
       },
     );
-    return res;
+    return response;
   },
-
-  // Thả cảm xúc
   reactionMessage: async (
     conversationId: string,
     userId: string,
     emojiType: EmojiType,
     messageId: string,
   ) => {
-    const res = await api.patch(`/messages/reaction`, {
+    const response = await api.patch(`/messages/reaction`, {
       conversationId,
       userId,
       emojiType,
       messageId,
     });
-    return res;
+    return response;
   },
-
-  // Gỡ cảm xúc
   removeReaction: async (
     userId: string,
     messageId: string,
     conversationId: string,
   ) => {
-    const res = await api.patch(`/messages/remove-reaction`, {
+    const response = await api.patch(`/messages/remove-reaction`, {
       userId,
       messageId,
       conversationId,
     });
-    return res;
+    return response;
   },
-
-  // Thu hồi tin nhắn
   recalledMessage: async (
     userId: string,
     messageId: string,
     conversationId: string,
   ) => {
-    const res = await api.patch(`/messages/recalled`, {
+    const response = await api.patch(`/messages/recalled`, {
       userId,
       messageId,
       conversationId,
     });
-    return res;
+    return response;
   },
-
-  // Ghim tin nhắn
   pinnedMessage: async (
     userId: string,
     messageId: string,
     conversationId: string,
   ) => {
-    const res = await api.patch(`/messages/pinned`, {
+    const response = await api.patch(`/messages/pinned`, {
       userId,
       messageId,
       conversationId,
     });
-    return res;
+    return response;
   },
-
-  // Gửi tin nhắn (Hỗ trợ cả Text và File/Ảnh qua FormData)
   sendMessage: async (
     conversationId: string,
     senderId: string,
+
+    repliedId?: string,
     content?: { text?: string; icon?: string },
-    file?: any | null, // Kiểu any để tương thích với cấu trúc File của React Native
+    files?: File[] | null,
   ) => {
-    if (file) {
+    if (files && files.length > 0) {
       const formData = new FormData();
+
       formData.append("conversationId", conversationId);
       formData.append("senderId", senderId);
-      if (content?.text) formData.append("content[text]", content.text);
-      if (content?.icon) formData.append("content[icon]", content.icon);
 
-      // Chú ý: React Native yêu cầu object đặc biệt cho File trong FormData
-      formData.append("file", file);
+      if (repliedId) {
+        formData.append("repliedId", repliedId);
+      }
 
-      const res = await api.post(`/messages`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+      if (content) {
+        formData.append("content", JSON.stringify(content));
+      }
+
+      files.forEach((file) => {
+        formData.append("files", file);
       });
-      return res;
+
+      const response = await api.post(`/messages`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      return response.data;
     }
 
-    const res = await api.post(`/messages`, {
+    const response = await api.post(`/messages`, {
       conversationId,
       senderId,
+      repliedId,
       content,
     });
-    return res;
+    return response.data;
   },
 
-  // Xóa tin nhắn ở phía người dùng hiện tại
+  // Mobile-specific: upload files using React Native FormData ({uri, name, type})
+  sendFormData: async (formData: FormData) => {
+    const response = await api.post(`/messages`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
+  },
   deleteMessageForMe: async (
     userId: string,
     messageId: string,
     conversationId: string,
   ) => {
-    const res = await api.patch(`/messages/delete-for-me`, {
+    const response = await api.patch(`/messages/delete-for-me`, {
       userId,
       messageId,
       conversationId,
     });
-    return res;
+    return response;
   },
-
-  // Gửi tín hiệu đã đọc tin nhắn
   readReceipt: async (userId: string, conversationId: string) => {
-    const res = await api.patch(`/messages/read-receipt`, {
+    const response = await api.patch(`/messages/read-receipt`, {
       userId,
       conversationId,
     });
-    return res;
+    return response;
   },
-
-  // Lấy xem trước các file đa phương tiện trong hội thoại
   getMediasPreview: async (userId: string, conversationId: string) => {
-    const res = await api.get(
+    const response = await api.get(
       `/messages/conversation/${conversationId}/medias/preview`,
       {
         params: { userId },
       },
     );
-    return res;
+    return response;
   },
-
-  // Chuyển tiếp tin nhắn sang các hội thoại khác
+  getMediasFileType: async (
+    conversationId: string,
+    userId: string,
+    type: "FILE" | "LINK",
+  ) => {
+    const response = await api.get(
+      `/messages/conversation/${conversationId}/medias`,
+      {
+        params: { userId, type },
+      },
+    );
+    return response;
+  },
   forwardMessagesToConversations: async (
     userId: string,
     messageIds: string[],
     targetConversationIds: string[],
   ) => {
-    const res = await api.post(`/messages/forward`, {
+    const response = await api.post(`/messages/forward`, {
       userId,
       messageIds,
       targetConversationIds,
     });
-    return res;
-  },
-
-  async updateCallStatus(
-    messageId: string,
-    status: string,
-    conversationId: string,
-  ) {
-    const res = await api.patch(
-      `/messages/conversation/${conversationId}/call-status`,
-      {
-        messageId,
-        status,
-      },
-    );
-    return res;
+    return response;
   },
 };

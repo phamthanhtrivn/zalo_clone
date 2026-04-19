@@ -25,7 +25,6 @@ export interface ConversationItemType {
   lastMessageAt: string;
 }
 
-
 export interface File {
   fileKey: string;
   fileName: string;
@@ -33,12 +32,11 @@ export interface File {
   type: "IMAGE" | "VIDEO" | "FILE";
 }
 
-
 export type ConversationCategory =
-  | 'customer'
-  | 'family'
-  | 'work'
-  | 'friends'
-  | 'later'
-  | 'colleague'
+  | "customer"
+  | "family"
+  | "work"
+  | "friends"
+  | "later"
+  | "colleague"
   | null;

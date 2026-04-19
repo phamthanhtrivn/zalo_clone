@@ -12,6 +12,7 @@ import {
   View,
   ToastAndroid,
 } from "react-native";
+import { showToast } from "@/utils/toast";
 import DatePicker from "react-native-date-picker";
 import { formatDate } from "@/utils/formater";
 import { useAppDispatch, useAppSelector } from "@/store/store";
@@ -20,7 +21,9 @@ import { Gender } from "@/utils/types/enums/gender";
 
 export default function CompleteRegister() {
   const dispatch = useAppDispatch();
-  const { loading, tmp_token } = useAppSelector((state: any) => state.auth);
+  const { user, error, loading, tmp_token } = useAppSelector(
+    (state: any) => state.auth,
+  );
 
   const [sheetType, setSheetType] = useState<"BIRTHDAY" | "GENDER">("BIRTHDAY");
 
@@ -182,14 +185,13 @@ export default function CompleteRegister() {
             </Text>
           )}
         </View>
-
         <View className="gap-3">
           <Text className="text-sm border-b-[0.5px] py-2 font-semibold">
             Mật khẩu
           </Text>
           <Input
             placeholder="Mật khẩu"
-            security={isHiddenPass}
+            security={true}
             value={password}
             onChangeText={(value) => setPassword(value)}
             onPressOnIcon={() => setHiddenPass(!isHiddenPass)}
@@ -202,7 +204,7 @@ export default function CompleteRegister() {
           )}
           <Input
             placeholder="Xác nhận mật khẩu"
-            security={isHiddenPass1}
+            security={true}
             value={repassword}
             onChangeText={(value) => setRepassword(value)}
             onPressOnIcon={() => setHiddenPass1(!isHiddenPass1)}
@@ -214,9 +216,8 @@ export default function CompleteRegister() {
             </Text>
           )}
         </View>
-
         <Button
-          className={`${loading ? "bg-secondary" : "bg-primary"} py-3 w-56 self-center`}
+          className={`${loading ? "bg-secondary" : "bg-primary"} py-3 w-56`}
           onPress={signUp}
         >
           {loading ? (
@@ -228,10 +229,11 @@ export default function CompleteRegister() {
       </View>
 
       <BottomSheet enableDynamicSizing={true} ref={bottomSheetRef}>
-        <View className="items-center gap-3 p-4">
+        <View className="items-center gap-3">
           {sheetType === "BIRTHDAY" ? (
             <BirthDaySelection />
           ) : (
+            // NỘI DUNG CHỌN GIỚI TÍNH
             <GenderSelection />
           )}
         </View>

@@ -32,7 +32,6 @@ import {
 } from "@/store/slices/conversationSlice";
 import { Avatar } from "../common/ui/Avatar";
 
-
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
 interface Props {
@@ -140,7 +139,6 @@ const ConversationItem: React.FC<Props> = ({
     setMenuVisible(true);
     translateY.setValue(SCREEN_HEIGHT);
     Animated.parallel([
-
       Animated.spring(translateY, {
         toValue: 0,
         damping: 20,
@@ -157,7 +155,6 @@ const ConversationItem: React.FC<Props> = ({
 
   const closeSheet = (onDone?: () => void) => {
     Animated.parallel([
-
       Animated.timing(translateY, {
         toValue: SCREEN_HEIGHT,
         duration: 220,
@@ -193,12 +190,10 @@ const ConversationItem: React.FC<Props> = ({
           Animated.spring(dragY, { toValue: 0, useNativeDriver: true }).start();
         }
       },
-    })
+    }),
   ).current;
 
-
   // ── Handlers — optimistic update với giá trị tường minh, KHÔNG toggle ──
-
 
   const handlePin = () => {
     const newPinned = !conversation.pinned;
@@ -235,7 +230,6 @@ const ConversationItem: React.FC<Props> = ({
   const handleMute = (duration: number) => {
     const newMuted = duration !== 0;
 
-
     dispatch(
       updateConversationSetting({
         conversationId: conversation.conversationId,
@@ -250,12 +244,11 @@ const ConversationItem: React.FC<Props> = ({
       try {
         duration === 0
           ? await unmuteConversation(user?.userId, conversation.conversationId)
-
           : await muteConversation(
-            user?.userId,
-            conversation.conversationId,
-            duration,
-          );
+              user?.userId,
+              conversation.conversationId,
+              duration,
+            );
       } catch (err) {
         dispatch(
           updateConversationSetting({
@@ -272,7 +265,6 @@ const ConversationItem: React.FC<Props> = ({
   const handleHide = () => {
     const newHidden = !conversation.hidden;
 
-
     dispatch(
       updateConversationSetting({
         conversationId: conversation.conversationId,
@@ -286,7 +278,6 @@ const ConversationItem: React.FC<Props> = ({
           ? await hideConversation(user?.userId, conversation.conversationId)
           : await unhideConversation(user?.userId, conversation.conversationId);
       } catch (err) {
-
         dispatch(
           updateConversationSetting({
             conversationId: conversation.conversationId,
@@ -337,7 +328,6 @@ const ConversationItem: React.FC<Props> = ({
       >
         {isSelectMode && (
           <View style={{ marginRight: 12 }}>
-
             <View
               style={{
                 width: 22,
@@ -538,7 +528,6 @@ const ConversationItem: React.FC<Props> = ({
             <View>
               <TouchableOpacity
                 onPress={() => setSubMenu(null)}
-
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
@@ -570,7 +559,6 @@ const ConversationItem: React.FC<Props> = ({
                 <TouchableOpacity
                   key={opt.label}
                   onPress={() => handleMute(opt.duration)}
-
                   style={{
                     paddingHorizontal: 20,
                     paddingVertical: 15,
@@ -587,7 +575,6 @@ const ConversationItem: React.FC<Props> = ({
             </View>
           ) : (
             <View>
-
               <SheetItem
                 icon={
                   <MaterialIcons
@@ -675,8 +662,6 @@ const ConversationItem: React.FC<Props> = ({
   );
 };
 
-
-
 const SheetItem = ({
   icon,
   label,
@@ -710,7 +695,6 @@ const SheetItem = ({
 );
 
 const Divider = () => (
-
   <View
     style={{ height: 0.5, backgroundColor: "#f0f0f0", marginVertical: 4 }}
   />
