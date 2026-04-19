@@ -8,7 +8,6 @@ import {
   Alert,
   Text,
   TouchableOpacity,
-  ActionSheetIOS,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -37,30 +36,25 @@ import {
 import { Image } from "expo-image";
 import MenuItem from "@/components/chat/MenuItem";
 import { conversationService } from "@/services/conversation.service";
-import {
-  setConversations,
-  setReplyingMessage,
-  clearReplyingMessage,
-} from "@/store/slices/conversationSlice";
+import { setConversations } from "@/store/slices/conversationSlice";
 import { useVideoCall } from "@/contexts/VideoCallContext";
 
 export default function ChatWindow() {
-  const dispatch = useAppDispatch();
-  const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { socket } = useSocket();
-  const { startCall } = useVideoCall(); // Khôi phục logic Call
-
-  const user = useAppSelector((state) => state.auth.user);
   const { items: conversations } = useAppSelector(
     (state) => state.conversation,
   );
-  const replyingMessage = useAppSelector(
-    (state) => state.conversation.replyingMessage,
-  );
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { socket } = useSocket();
+  const user = useAppSelector((state) => state.auth.user);
+  const router = useRouter();
+  const dispatch = useAppDispatch();
 
   const conversation = conversations?.find((c) => c.conversationId === id);
-  const isGroup = conversation?.type === "GROUP";
+  const [contextMenuMsg, setContextMenuMsg] = useState<MessagesType | null>(
+    null,
+  );
+
+  const { startCall } = useVideoCall();
 
   // ===== STATE =====
   const [messages, setMessages] = useState<MessagesType[]>([]);
@@ -68,14 +62,17 @@ export default function ChatWindow() {
   const [isLoading, setIsLoading] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [prevCursor, setPrevCursor] = useState<string | null>(null);
-  const [contextMenuMsg, setContextMenuMsg] = useState<MessagesType | null>(
-    null,
-  );
+
+  // Reaction picker
   const [reactionPickerMsg, setReactionPickerMsg] =
     useState<MessagesType | null>(null);
+
+  // Reaction modal
   const [reactionModalData, setReactionModalData] = useState<
     ReactionType[] | null
   >(null);
+
+  // Select mode (forward)
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [showForwardModal, setShowForwardModal] = useState(false);
@@ -84,32 +81,39 @@ export default function ChatWindow() {
   const [highlightedMessageId, setHighlightedMessageId] = useState<
     string | null
   >(null);
+
+  // Detail modal
   const [detailMessage, setDetailMessage] = useState<MessagesType | null>(null);
+
+  // Info panel
   const [showInfoSheet, setShowInfoSheet] = useState(false);
+
+  // Reply mode
+  const [replyMessage, setReplyMessage] = useState<MessagesType | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
   const isFirstLoad = useRef(true);
   const isFetchingRef = useRef(false);
   const isFetchingNewerRef = useRef(false);
-  const isJumpingRef = useRef(false);
-  const prevCursorRef = useRef<string | null>(null);
 
   const isPinned =
     contextMenuMsg && pinnedMessages.some((m) => m._id === contextMenuMsg._id);
 
-  // ================= SCROLL & JUMP LOGIC =================
   const scrollToBottom = (animated = true) => {
     flatListRef.current?.scrollToEnd({ animated });
     setShowScrollToBottom(false);
   };
 
   const handleGoToNewest = () => {
-    isFirstLoad.current = true;
-    setPrevCursor(null);
-    fetchInitialMessages();
+    if (prevCursor) {
+      isFirstLoad.current = true;
+      fetchInitialMessages();
+    } else {
+      scrollToBottom();
+    }
   };
 
-  // ================= FETCH LOGIC =================
+  // ================= FETCH =================
   const fetchInitialMessages = async () => {
     if (!id || !user?.userId) return;
     try {
@@ -120,10 +124,19 @@ export default function ChatWindow() {
         null,
         20,
       );
+
       if (res.success) {
         const msgs = res.data.messages || [];
-        setMessages([...msgs].reverse());
+        // API usually returns newest-first. For normal list we want oldest-first.
+        const isOldestFirst =
+          msgs.length >= 2 &&
+          new Date(msgs[0].createdAt) <
+            new Date(msgs[msgs.length - 1].createdAt);
+        const sorted = isOldestFirst ? msgs : [...msgs].reverse();
+
+        setMessages(sorted);
         setNextCursor(res.data.nextCursor);
+        // If we just loaded history, we are at the end of known history
         setPrevCursor(null);
       }
       const pinRes: any = await messageService.getPinnedMessages(
@@ -131,6 +144,8 @@ export default function ChatWindow() {
         user.userId,
       );
       if (pinRes.success) setPinnedMessages(pinRes.data.messages);
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -147,7 +162,13 @@ export default function ChatWindow() {
         20,
       );
       if (res.success && res.data.messages.length > 0) {
-        const sortedNew = [...res.data.messages].reverse();
+        const newMsgs = res.data.messages;
+        const isOldestFirst =
+          newMsgs.length >= 2 &&
+          new Date(newMsgs[0].createdAt) <
+            new Date(newMsgs[newMsgs.length - 1].createdAt);
+        const sortedNew = isOldestFirst ? newMsgs : [...newMsgs].reverse();
+
         setMessages((prev) => {
           const existingIds = new Set(prev.map((m) => m._id));
           const uniqueNew = sortedNew.filter(
@@ -156,20 +177,18 @@ export default function ChatWindow() {
           return [...uniqueNew, ...prev];
         });
         setNextCursor(res.data.nextCursor);
+      } else {
+        setNextCursor(null);
       }
+    } catch (err) {
+      console.error(err);
     } finally {
       isFetchingRef.current = false;
     }
   };
 
   const loadNewerMessages = async () => {
-    if (
-      !id ||
-      !user?.userId ||
-      !prevCursor ||
-      isFetchingNewerRef.current ||
-      isJumpingRef.current
-    )
+    if (!id || !user?.userId || !prevCursor || isFetchingNewerRef.current)
       return;
     isFetchingNewerRef.current = true;
     try {
@@ -180,7 +199,13 @@ export default function ChatWindow() {
         20,
       );
       if (res.success && res.data.messages.length > 0) {
-        const sortedNew = [...res.data.messages].reverse();
+        const newMsgs = res.data.messages;
+        const isOldestFirst =
+          newMsgs.length >= 2 &&
+          new Date(newMsgs[0].createdAt) <
+            new Date(newMsgs[newMsgs.length - 1].createdAt);
+        const sortedNew = isOldestFirst ? newMsgs : [...newMsgs].reverse();
+
         setMessages((prev) => {
           const existingIds = new Set(prev.map((m) => m._id));
           const uniqueNew = sortedNew.filter(
@@ -188,99 +213,135 @@ export default function ChatWindow() {
           );
           return [...prev, ...uniqueNew];
         });
-        setPrevCursor(sortedNew[sortedNew.length - 1]._id);
+        setPrevCursor(res.data.prevCursor); // API returns prevCursor for newer
       } else {
         setPrevCursor(null);
       }
+    } catch (err) {
+      console.error(err);
     } finally {
       isFetchingNewerRef.current = false;
     }
   };
 
-  // ================= ACTIONS =================
+  // ================= SEND =================
   const handleSendMessage = async (text: string) => {
     if (!id || !user?.userId) return;
     try {
-      await messageService.sendMessage(
-        id,
-        user.userId,
-        replyingMessage?._id,
-        { text },
-        null,
-      );
-      if (replyingMessage) dispatch(clearReplyingMessage());
+      await messageService.sendMessage(id, user.userId, { text }, null);
+      if (replyMessage) setReplyMessage(null);
       scrollToBottom();
     } catch (err) {
       console.error(err);
     }
   };
 
-  const handleSendFile = async (files: any[]) => {
-    if (!id || !user?.userId || files.length === 0) return;
+  const handleSendFile = async (file: any) => {
+    if (!id || !user?.userId) return;
     try {
-      const mediaFiles = files.filter(
-        (f) => f.type.startsWith("image/") || f.type.startsWith("video/"),
-      );
-      const docFiles = files.filter(
-        (f) => !f.type.startsWith("image/") && !f.type.startsWith("video/"),
-      );
-      const promises = [];
-
-      if (mediaFiles.length > 0) {
-        const formData = new FormData();
-        formData.append("conversationId", id);
-        formData.append("senderId", user.userId);
-        if (replyingMessage?._id)
-          formData.append("repliedId", replyingMessage._id);
-        mediaFiles.forEach((f) =>
-          formData.append("files", {
-            uri: f.uri,
-            name: f.name,
-            type: f.type,
-          } as any),
-        );
-        promises.push(messageService.sendFormData(formData));
-      }
-
-      docFiles.forEach((f) => {
-        const fd = new FormData();
-        fd.append("conversationId", id);
-        fd.append("senderId", user.userId);
-        if (replyingMessage?._id) fd.append("repliedId", replyingMessage._id);
-        fd.append("files", { uri: f.uri, name: f.name, type: f.type } as any);
-        promises.push(messageService.sendFormData(fd));
-      });
-
-      await Promise.all(promises);
-      if (replyingMessage) dispatch(clearReplyingMessage());
+      await messageService.sendMessage(id, user.userId, undefined, file);
+      if (replyMessage) setReplyMessage(null);
       scrollToBottom();
     } catch (err) {
-      Alert.alert("Lỗi", "Gửi tệp thất bại");
+      console.error(err);
     }
   };
 
-  const handleVideoCall = async () => {
-    if (!id || !user?.userId || !conversation?.otherMemberId) {
-      Alert.alert("Lỗi", "Không thể thực hiện cuộc gọi.");
-      return;
-    }
+  // ================= PIN =================
+  const handleTogglePin = async (messageId: string) => {
+    if (!id || !user?.userId) return;
     try {
-      const res: any = await messageService.sendMessage(
+      await messageService.pinnedMessage(user.userId, messageId, id);
+    } catch {
+      Alert.alert(
+        "Bạn chỉ có thể ghim tối đa 3 tin nhắn trong 1 cuộc trò chuyện",
+      );
+    }
+  };
+
+  // ================= REACT =================
+  const handleReaction = async (emojiType: EmojiType, messageId: string) => {
+    if (!id || !user?.userId) return;
+    try {
+      await messageService.reactionMessage(
         id,
         user.userId,
-        undefined,
-        { text: "Cuộc gọi video" },
-        null,
-        "VIDEO",
+        emojiType,
+        messageId,
       );
-      const messageId = res.data?._id || res?._id;
-      if (messageId)
-        startCall(conversation.otherMemberId, id, "VIDEO", messageId);
-    } catch {
-      Alert.alert("Lỗi", "Khởi tạo cuộc gọi thất bại.");
+    } catch (err) {
+      console.error(err);
     }
   };
 
+  const handleRemoveReaction = async (messageId: string) => {
+    if (!id || !user?.userId) return;
+    try {
+      await messageService.removeReaction(user.userId, messageId, id);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // ================= RECALL / DELETE =================
+  const handleRecall = async (messageId: string) => {
+    if (!id || !user?.userId) return;
+    try {
+      await messageService.recalledMessage(user.userId, messageId, id);
+    } catch {
+      Alert.alert("Bạn không thể thu hồi tin nhắn trong vòng 24 giờ");
+    }
+  };
+
+  const handleDeleteForMe = async (messageId: string) => {
+    if (!id || !user?.userId) return;
+    try {
+      await messageService.deleteMessageForMe(user.userId, messageId, id);
+      setMessages((prev) => prev.filter((m) => m._id !== messageId));
+
+      const res: any = await conversationService.getConversationsFromUserId(
+        user?.userId || "",
+      );
+
+      if (res.success) {
+        dispatch(setConversations(res.data));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // ================= FORWARD =================
+  const toggleSelectMessage = (messageId: string) => {
+    setSelectedMessages((prev) =>
+      prev.includes(messageId)
+        ? prev.filter((id) => id !== messageId)
+        : [...prev, messageId],
+    );
+  };
+
+  const handleForward = async (conversationIds: string[]) => {
+    if (!user?.userId || selectedMessages.length === 0) return;
+    setLoadingForward(true);
+    try {
+      await messageService.forwardMessagesToConversations(
+        user.userId,
+        selectedMessages,
+        conversationIds,
+      );
+      setShowForwardModal(false);
+      setIsSelectMode(false);
+      setSelectedMessages([]);
+      Alert.alert("Thành công", "Đã chuyển tiếp tin nhắn");
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Lỗi", "Không thể chuyển tiếp tin nhắn");
+    } finally {
+      setLoadingForward(false);
+    }
+  };
+
+  // ================= JUMP =================
   const handleJumpToMessage = async (messageId: string) => {
     if (!id || !user?.userId) return;
     const res: any = await messageService.getMessagesAroundPinnedMessage(
@@ -290,179 +351,223 @@ export default function ChatWindow() {
       15,
     );
     if (res.success) {
-      isJumpingRef.current = true;
-      setMessages(res.data.messages);
+      const msgs = res.data.messages;
+      setMessages(msgs);
       setNextCursor(res.data.nextCursor);
       setPrevCursor(res.data.prevCursor);
-      const index = res.data.messages.findIndex(
-        (m: any) => m._id === messageId,
-      );
+
+      const index = msgs.findIndex((m: any) => m._id === messageId);
       if (index !== -1) {
+        // Clear previous highlight
+        setHighlightedMessageId(null);
+
         setTimeout(() => {
           flatListRef.current?.scrollToIndex({
             index,
             animated: true,
-            viewPosition: 0.5,
+            viewPosition: 0.5, // Center it
           });
+
           setHighlightedMessageId(messageId);
-          setTimeout(() => {
-            setHighlightedMessageId(null);
-            isJumpingRef.current = false;
-          }, 2500);
+          setTimeout(() => setHighlightedMessageId(null), 2500);
         }, 300);
       }
     }
   };
 
-  const handleMessageLongPress = (msg: MessagesType) => {
-    const isMe = (msg.senderId?._id || msg.senderId) === user?.userId;
-    const options = [
-      "Thả cảm xúc",
-      "Trả lời",
-      "Chuyển tiếp",
-      isPinned ? "Bỏ ghim" : "Ghim",
-      "Xóa phía tôi",
-      ...(isMe && !msg.recalled ? ["Thu hồi"] : []),
-      "Hủy",
-    ];
-
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options,
-          cancelButtonIndex: options.length - 1,
-          destructiveButtonIndex: options.indexOf("Xóa phía tôi"),
-        },
-        (idx) => {
-          const action = options[idx];
-          if (action === "Thả cảm xúc") setReactionPickerMsg(msg);
-          if (action === "Trả lời") dispatch(setReplyingMessage(msg));
-          if (action === "Chuyển tiếp") {
-            setIsSelectMode(true);
-            setSelectedMessages([msg._id]);
-            setShowForwardModal(true);
-          }
-          if (action === "Ghim" || action === "Bỏ ghim")
-            messageService.pinnedMessage(user!.userId, msg._id, id!);
-          if (action === "Thu hồi")
-            messageService.recalledMessage(user!.userId, msg._id, id!);
-          if (action === "Xóa phía tôi")
-            messageService
-              .deleteMessageForMe(user!.userId, msg._id, id!)
-              .then(() =>
-                setMessages((p) => p.filter((m) => m._id !== msg._id)),
-              );
-        },
+  const handleVideoCall = async () => {
+    if (!id || !user?.userId || !conversation?.otherMemberId) {
+      Alert.alert(
+        "Lỗi",
+        "Không thể khởi tạo cuộc gọi. Thiếu thông tin người nhận.",
       );
-    } else {
-      setContextMenuMsg(msg); // Hiện overlay menu cho Android
+      return;
+    }
+
+    try {
+      console.log("1. Đang tạo bản ghi cuộc gọi trong DB (Mobile)");
+
+      const res: any = await messageService.sendMessage(
+        id,
+        user.userId,
+        { text: "Cuộc gọi video" },
+        null,
+        "VIDEO",
+      );
+
+      const messageId = res.data?._id || res?._id;
+
+      if (!messageId) throw new Error("Không nhận được messageId");
+
+      console.log("2. Đã có messageId:", messageId, ". Bắt đầu signaling...");
+
+      // 2. Kích hoạt Context cuộc gọi
+      startCall(conversation.otherMemberId, id, "VIDEO", messageId);
+    } catch (error) {
+      console.error("Lỗi khởi tạo cuộc gọi:", error);
+      Alert.alert("Lỗi", "Không thể thực hiện cuộc gọi lúc này.");
     }
   };
 
-  // ================= SOCKET LISTENERS =================
+  // ================= EFFECTS =================
+  useEffect(() => {
+    if (id && user?.userId) {
+      fetchInitialMessages();
+      messageService.readReceipt(user.userId, id);
+    }
+  }, [id, user?.userId]);
+
+  // ===== SOCKET =====
   useEffect(() => {
     if (!socket || !id || !user?.userId) return;
     socket.emit("join_room", id);
 
-    const handleNewMessage = (msg: MessagesType) => {
-      if (prevCursorRef.current) {
-        setShowScrollToBottom(true);
-        return;
+    const handleNewMessage = (newMessage: MessagesType) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === newMessage._id)) return prev;
+        // New messages from socket go to the END
+        return [...prev, newMessage];
+      });
+      messageService.readReceipt(user.userId, id);
+
+      // Auto scroll if user is already at the bottom
+      if (!showScrollToBottom) {
+        setTimeout(() => scrollToBottom(true), 100);
       }
+    };
+
+    const handleMessageReacted = (data: any) => {
       setMessages((prev) =>
-        prev.some((m) => m._id === msg._id) ? prev : [...prev, msg],
+        prev.map((m) =>
+          m._id === data.messageId ? { ...m, reactions: data.reactions } : m,
+        ),
       );
-      if (!showScrollToBottom) setTimeout(() => scrollToBottom(true), 100);
+    };
+
+    const handleMessageRecalled = (data: any) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId ? { ...m, recalled: true } : m,
+        ),
+      );
+    };
+
+    const handleMessagePinned = (data: any) => {
+      setPinnedMessages(data.pinnedMessages);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId ? { ...m, pinned: data.pinned } : m,
+        ),
+      );
+    };
+
+    const handleReadReceipt = (data: {
+      conversationId: string;
+      messages: MessagesType[];
+    }) => {
+      if (data.conversationId === id) {
+        setMessages((prev) => {
+          const updatedMap = new Map(
+            data.messages.map((m) => [m._id, m.readReceipts]),
+          );
+          return prev.map((m) => {
+            const newReadReceipts = updatedMap.get(m._id);
+            if (!newReadReceipts) return m;
+            return { ...m, readReceipts: newReadReceipts };
+          });
+        });
+      }
+    };
+
+    const handleCallUpdated = (data: {
+      messageId: string;
+      status: string;
+      duration?: number;
+    }) => {
+      console.log(
+        ">>> [Mobile Realtime] Cập nhật tin nhắn cuộc gọi:",
+        data.status,
+      );
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === data.messageId
+            ? {
+                ...msg,
+                call: {
+                  ...(msg.call || {}),
+                  status: data.status,
+                  duration: data.duration ?? msg.call?.duration ?? 0,
+                },
+              }
+            : msg,
+        ),
+      );
     };
 
     socket.on("new_message", handleNewMessage);
-    socket.on("message_reacted", (data) =>
-      setMessages((p) =>
-        p.map((m) =>
-          m._id === data.messageId ? { ...m, reactions: data.reactions } : m,
-        ),
-      ),
-    );
-    socket.on("message_recalled", (data) =>
-      setMessages((p) =>
-        p.map((m) => (m._id === data.messageId ? { ...m, recalled: true } : m)),
-      ),
-    );
-    socket.on("messages_expired", (data) =>
-      setMessages((p) =>
-        p.map((m) =>
-          data.messageIds.includes(m._id) ? { ...m, expired: true } : m,
-        ),
-      ),
-    );
-    socket.on("call_updated", (data) =>
-      setMessages((p) =>
-        p.map((m) =>
-          m._id === data.messageId
-            ? {
-                ...m,
-                call: {
-                  ...m.call,
-                  status: data.status,
-                  duration: data.duration,
-                },
-              }
-            : m,
-        ),
-      ),
-    );
+    socket.on("message_reacted", handleMessageReacted);
+    socket.on("message_recalled", handleMessageRecalled);
+    socket.on("message_pinned", handleMessagePinned);
+    socket.on("read_receipt", handleReadReceipt);
+    socket.on("call_updated", handleCallUpdated);
 
     return () => {
-      [
-        "new_message",
-        "message_reacted",
-        "message_recalled",
-        "messages_expired",
-        "call_updated",
-      ].forEach((ev) => socket.off(ev));
+      socket.off("new_message", handleNewMessage);
+      socket.off("message_reacted", handleMessageReacted);
+      socket.off("message_recalled", handleMessageRecalled);
+      socket.off("message_pinned", handleMessagePinned);
+      socket.off("read_receipt", handleReadReceipt);
+      socket.off("call_updated", handleCallUpdated);
       socket.emit("leave_room", id);
     };
-  }, [socket, id, user?.userId, showScrollToBottom]);
+  }, [socket, id, user?.userId]);
 
-  useEffect(() => {
-    if (id && user?.userId) {
-      fetchInitialMessages();
-      dispatch(clearReplyingMessage());
-      isFirstLoad.current = true;
-    }
-  }, [id, user?.userId]);
-
-  useEffect(() => {
-    prevCursorRef.current = prevCursor;
-  }, [prevCursor]);
-
-  // ================= RENDER ITEM =================
+  // ================= RENDER =================
   const renderItem = ({ item, index }: any) => {
+    // Normal list: older is at lower index, newer is at higher index
     const older = messages[index - 1];
-    const sameSenderOlder =
-      older &&
-      (older.senderId?._id || older.senderId) ===
-        (item.senderId?._id || item.senderId);
+    const newer = messages[index + 1];
+
+    const isMe = item.senderId?._id === user?.userId;
+    const sameSenderOlder = older && older.senderId?._id === item.senderId?._id;
     const sameMinuteOlder =
       older && isSameHourAndMinute(older.createdAt, item.createdAt);
     const isFirstInCluster = !(sameSenderOlder && sameMinuteOlder);
-    const showAvatar =
-      (item.senderId?._id || item.senderId) !== user?.userId &&
-      isFirstInCluster;
+
+    const sameSenderNewer = newer && newer.senderId?._id === item.senderId?._id;
+    const sameMinuteNewer =
+      newer && isSameHourAndMinute(newer.createdAt, item.createdAt);
+    const isLastInCluster = !(sameSenderNewer && sameMinuteNewer);
+
+    const showAvatar = !isMe && isFirstInCluster;
+    const showName = !isMe && isFirstInCluster;
+    const showTime = isLastInCluster;
     const showDivider =
       !older ||
       new Date(older.createdAt).toDateString() !==
         new Date(item.createdAt).toDateString();
 
+    const isSelected = selectedMessages.includes(item._id);
+
+    const isLastReadMessage = index === messages.length - 1;
+
+    const addSpacing = !sameSenderOlder;
+
     return (
       <View
         style={{
-          marginTop: isFirstInCluster && !showDivider ? 12 : 2,
-          marginBottom: item.reactions?.length > 0 ? 14 : 0,
+          marginBottom: item.reactions?.length > 0 ? 12 : 0,
+          marginTop: addSpacing ? 16 : 0,
         }}
       >
         {showDivider && (
-          <View style={{ alignItems: "center", marginVertical: 12 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "center",
+              marginVertical: 12,
+            }}
+          >
             <View
               style={{
                 backgroundColor: "#babbbe",
@@ -479,25 +584,23 @@ export default function ChatWindow() {
         )}
         <MessageBubble
           message={item}
-          isMe={(item.senderId?._id || item.senderId) === user?.userId}
+          isMe={
+            (typeof item.senderId === "string"
+              ? item.senderId
+              : item.senderId?._id) === user?.userId
+          }
           showAvatar={showAvatar}
-          showName={isGroup && showAvatar}
-          showTime={true}
-          isSelected={selectedMessages.includes(item._id)}
+          showName={showName}
+          showTime={showTime}
+          isSelected={isSelected}
           isSelectMode={isSelectMode}
           isHighlighted={highlightedMessageId === item._id}
-          onLongPress={() => handleMessageLongPress(item)}
-          onPress={() =>
-            isSelectMode &&
-            setSelectedMessages((p) =>
-              p.includes(item._id)
-                ? p.filter((x) => x !== item._id)
-                : [...p, item._id],
-            )
-          }
-          onOpenReactionModal={(r) => setReactionModalData(r)}
-          onReplyPress={handleJumpToMessage}
-          isGroup={isGroup}
+          onLongPress={() => setContextMenuMsg(item)}
+          onPress={() => {
+            if (isSelectMode) toggleSelectMessage(item._id);
+          }}
+          onOpenReactionModal={(reactions) => setReactionModalData(reactions)}
+          renderReadReceipts={isLastReadMessage}
         />
       </View>
     );
@@ -510,7 +613,8 @@ export default function ChatWindow() {
         style={{
           flexDirection: "row",
           alignItems: "center",
-          padding: 10,
+          paddingHorizontal: 12,
+          paddingVertical: 10,
           backgroundColor: "#0068ff",
           gap: 10,
         }}
@@ -518,10 +622,24 @@ export default function ChatWindow() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Image
-          source={{ uri: conversation?.avatar }}
-          style={{ width: 38, height: 38, borderRadius: 19 }}
-        />
+
+        {/* Avatar */}
+        <View
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 19,
+            overflow: "hidden",
+            backgroundColor: "rgba(255,255,255,0.3)",
+          }}
+        >
+          <Image
+            source={{ uri: conversation?.avatar }}
+            style={{ width: 38, height: 38 }}
+          />
+        </View>
+
+        {/* Name */}
         <View style={{ flex: 1 }}>
           <Text
             style={{ color: "white", fontSize: 16, fontWeight: "700" }}
@@ -530,10 +648,21 @@ export default function ChatWindow() {
             {conversation?.name}
           </Text>
         </View>
-        <TouchableOpacity onPress={handleVideoCall}>
+
+        {/* Actions */}
+        <TouchableOpacity>
+          <Ionicons name="person-add-outline" size={22} color="white" />
+        </TouchableOpacity>
+        <TouchableOpacity style={{ padding: 4 }} onPress={handleVideoCall}>
           <Ionicons name="videocam-outline" size={24} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowInfoSheet(true)}>
+        <TouchableOpacity style={{ padding: 4 }}>
+          <Ionicons name="search-outline" size={24} color="white" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ padding: 4 }}
+          onPress={() => setShowInfoSheet(true)}
+        >
           <Ionicons name="information-circle-outline" size={24} color="white" />
         </TouchableOpacity>
       </View>
@@ -541,43 +670,89 @@ export default function ChatWindow() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+        keyboardVerticalOffset={50}
       >
         <PinnedMessagesBar
           pinnedMessages={pinnedMessages}
-          onUnpin={() => {}}
+          onUnpin={handleTogglePin}
           onJumpToMessage={handleJumpToMessage}
         />
 
         <View style={{ flex: 1, backgroundColor: "#F1F2F4" }}>
           {isLoading ? (
-            <ActivityIndicator style={{ flex: 1 }} color="#0068FF" />
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <ActivityIndicator size="large" color="#0068FF" />
+            </View>
           ) : (
             <FlatList
               ref={flatListRef}
               data={messages}
-              keyExtractor={(m) => m._id}
+              keyExtractor={(item, index) => item?._id || index.toString()}
               renderItem={renderItem}
+              scrollEventThrottle={16}
+              initialNumToRender={20}
               onScroll={(e) => {
                 const { y } = e.nativeEvent.contentOffset;
-                if (y < 100) loadMoreMessages();
-                const isBottom =
-                  y + e.nativeEvent.layoutMeasurement.height >=
-                  e.nativeEvent.contentSize.height - 100;
+                const { height: contentHeight } = e.nativeEvent.contentSize;
+                const { height: layoutHeight } =
+                  e.nativeEvent.layoutMeasurement;
+
+                // Show button if scrolled up or if in historical mode
+                const isBottom = y >= contentHeight - layoutHeight - 100;
                 setShowScrollToBottom(!isBottom || !!prevCursor);
+
+                if (y < 100) loadMoreMessages();
               }}
-              onEndReached={() => prevCursor && loadNewerMessages()}
+              onContentSizeChange={(w, h) => {
+                if (
+                  isFirstLoad.current &&
+                  h > 0 &&
+                  messages.length > 0 &&
+                  !prevCursor
+                ) {
+                  // Use a small delay to ensure final measurements are ready
+                  setTimeout(() => {
+                    scrollToBottom(false);
+                    isFirstLoad.current = false;
+                  }, 100);
+                }
+              }}
+              onScrollToIndexFailed={(info) => {
+                const wait = new Promise((resolve) => setTimeout(resolve, 500));
+                wait.then(() => {
+                  flatListRef.current?.scrollToIndex({
+                    index: info.index,
+                    animated: true,
+                    viewPosition: 0.5,
+                  });
+                });
+              }}
+              onEndReached={() => {
+                if (prevCursor) loadNewerMessages();
+              }}
               onEndReachedThreshold={0.5}
-              ListEmptyComponent={
-                <View style={{ alignItems: "center", padding: 40 }}>
-                  <Text style={{ color: "#9ca3af" }}>Chưa có tin nhắn nào</Text>
+              contentContainerStyle={{
+                paddingTop: 8,
+                paddingBottom: 90, // space for input
+              }}
+              ListEmptyComponent={() => (
+                <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                  <Text style={{ color: "#9ca3af", fontSize: 13 }}>
+                    Chưa có tin nhắn nào
+                  </Text>
                 </View>
-              }
+              )}
             />
           )}
 
-          {/* REPLY BAR UI (Khôi phục từ KVT) */}
-          {replyingMessage && (
+          {/* Reply Bar */}
+          {replyMessage && (
             <View
               style={{
                 backgroundColor: "white",
@@ -586,6 +761,7 @@ export default function ChatWindow() {
                 borderTopColor: "#e5e7eb",
                 flexDirection: "row",
                 alignItems: "center",
+                gap: 10,
               }}
             >
               <View
@@ -594,7 +770,6 @@ export default function ChatWindow() {
                   height: 30,
                   backgroundColor: "#0068ff",
                   borderRadius: 2,
-                  marginRight: 10,
                 }}
               />
               <View style={{ flex: 1 }}>
@@ -602,31 +777,31 @@ export default function ChatWindow() {
                   style={{ fontSize: 12, fontWeight: "700", color: "#0068ff" }}
                 >
                   Đang trả lời{" "}
-                  {replyingMessage.senderId?.profile?.name || "Bạn"}
+                  {replyMessage.senderId?._id === user?.userId
+                    ? "chính mình"
+                    : replyMessage.senderId?.profile?.name || "Bạn"}
                 </Text>
                 <Text
                   numberOfLines={1}
                   style={{ fontSize: 12, color: "#6b7280" }}
                 >
-                  {replyingMessage.content?.text ||
-                    (replyingMessage.content?.file
-                      ? replyingMessage.content.file.fileName
-                      : "[Đính kèm]")}
+                  {replyMessage.content?.text ||
+                    (replyMessage.content?.file
+                      ? "[Tệp đính kèm]"
+                      : "[Biểu cảm]")}
                 </Text>
               </View>
-              <TouchableOpacity
-                onPress={() => dispatch(clearReplyingMessage())}
-              >
+              <TouchableOpacity onPress={() => setReplyMessage(null)}>
                 <Ionicons name="close-circle" size={20} color="#9ca3af" />
               </TouchableOpacity>
             </View>
           )}
 
           <ChatInput
-            conversationId={id!}
+            conversationId={conversation?.conversationId}
             chatName={conversation?.name}
             onSendMessage={handleSendMessage}
-            onSendFiles={handleSendFile}
+            onSendFile={handleSendFile}
             isSelectMode={isSelectMode}
             selectedMessages={selectedMessages}
             onOpenForwardModal={() => setShowForwardModal(true)}
@@ -636,6 +811,7 @@ export default function ChatWindow() {
             }}
           />
 
+          {/* Floating Jump to Newest Button */}
           {showScrollToBottom && (
             <TouchableOpacity
               onPress={handleGoToNewest}
@@ -648,8 +824,13 @@ export default function ChatWindow() {
                 borderRadius: 18,
                 backgroundColor: "white",
                 elevation: 4,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 3,
                 alignItems: "center",
                 justifyContent: "center",
+                zIndex: 10,
               }}
             >
               <Ionicons name="chevron-down" size={24} color="#0068ff" />
@@ -658,18 +839,23 @@ export default function ChatWindow() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* MODALS */}
+      {/* ===== MODALS ===== */}
+
+      {/* Reaction Picker */}
       {reactionPickerMsg && (
         <ReactionPicker
           visible={true}
           onClose={() => setReactionPickerMsg(null)}
           messageId={reactionPickerMsg._id}
-          isMe={reactionPickerMsg.senderId?._id === user?.userId}
+          isMe={reactionPickerMsg.senderId._id === user?.userId}
+          messageReactions={reactionPickerMsg.reactions}
           currentUserId={user?.userId || ""}
-          onReact={() => {}}
-          onRemoveReaction={() => {}}
+          onReact={handleReaction}
+          onRemoveReaction={handleRemoveReaction}
         />
       )}
+
+      {/* Reaction Detail Modal */}
       {reactionModalData && (
         <ReactionModal
           visible={true}
@@ -677,25 +863,166 @@ export default function ChatWindow() {
           reactions={reactionModalData}
         />
       )}
+
+      {/* Forward Modal */}
       <ForwardModal
         visible={showForwardModal}
         onClose={() => setShowForwardModal(false)}
         conversations={conversations}
         selectedMessageIds={selectedMessages}
-        onSubmit={() => {}}
+        onSubmit={handleForward}
         loadingForward={loadingForward}
       />
+
+      {/* Message Detail Modal */}
       <MessageDetailModal
         visible={!!detailMessage}
         onClose={() => setDetailMessage(null)}
         message={detailMessage}
       />
+
+      {/* Conversation Info Sheet */}
       {conversation && (
         <ConversationInfoSheet
           visible={showInfoSheet}
           onClose={() => setShowInfoSheet(false)}
           conversation={conversation}
         />
+      )}
+
+      {contextMenuMsg && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.2)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          {/* Tap outside để close */}
+          <TouchableOpacity
+            style={{ position: "absolute", width: "100%", height: "100%" }}
+            onPress={() => setContextMenuMsg(null)}
+          />
+
+          {/* ===== REACTION BAR ===== */}
+          <View
+            style={{
+              flexDirection: "row",
+              backgroundColor: "white",
+              padding: 8,
+              borderRadius: 30,
+              marginBottom: 10,
+              gap: 10,
+              elevation: 5,
+            }}
+          >
+            {REACTION_EMOJIS.map((emoji) => (
+              <TouchableOpacity
+                key={emoji}
+                onPress={() => {
+                  handleReaction(emoji as any, contextMenuMsg._id);
+                  setContextMenuMsg(null);
+                }}
+              >
+                <Text style={{ fontSize: 22 }}>{EMOJI_MAP[emoji]}</Text>
+              </TouchableOpacity>
+            ))}
+
+            {contextMenuMsg.reactions?.some(
+              (r) => r.userId?._id === user?.userId,
+            ) && (
+              <TouchableOpacity
+                onPress={() => {
+                  handleRemoveReaction(contextMenuMsg._id);
+                  setContextMenuMsg(null);
+                }}
+                style={{
+                  width: 36,
+                  height: 36,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  borderRadius: 18,
+                  backgroundColor: "#f3f4f6",
+                }}
+              >
+                <Ionicons name="close" size={18} color="#6b7280" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* ===== MENU ===== */}
+          <View
+            style={{
+              backgroundColor: "white",
+              borderRadius: 12,
+              paddingVertical: 6,
+              width: 220,
+              elevation: 5,
+            }}
+          >
+            <MenuItem
+              label="Trả lời"
+              onPress={() => {
+                setReplyMessage(contextMenuMsg);
+                setContextMenuMsg(null);
+              }}
+            />
+
+            <MenuItem
+              label="Chuyển tiếp"
+              onPress={() => {
+                setIsSelectMode(true);
+                toggleSelectMessage(contextMenuMsg._id);
+                setShowForwardModal(true);
+                setContextMenuMsg(null);
+              }}
+            />
+
+            <MenuItem
+              label={isPinned ? "Bỏ ghim" : "Ghim"}
+              onPress={() => {
+                handleTogglePin(contextMenuMsg._id);
+                setContextMenuMsg(null);
+              }}
+            />
+
+            <MenuItem
+              label="Xem chi tiết"
+              onPress={() => {
+                setDetailMessage(contextMenuMsg);
+                setContextMenuMsg(null);
+              }}
+            />
+
+            <MenuItem
+              label="Xóa phía tôi"
+              danger
+              onPress={() => {
+                handleDeleteForMe(contextMenuMsg._id);
+                setContextMenuMsg(null);
+              }}
+            />
+
+            {(typeof contextMenuMsg.senderId === "string"
+              ? contextMenuMsg.senderId
+              : contextMenuMsg.senderId?._id) === user?.userId &&
+              !contextMenuMsg.recalled && (
+                <MenuItem
+                  label="Thu hồi"
+                  danger
+                  onPress={() => {
+                    handleRecall(contextMenuMsg._id);
+                    setContextMenuMsg(null);
+                  }}
+                />
+              )}
+          </View>
+        </View>
       )}
     </Container>
   );

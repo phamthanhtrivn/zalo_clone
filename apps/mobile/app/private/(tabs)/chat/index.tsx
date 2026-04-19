@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -11,20 +11,15 @@ import {
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { createSelector } from "@reduxjs/toolkit";
-
 import Container from "@/components/common/Container";
-import Header from "@/components/common/Header";
-import SearchLabel from "@/components/common/SearchLabel";
-
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { useSocket } from "@/contexts/SocketContext";
 import {
   fetchConversations,
   updateConversationFromSocket,
-  type ConversationItem as ConversationItemType,
+  type ConversationItem,
 } from "@/store/slices/conversationSlice";
-import type { RootState } from "@/store/store";
+
 import CreateGroupModal from "@/components/chat/CreateGroupModal";
 
 // --- HELPERS ---
@@ -41,7 +36,7 @@ function formatConversationTime(value?: string) {
   return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
 }
 
-function getLastMessageText(item: ConversationItemType) {
+function getLastMessageText(item: ConversationItem) {
   const lastMsg = item.lastMessage;
   if (!lastMsg) return "Chưa có tin nhắn";
   if (lastMsg.recalled) return "Tin nhắn đã thu hồi";
@@ -51,6 +46,7 @@ function getLastMessageText(item: ConversationItemType) {
       ? `${lastMsg.senderName}: `
       : "";
 
+  // Logic hiển thị icon/text cho các loại tin nhắn đặc biệt
   if (lastMsg.type === "CALL")
     return `[Cuộc gọi ${lastMsg.content?.text?.toLowerCase().includes("video") ? "video" : "thoại"}]`;
   if (lastMsg.content?.file?.type === "IMAGE") return `${prefix}[Hình ảnh]`;
@@ -66,11 +62,21 @@ function getAvatarFallback(name?: string) {
   return name.trim().charAt(0).toUpperCase();
 }
 
-// --- SELECTOR TỐI ƯU (Khôi phục logic lọc ghim của Tung kết hợp Memoize) ---
-const selectVisibleConversations = createSelector(
-  (state: RootState) => state.conversation.items,
-  (items) =>
-    [...items]
+export default function ChatTabScreen() {
+  const dispatch = useAppDispatch();
+  const { socket } = useSocket();
+  const { items, loading, error } = useAppSelector(
+    (state) => state.conversation,
+  );
+  const user = useAppSelector((state) => state.auth.user);
+
+  const [activeTab, setActiveTab] = useState<"PRIORITY" | "OTHER">("PRIORITY");
+
+  const [isCreateGroupVisible, setIsCreateGroupVisible] = useState(false);
+
+  // Logic Sắp xếp & Lọc: Ưu tiên ghim -> Tin nhắn mới nhất
+  const visibleConversations = useMemo(() => {
+    return [...items]
       .filter((c) => !c.hidden)
       .sort((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
@@ -78,25 +84,15 @@ const selectVisibleConversations = createSelector(
           new Date(b.lastMessageAt || 0).getTime() -
           new Date(a.lastMessageAt || 0).getTime()
         );
-      }),
-);
+      });
+  }, [items]);
 
-export default function ChatTabScreen() {
-  const dispatch = useAppDispatch();
-  const { socket } = useSocket();
-  const visibleConversations = useAppSelector(selectVisibleConversations);
-  // Khôi phục biến error từ nhánh Tung
-  const { loading, error, items } = useAppSelector(
-    (state) => state.conversation,
-  );
-
-  const [activeTab, setActiveTab] = useState<"PRIORITY" | "OTHER">("PRIORITY");
-  const [isCreateGroupVisible, setIsCreateGroupVisible] = useState(false);
-
+  // Khởi tạo dữ liệu
   useEffect(() => {
     dispatch(fetchConversations());
   }, [dispatch]);
 
+  // Real-time cập nhật danh sách qua Socket
   useEffect(() => {
     if (!socket) return;
 
@@ -132,7 +128,7 @@ export default function ChatTabScreen() {
     dispatch(fetchConversations());
   }, [dispatch]);
 
-  const renderItem = ({ item }: { item: ConversationItemType }) => {
+  const renderItem = ({ item }: { item: ConversationItem }) => {
     const unreadCount = item.unreadCount ?? 0;
     const lastMessageText = getLastMessageText(item);
     const isGroup = item.type === "GROUP";
@@ -143,6 +139,7 @@ export default function ChatTabScreen() {
         onPress={() => router.push(`/private/chat/${item.conversationId}`)}
         className={`flex-row items-center px-4 py-3 ${item.pinned ? "bg-[#f0f7ff]" : "bg-white"}`}
       >
+        {/* Avatar Area */}
         <View className="w-14 h-14 rounded-full overflow-hidden mr-3 bg-[#dbeafe] items-center justify-center relative">
           {item.avatar ? (
             <Image source={{ uri: item.avatar }} className="w-full h-full" />
@@ -155,11 +152,12 @@ export default function ChatTabScreen() {
           )}
         </View>
 
+        {/* Info Area */}
         <View className="flex-1 min-w-0">
           <View className="flex-row items-center justify-between mb-1">
             <View className="flex-row items-center flex-1 mr-2">
               <Text
-                className="text-[16px] font-semibold text-black"
+                className="text-[16px] font-semibold text-black truncate"
                 numberOfLines={1}
               >
                 {item.name}
@@ -200,28 +198,22 @@ export default function ChatTabScreen() {
 
   return (
     <Container className="bg-[#f5f6f8]">
-      {/* 1. BLUE HEADER (Đồng bộ style Zalo từ Tung vào Header develop) */}
-      <Header
-        gradient
-        leftChild={
-          <TouchableOpacity className="ml-2">
-            <MaterialCommunityIcons
-              name="qrcode-scan"
-              size={22}
-              color="white"
-            />
-          </TouchableOpacity>
-        }
-        centerChild={<SearchLabel color="white" />}
-        rightChild={
-          <TouchableOpacity
-            className="mr-2"
-            onPress={() => setIsCreateGroupVisible(true)}
-          >
-            <Ionicons name="add" size={28} color="white" />
-          </TouchableOpacity>
-        }
-      />
+      {/* 1. BLUE HEADER (ZALO STYLE) */}
+      <View className="h-14 bg-[#0068ff] flex-row items-center px-3">
+        <TouchableOpacity className="w-9 h-9 items-center justify-center">
+          <MaterialCommunityIcons name="qrcode-scan" size={22} color="white" />
+        </TouchableOpacity>
+        <View className="flex-1 h-9 bg-white/20 rounded-lg mx-2 flex-row items-center px-3">
+          <Ionicons name="search-outline" size={18} color="white" />
+          <Text className="text-white/70 ml-2 text-[13px]">Tìm kiếm</Text>
+        </View>
+        <TouchableOpacity
+          className="w-9 h-9 items-center justify-center"
+          onPress={() => setIsCreateGroupVisible(true)}
+        >
+          <Ionicons name="add" size={28} color="white" />
+        </TouchableOpacity>
+      </View>
 
       {/* 2. TAB SWITCHER */}
       <View className="flex-row items-center justify-between px-4 py-2 bg-white border-b border-gray-100">
@@ -247,23 +239,15 @@ export default function ChatTabScreen() {
             </Text>
           </Pressable>
         </View>
-        <Ionicons name="filter-outline" size={18} color="#6b7280" />
+        <View className="flex-row items-center gap-3">
+          <Ionicons name="filter-outline" size={18} color="#6b7280" />
+        </View>
       </View>
 
-      {/* 3. CONVERSATION LIST & ERROR HANDLING */}
+      {/* 3. CONVERSATION LIST */}
       {loading && items.length === 0 ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color="#0068ff" />
-        </View>
-      ) : error ? (
-        <View className="flex-1 items-center justify-center px-10">
-          <Text className="text-red-500 text-center">{error}</Text>
-          <TouchableOpacity
-            onPress={onRefresh}
-            className="mt-4 bg-blue-500 px-4 py-2 rounded-lg"
-          >
-            <Text className="text-white">Thử lại</Text>
-          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -286,7 +270,6 @@ export default function ChatTabScreen() {
           contentContainerStyle={{ paddingBottom: 20 }}
         />
       )}
-
       <CreateGroupModal
         visible={isCreateGroupVisible}
         onClose={() => setIsCreateGroupVisible(false)}

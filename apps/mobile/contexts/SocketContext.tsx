@@ -9,13 +9,12 @@ import { io, Socket } from "socket.io-client";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { config } from "@/constants/config";
 import {
-  fetchConversations, // Khôi phục import từ nhánh Tùng để dùng làm fallback
+  fetchConversations,
   removeConversation,
   updateConversationFromSocket,
   updateConversationSetting,
   updateRecallMessageInConversation,
   addConversationToTop,
-  removeExpiredMessages,
 } from "@/store/slices/conversationSlice";
 
 interface SocketContextType {
@@ -63,9 +62,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     const socketInstance = socketRef.current;
     setSocket(socketInstance);
 
-    // --- CÁC HÀM XỬ LÝ SỰ KIỆN (HANDLERS) ---
+    // --- HANDLERS ---
 
-    // 1. Cập nhật Sidebar khi có tin nhắn mới
+    // 1. Cập nhật tin nhắn cuối cùng & Số lượng chưa đọc cho Sidebar
     const handleNewMessageSidebar = (data: any) => {
       if (!data?.conversationId) return;
 
@@ -76,7 +75,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
             senderName:
               data?.senderId?._id === userId
                 ? "Bạn"
-                : data?.senderId?.profile?.name || "Người dùng",
+                : data?.senderId?.profile?.name,
             content: data?.content ?? {},
             recalled: Boolean(data?.recalled),
             type: data?.type,
@@ -101,21 +100,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       dispatch(updateRecallMessageInConversation(data));
     };
 
-    // 3. Tin nhắn hết hạn (Giữ lại từ develop)
-    const handleMessagesExpired = (data: {
-      conversationId: string;
-      messageIds: string[];
-    }) => {
-      dispatch(removeExpiredMessages(data.messageIds));
-    };
-
-    // 4. Cập nhật cài đặt hội thoại
+    // 3. Cập nhật cài đặt (Ghim, Ẩn, Tắt thông báo)
     const handleConversationUpdate = (data: any) => {
-      // Guard logic từ develop: tránh loop unreadCount
-      if (data.unreadCount !== undefined && Object.keys(data).length === 2)
-        return;
-
       const patch: any = { conversationId: data.conversationId };
+
       if ("pinned" in data) patch.pinned = data.pinned;
       if ("hidden" in data) patch.hidden = data.hidden;
       if ("mutedUntil" in data) {
@@ -130,27 +118,27 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       dispatch(updateConversationSetting(patch));
     };
 
-    // 5. Hội thoại mới (Hợp nhất logic Join Room của Tùng)
-    const handleNewConversation = (conversation: any) => {
-      if (!conversation?.conversationId) return;
-      // Sử dụng socketRef để đảm bảo an toàn instance
-      socketRef.current?.emit("join_room", conversation.conversationId);
-      dispatch(addConversationToTop(conversation));
-    };
-
-    // 6. Xử lý xóa/rời nhóm (Khôi phục logic chặt chẽ của Tùng)
+    // 4. Xóa/Rời khỏi hội thoại
     const handleRemoveFromConversation = (data: {
       conversationId?: string;
     }) => {
       if (!data?.conversationId) return;
       dispatch(removeConversation(data.conversationId));
-      // Fallback: Đồng bộ lại danh sách nếu cần (Optional)
-      // dispatch(fetchConversations(userId));
+    };
+
+    const handleNewConversation = (conversation: any) => {
+      if (!conversation?.conversationId) return;
+
+      socketRef.current?.emit("join_room", conversation.conversationId);
+
+      dispatch(addConversationToTop(conversation));
     };
 
     const handleGroupDisbanded = (payload: any) => {
       const convId = payload?.conversationId || payload?.id;
-      if (convId) dispatch(removeConversation(convId));
+      if (convId) {
+        dispatch(removeConversation(convId));
+      }
     };
 
     const handleGroupSettingsUpdate = (data: any) => {
@@ -162,12 +150,24 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       );
     };
 
-    // --- ĐĂNG KÝ SỰ KIỆN ---
+    const handleGroupUpdate = (data: any) => {
+      dispatch(
+        updateConversationSetting({
+          conversationId: data.conversationId,
+          name: data.name,
+          avatar: data.avatar,
+          group: data.group,
+        }),
+      );
+    };
+
+    socketInstance.on("group_settings_updated", handleGroupSettingsUpdate);
+
+    // --- REGISTER EVENTS ---
     socketInstance.on("connect", () => setIsConnected(true));
     socketInstance.on("disconnect", () => setIsConnected(false));
     socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
     socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
-    socketInstance.on("messages_expired", handleMessagesExpired);
     socketInstance.on("conversation_setting:update", handleConversationUpdate);
     socketInstance.on("conversation_setting:delete", (data) =>
       dispatch(removeConversation(data.conversationId)),
@@ -179,40 +179,20 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on("new_conversation", handleNewConversation);
     socketInstance.on("group_disbanded", handleGroupDisbanded);
     socketInstance.on("group_settings_updated", handleGroupSettingsUpdate);
-    socketInstance.on("group_updated", (data: any) => {
-      dispatch(
-        updateConversationSetting({
-          conversationId: data.conversationId,
-          name: data.name,
-          avatar: data.avatar,
-          group: data.group,
-        }),
-      );
-    });
+    socketInstance.on("group_updated", handleGroupUpdate);
 
-    // --- HỦY ĐĂNG KÝ (CLEANUP) ---
     return () => {
       socketInstance.off("connect");
       socketInstance.off("disconnect");
-      socketInstance.off("new_message_sidebar", handleNewMessageSidebar);
-      socketInstance.off(
-        "message_recalled_sidebar",
-        handleRecallMessageSidebar,
-      );
-      socketInstance.off("messages_expired", handleMessagesExpired);
-      socketInstance.off(
-        "conversation_setting:update",
-        handleConversationUpdate,
-      );
+      socketInstance.off("new_message_sidebar");
+      socketInstance.off("message_recalled_sidebar");
+      socketInstance.off("conversation_setting:update");
       socketInstance.off("conversation_setting:delete");
-      socketInstance.off(
-        "removed_from_conversation",
-        handleRemoveFromConversation,
-      );
-      socketInstance.off("new_conversation", handleNewConversation);
-      socketInstance.off("group_disbanded", handleGroupDisbanded);
+      socketInstance.off("removed_from_conversation");
+      socketInstance.off("new_conversation");
+      socketInstance.off("group_disbanded");
       socketInstance.off("group_settings_updated", handleGroupSettingsUpdate);
-      socketInstance.off("group_updated");
+      socketInstance.off("group_updated", handleGroupUpdate);
     };
   }, [dispatch, user?.userId]);
 
