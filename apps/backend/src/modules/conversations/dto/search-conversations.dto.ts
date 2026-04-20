@@ -1,4 +1,11 @@
-import { IsIn, IsMongoId, IsNotEmpty, IsNumberString, IsOptional, Matches } from 'class-validator';
+import {
+  IsIn,
+  IsMongoId,
+  IsNotEmpty,
+  IsNumberString,
+  IsOptional,
+  Matches,
+} from 'class-validator';
 
 export class SearchConversationsDto {
   @IsMongoId()
