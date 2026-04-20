@@ -1,6 +1,5 @@
 import {
   Injectable,
-  Body,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -8,7 +7,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schemas/user.schema';
 import { Model } from 'mongoose';
 import { RequestFriendDto } from './dto/request-friend.dto';
-import { FriendStatus } from '@zalo-clone/shared-types';
 import { updateFriendStatus } from './helper/updateFriendStatus.helper';
 import { checkFriendStatus } from './helper/checkFriendStaus.helper';
 import { SearchFriendDto } from './dto/search-friend.dto';
@@ -18,14 +16,17 @@ import { flattenObject } from './helper/flattenObject.helper';
 import { StorageService } from '../../common/storage/storage.service';
 import { getListUserForStatus } from './helper/getListUserForStatus.helper';
 import { format } from './helper/format.helper';
-import { Gender } from '@zalo-clone/shared-types';
 import * as bcrypt from 'bcrypt';
+import { Gender } from 'src/common/types/enums/gender';
+import { FriendStatus } from 'src/common/types/enums/friend-status';
+import { ChatGateway } from '../chat/chat.gateway';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     private readonly storageService: StorageService,
+    private readonly chatGateway: ChatGateway,
   ) {}
 
   async findByPhone(phone: string) {
@@ -99,6 +100,22 @@ export class UsersService {
       friendId,
       FriendStatus.PENDING,
     );
+
+    const user = await this.userModel
+      .findById(userId)
+      .select('profile.name profile.avatarUrl') // Chỉ lấy những trường cần thiết
+      .lean();
+
+    const payload = {
+      friendId: user?._id.toString(),
+      name: user?.profile?.name,
+      avatarUrl:
+        this.storageService.signFileUrl(user?.profile?.avatarUrl ?? '') || '',
+    };
+
+    this.chatGateway.server
+      .to(body.friendId)
+      .emit('receive_friend_request', payload);
     // Gui yeu cau lai lan nua
     if (check) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
@@ -108,6 +125,7 @@ export class UsersService {
         userId,
         FriendStatus.REQUESTED,
       );
+
       return { userId, friendId };
     }
 
@@ -135,6 +153,7 @@ export class UsersService {
     });
     return { userId, friendId };
   }
+
   // [POST] /api/users/accept-friend
   async acceptFriend(body: RequestFriendDto) {
     const { userId, friendId } = body;
@@ -145,6 +164,21 @@ export class UsersService {
       friendId,
       FriendStatus.REQUESTED,
     );
+
+    const user = await this.userModel
+      .findById(userId)
+      .select('profile.name profile.avatarUrl') // Chỉ lấy những trường cần thiết
+      .lean();
+
+    const payload = {
+      friendId: user?._id.toString(),
+      name: user?.profile?.name,
+      avatarUrl:
+        this.storageService.signFileUrl(user?.profile?.avatarUrl ?? '') || '',
+    };
+
+    this.chatGateway.server.to(body.friendId).emit('friend_accepted', payload);
+
     if (check) {
       // update status user
       await updateFriendStatus(
@@ -232,42 +266,32 @@ export class UsersService {
   // [POST] /api/users/search-friend
   async searchFriend(body: SearchFriendDto) {
     const { userId, key } = body;
-    const users = await this.userModel
-      .find({
-        $or: [
-          {
-            phone: key,
-          },
-          {
-            $and: [
-              { 'friends.friendId': userId },
-              { 'friends.status': FriendStatus.ACCEPTED },
-              { 'profile.name': { $regex: `${key}`, $options: 'i' } },
-            ],
-          },
-        ],
-      })
-      .select({ _id: true, profile: true });
+    const users = await getListUserForStatus(
+      this.userModel,
+      FriendStatus.ACCEPTED,
+      this.storageService,
+      userId,
+    );
+    let userFormat = format(users);
 
-    const userMap = users?.map((item) => {
-      return {
-        _id: item._id,
-        name: item.profile?.name,
-        avatarUrl: this.storageService.signFileUrl(
-          item.profile?.avatarUrl ? item.profile?.avatarUrl : '',
-        ),
-      };
-    });
-
-    const usersFormat = format(userMap);
-
-    return { users: usersFormat };
+    if (key && key.trim().length > 0) {
+      const searchKey = key.trim().toLowerCase();
+      userFormat = userFormat
+        .map((group) => ({
+          ...group,
+          friends: group.friends.filter((friend) =>
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+            friend.name.toLowerCase().includes(searchKey),
+          ),
+        }))
+        .filter((group) => group.friends.length > 0);
+    }
+    return { users: userFormat };
   }
   // [POST] /api/users/suggest-friend
   async suggestFriend(userId: string) {
     // id ung cu vien co the kb
     const candidatesIds = await generateSuggestFriends(this.userModel, userId);
-    console.log('candidatesIds : ', candidatesIds);
     const friendsUser = await this.userModel
       .findOne({ _id: userId })
       .select({ friends: 1 })
@@ -420,8 +444,40 @@ export class UsersService {
       },
     };
 
-    console.log(data);
-
     return data;
+  }
+  async searchFriendByPhone(currentUserId: string, phone: string) {
+    const targetUser = await this.userModel
+      .findOne(
+        {
+          phone: phone,
+        },
+        {
+          _id: 1,
+          'profile.name': 1,
+          'profile.avatarUrl': 1,
+          friends: {
+            $elemMatch: { friendId: currentUserId },
+          },
+        },
+      )
+      .lean();
+
+    if (!targetUser) {
+      return null;
+    }
+
+    const relationship = targetUser.friends?.[0];
+
+    const user = {
+      friendId: targetUser._id.toString(),
+      name: targetUser.profile?.name || '',
+      avatarUrl: targetUser.profile?.avatarUrl
+        ? this.storageService.signFileUrl(targetUser.profile?.avatarUrl || '')
+        : '',
+      status: relationship ? relationship.status : 'NONE',
+    };
+
+    return user;
   }
 }

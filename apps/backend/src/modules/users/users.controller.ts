@@ -1,3 +1,4 @@
+import { RequestFriendPhone } from './dto/request-friend-phone';
 import {
   Body,
   Controller,
@@ -5,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Request,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -48,35 +50,38 @@ export class UsersController {
     return this.usersService.cancelFriend(body);
   }
   // theo tên người đã kb
-  // theo std
   @Post('search-friend')
   searchFriend(@Body() body: SearchFriendDto) {
     return this.usersService.searchFriend(body);
   }
-  @Patch('update-information-user/:id')
+  @Post('search-friend-phone')
+  searchFriendPhone(@Body() body: RequestFriendPhone) {
+    return this.usersService.searchFriendByPhone(body.userId, body.phone);
+  }
+  @Patch('update-information-user')
   @UseInterceptors(FileInterceptor('avatar'))
   updateInformationUser(
-    @Param('id') id: string,
+    @Request() req,
     @Body() body: InforUser,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.usersService.updateInformationUser(body, file, id);
+    return this.usersService.updateInformationUser(body, file, req.user.userId);
   }
-  @Post('suggest-friend/:userId')
-  suggestFriend(@Param('userId') userId: string) {
-    return this.usersService.suggestFriend(userId);
+  @Post('suggest-friend')
+  suggestFriend(@Request() req) {
+    return this.usersService.suggestFriend(req.user.userId);
   }
-  @Get('list-friends/:userId')
-  getListFriends(@Param('userId') userId: string) {
-    return this.usersService.getListFriends(userId);
+  @Get('list-friends')
+  getListFriends(@Request() req) {
+    return this.usersService.getListFriends(req.user.userId);
   }
-  @Get('received-friends-requests/:userId')
-  getReceivedFriendRequests(@Param('userId') userId: string) {
-    return this.usersService.getReceivedFriendRequests(userId);
+  @Get('received-friends-requests')
+  getReceivedFriendRequests(@Request() req) {
+    return this.usersService.getReceivedFriendRequests(req.user.userId);
   }
-  @Get('sent-friends-requests/:userId')
-  getSentFriendRequests(@Param('userId') userId: string) {
-    return this.usersService.getSentFriendRequests(userId);
+  @Get('sent-friends-requests')
+  getSentFriendRequests(@Request() req) {
+    return this.usersService.getSentFriendRequests(req.user.userId);
   }
   @Get('user-information/:userId')
   getUserInformation(@Param('userId') userId: string) {

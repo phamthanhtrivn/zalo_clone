@@ -31,6 +31,7 @@ const ModelProfile = ({ user, open, onClose, setUser }: ModelProfileProps) => {
         const data = await userService.updateProfile(formData);
         if (data.success) {
           const newUser = data.data;
+          console.log(newUser);
           setUser((prev: any) => ({ ...prev, profile: newUser.profile }));
         }
       } catch (err) {

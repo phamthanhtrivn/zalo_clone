@@ -9,7 +9,6 @@ export async function generateSuggestFriends(
   const users = await userModel.findById(userId).select({ friends: 1 });
   const friendIds: string[] =
     users?.friends?.map((f) => f.friendId.toString()) ?? [];
-  console.log('friends : ', friendIds);
   const queue: { userId: string; level: number }[] = [];
   for (const id of friendIds) {
     queue.push({ userId: id, level: 1 });
@@ -28,8 +27,6 @@ export async function generateSuggestFriends(
       const users = await userModel
         .findById(item.userId)
         .select({ friends: 1 });
-      console.log('id : ', item.userId);
-      console.log('friendIds : ', users);
 
       const friendIds: string[] =
         users?.friends?.map((f) => f.friendId.toString()) ?? [];

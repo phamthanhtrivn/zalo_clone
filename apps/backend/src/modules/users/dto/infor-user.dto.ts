@@ -9,7 +9,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { Gender } from '@zalo-clone/shared-types';
+import { Gender } from 'src/common/types/enums/gender';
 
 class ProfileDto {
   @IsOptional()

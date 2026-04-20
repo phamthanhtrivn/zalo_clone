@@ -6,16 +6,15 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Gender } from '@zalo-clone/shared-types';
 import * as bcrypt from 'bcrypt';
 import { AuthUser } from '../types/auth.type';
 import { TokenService } from './jwt.service';
 import { SessionService } from './session.service';
 import { Purpose } from '../dto/verify-otp.dto';
+import { Gender } from 'src/common/types/enums/gender';
 
 @Injectable()
 export class AuthService {

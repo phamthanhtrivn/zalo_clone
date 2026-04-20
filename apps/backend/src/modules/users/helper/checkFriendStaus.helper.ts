@@ -1,4 +1,4 @@
-import { FriendStatus } from '@zalo-clone/shared-types';
+import { FriendStatus } from 'src/common/types/enums/friend-status';
 import { User } from '../schemas/user.schema';
 import { Model } from 'mongoose';
 

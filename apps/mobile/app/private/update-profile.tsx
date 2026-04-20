@@ -56,7 +56,7 @@ export default function ProfileUpdateScreen() {
         formData.append("profile[name]", name);
         formData.append("profile[gender]", gender);
         formData.append("profile[birthday]", date.toISOString());
-        const data = await userService.updateProfile(formData, userInfo._id);
+        const data = await userService.updateProfile(formData);
         console.log(data);
         dispatch(
           updateUserProfile({
@@ -102,12 +102,11 @@ export default function ProfileUpdateScreen() {
             name: filename,
             type: type,
           } as any);
-          
-          const data = await userService.updateProfile(formData, userInfo._id);
-          console.log("data update ", data);
+
+          const data = await userService.updateProfile(formData);
           dispatch(
             updateUserProfile({
-              avatarUrl : data.profile.avatarUrl
+              avatarUrl: data.profile.avatarUrl,
             }),
           );
         } catch (err) {

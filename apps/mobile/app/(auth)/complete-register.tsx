@@ -14,9 +14,15 @@ import {
 } from "react-native";
 import DatePicker from "react-native-date-picker";
 import { formatDate } from "@/utils/formater";
+<<<<<<< HEAD
 import { Gender } from "../../../../packages/shared-types/src/enums/gender";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { completeSignUp } from "@/store/auth/authThunk";
+=======
+import { useAppDispatch, useAppSelector } from "@/store/store";
+import { completeSignUp } from "@/store/auth/authThunk";
+import { Gender } from "@/utils/types/enums/gender";
+>>>>>>> 30cf414fe9680fb67fe94f458295ad0a4eacf8dd
 
 export default function CompleteRegister() {
   const dispatch = useAppDispatch();

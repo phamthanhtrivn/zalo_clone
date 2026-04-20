@@ -1,28 +1,29 @@
 import { apiClient } from "./apiClient";
 
-const userId = "69a7cf6cdf7c64ce18685dc6";
 export const userService = {
   getListFriends: async () => {
-    const response = await apiClient.get(`users/list-friends/${userId}`);
+    const response = await apiClient.get(`/api/users/list-friends`);
     return response.data;
   },
 
-  searchFriend: async (key: string) => {
-    const response = await apiClient.post("users/search-friend", {
+  searchFriend: async (key: string, userId : string) => {
+    console.log("key : ", key);
+    console.log("userId : ", userId);
+    const response = await apiClient.post("/api/users/search-friend", {
       userId: userId,
       key,
     });
     return response.data;
   },
-  cancelFriend: async (friendId: string) => {
-    const response = await apiClient.post("users/cancel-friend", {
+  cancelFriend: async (friendId: string,  userId : string) => {
+    const response = await apiClient.post("/api/users/cancel-friend", {
       userId: userId,
       friendId: friendId,
     });
     return response.data;
   },
-  blockFriend: async (friendId: string) => {
-    const response = await apiClient.post("users/block-friend", {
+  blockFriend: async (friendId: string, userId : string) => {
+    const response = await apiClient.post("/api/users/block-friend", {
       userId: userId,
       friendId: friendId,
     });
@@ -30,64 +31,77 @@ export const userService = {
   },
   receivedFriendRequests: async () => {
     const response = await apiClient.get(
-      `users/received-friends-requests/${userId}`,
+      `/api/users/received-friends-requests`,
     );
     return response.data;
   },
 
   sentFriendRequests: async () => {
     const response = await apiClient.get(
-      `users/sent-friends-requests/${userId}`,
+      `/api/users/sent-friends-requests`,
     );
     return response.data;
   },
 
   suggestFriend: async () => {
-    const response = await apiClient.post(`users/suggest-friend/${userId}`);
+    const response = await apiClient.post(`/api/users/suggest-friend`);
     return response.data;
   },
 
-  acceptFriend: async (friendId: string) => {
-    const response = await apiClient.post(`users/accept-friend`, {
+  acceptFriend: async (friendId: string, userId : string) => {
+    const response = await apiClient.post(`/api/users/accept-friend`, {
       userId: userId,
       friendId: friendId,
     });
     return response.data;
   },
 
-  rejectFriend: async (friendId: string) => {
-    const response = await apiClient.post(`users/reject-friend`, {
+  rejectFriend: async (friendId: string, userId : string) => {
+    const response = await apiClient.post(`/api/users/reject-friend`, {
       userId: userId,
       friendId: friendId,
     });
     return response.data;
   },
 
-  addFriend: async (friendId: string) => {
-    const response = await apiClient.post(`users/add-friend`, {
+  addFriend: async (friendId: string, userId : string) => {
+    const response = await apiClient.post(`/api/users/add-friend`, {
       userId: userId,
       friendId: friendId,
     });
     return response.data;
   },
 
-  getProfile: async () => {
-    const response = await apiClient.get("/users/profile");
+  getProfile: async (userId : string) => {
+    const response = await apiClient.get(`/api/users/user-information/${userId}`);
     return response.data;
   },
 
   updateProfile: async (data: any) => {
-    const response = await apiClient.patch("/users/profile", data);
+    const response = await apiClient.patch(
+      `/api/users/update-information-user`,
+      data,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      },
+    );
     return response.data;
   },
 
   getSettings: async () => {
-    const response = await apiClient.get("/users/settings");
+    const response = await apiClient.get("/api/users/settings");
     return response.data;
   },
 
   updateSettings: async (settings: any) => {
-    const response = await apiClient.patch("/users/settings", settings);
+    const response = await apiClient.patch("/api/users/settings", settings);
     return response.data;
   },
+
+  searchFriendByPhone : async (userId : string, phone : string) => {
+    const response = await apiClient.post("/api/users/search-friend-phone", {userId, phone});
+    return response.data;
+  }
 };

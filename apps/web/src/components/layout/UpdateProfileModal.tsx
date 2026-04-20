@@ -42,7 +42,7 @@ const UpdateProfileModal = ({ user, onClose, setUser }: any) => {
             if(data.success){
                const newUser = data.data;
                console.log('newUser', newUser);
-            //    setUser((prev : any) => ({ ...prev, profile: newUser.profile }));
+               setUser((prev : any) => ({ ...prev, profile: newUser.profile }));
             }
             onClose();
         }

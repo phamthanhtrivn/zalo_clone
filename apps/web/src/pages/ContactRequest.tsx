@@ -4,11 +4,16 @@ import { userService } from "@/services/user.service";
 import UserRequestCart from "@/components/layout/UserRequestCard";
 import UserSendCart from "@/components/layout/UserSendCart";
 import UserSuggestCart from "@/components/layout/UserSuggestCart";
+import { useSelector } from "react-redux";
+import { useSocket } from "@/contexts/SocketContext";
+import { toast } from "react-toastify";
 
 const ContactRequest = () => {
   const [receivedUsers, setReceivedUsers] = useState<any>([]);
   const [sendUsers, setSendUsers] = useState<any>([]);
   const [suggestUsers, setSuggestUsers] = useState<any>([]);
+  const userId = useSelector((item: any) => item.auth.user.userId);
+  const { socket } = useSocket();
 
   useEffect(() => {
     const getUsers = async () => {
@@ -32,31 +37,65 @@ const ContactRequest = () => {
     getUsers();
   }, []);
 
+  useEffect(() => {
+    if (!socket) return;
+
+    // 1. Xử lý khi có người khác gửi lời mời cho mình
+    const handleReceiveRequest = (data: any) => {
+      console.log("Nhận lời mời mới:", data);
+      setReceivedUsers((prev: any) => [data, ...prev]);
+      toast.info(`Bạn có lời mời kết bạn mới từ ${data.name}!`);
+    };
+
+    // 2. Xử lý khi lời mời mình gửi đi được đối phương chấp nhận
+    const handleFriendAccepted = (data: any) => {
+      console.log("Lời mời đã được chấp nhận:", data);
+      setSendUsers((prev: any) =>
+        prev.filter((user: any) => user.friendId !== data.friendId),
+      );
+
+      toast.success(`${data.name} đã chấp nhận lời mời kết bạn!`);
+    };
+
+    // Đăng ký các sự kiện
+    socket.on("receive_friend_request", handleReceiveRequest);
+    socket.on("friend_accepted", handleFriendAccepted);
+
+    // Hàm cleanup
+    return () => {
+      socket.off("receive_friend_request", handleReceiveRequest);
+      socket.off("friend_accepted", handleFriendAccepted);
+    };
+  }, [socket]);
+
+
   const handelAccept = (id: string) => {
     const acceptFriend = async () => {
       try {
-        const data = await userService.acceptFriend(id);
-        console.log(data);
+        const data = await userService.acceptFriend(id, userId);
         if (data.data) {
           setReceivedUsers((prev: any) =>
             prev.filter((item: any) => item.friendId != id),
           );
+          toast.success("Kết bạn thành công");
         }
       } catch (err) {
         console.log(err);
       }
     };
+
     acceptFriend();
   };
 
   const handelReject = (id: string) => {
     const rejectFriend = async () => {
       try {
-        const data = await userService.rejectFriend(id);
+        const data = await userService.rejectFriend(id, userId);
         if (data.data) {
           setReceivedUsers((prev: any) =>
             prev.filter((item: any) => item.friendId != id),
           );
+          toast.success("Từ chối thành công");
         }
       } catch (err) {
         console.log(err);
@@ -68,11 +107,12 @@ const ContactRequest = () => {
   const handelRecall = (id: string) => {
     const recallFriend = async () => {
       try {
-        const data = await userService.cancelFriend(id);
+        const data = await userService.cancelFriend(id, userId);
         if (data.data) {
           setSendUsers((prev: any) =>
             prev.filter((item: any) => item.friendId != id),
           );
+          toast.success("Thu hồi thành công");
         }
       } catch (err) {
         console.log(err);
@@ -84,13 +124,14 @@ const ContactRequest = () => {
   const handelAddFriend = (id: string) => {
     const addFriend = async () => {
       try {
-        const data = await userService.addFriend(id);
+        const data = await userService.addFriend(id, userId);
         if (data.data) {
           const item = suggestUsers.find((user: any) => user.friendId == id);
           setSuggestUsers((prev: any) =>
             prev.filter((item: any) => item.friendId != id),
           );
           setSendUsers([...sendUsers, item]);
+          toast.success("Thêm bạn thành công");
         }
       } catch (err) {
         console.log(err);
@@ -100,6 +141,7 @@ const ContactRequest = () => {
   };
 
   const handelSkip = (id: string) => {
+    toast.success("Bỏ qua thành công");
     setSuggestUsers((prev: any) =>
       prev.filter((item: any) => item.friendId != id),
     );
@@ -130,7 +172,7 @@ const ContactRequest = () => {
                   <UserRequestCart
                     key={item.friendId}
                     item={item}
-                    handelAccept={handelAccept}
+                    handelAccept={() => handelAccept(item.friendId)}
                     handelReject={handelReject}
                   />
                 ))}

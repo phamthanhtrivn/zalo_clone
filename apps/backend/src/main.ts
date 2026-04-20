@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import cookieParser from 'cookie-parser';
 
 import * as dns from 'node:dns';
 dns.setServers(['1.1.1.1']);
@@ -22,10 +23,25 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port');
+  const clientUrl = configService.get<string>('client_url');
+
+  app.use(cookieParser());
+  app.enableCors({
+    origin: clientUrl,
+
+    credentials: true,
+
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+
+    allowedHeaders: 'Content-Type,Accept,Authorization',
+  });
 
   app.setGlobalPrefix('/api');
   app.enableVersioning({
     type: VersioningType.URI,
+  });
+  app.enableCors({
+    origin: true,
   });
 
   app.useGlobalPipes(

@@ -28,6 +28,7 @@ export default function SettingScreen() {
 
   console.log("userInfo : ", userInfo);
 
+<<<<<<< HEAD
   // useEffect(() => {
   //   if (!user?.userId) return;
 
@@ -44,6 +45,8 @@ export default function SettingScreen() {
 
   //   getUserInfo();
   // }, [user]);
+=======
+>>>>>>> 30cf414fe9680fb67fe94f458295ad0a4eacf8dd
 
   const handleOnLogout = async () => {
     try {
