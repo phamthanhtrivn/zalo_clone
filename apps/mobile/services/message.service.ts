@@ -2,147 +2,138 @@ import { EmojiType } from "@/constants/emoji.constant";
 import { api } from "./api";
 
 export const messageService = {
+  // 1. Lấy tin nhắn cũ hơn (Pagination) - Default limit 20 cho mượt
   getMessagesFromConversation: async (
     conversationId: string,
     userId: string,
     cursor?: string | null,
-    limit: number = 15,
+    limit: number = 20,
   ) => {
-    const response = await api.get(`/messages/conversation/${conversationId}`, {
-      params: {
-        userId,
-        cursor,
-        limit,
-      },
+    return await api.get(`/messages/conversation/${conversationId}`, {
+      params: { userId, cursor, limit },
     });
-    return response;
   },
+
+  // 2. Lấy tin nhắn mới hơn
   getNewerMessages: async (
     conversationId: string,
     userId: string,
     cursor?: string | null,
-    limit: number = 15,
+    limit: number = 20,
   ) => {
-    const response = await api.get(
-      `/messages/conversation/${conversationId}/newer`,
-      {
-        params: {
-          userId,
-          cursor,
-          limit,
-        },
-      },
-    );
-    return response;
+    return await api.get(`/messages/conversation/${conversationId}/newer`, {
+      params: { userId, cursor, limit },
+    });
   },
+
+  // 3. Quản lý tin nhắn ghim
   getPinnedMessages: async (conversationId: string, userId: string) => {
-    const response = await api.get(
-      `/messages/conversation/${conversationId}/pinned`,
-      {
-        params: { userId },
-      },
-    );
-    return response;
+    return await api.get(`/messages/conversation/${conversationId}/pinned`, {
+      params: { userId },
+    });
   },
+
   getMessagesAroundPinnedMessage: async (
     conversationId: string,
     userId: string,
     messageId: string,
-    limit: number = 15,
+    limit: number = 20,
   ) => {
-    const response = await api.get(
-      `/messages/conversation/${conversationId}/around`,
-      {
-        params: { userId, messageId, limit },
-      },
-    );
-    return response;
+    return await api.get(`/messages/conversation/${conversationId}/around`, {
+      params: { userId, messageId, limit },
+    });
   },
+
+  // 4. Reaction & Interaction
   reactionMessage: async (
     conversationId: string,
     userId: string,
     emojiType: EmojiType,
     messageId: string,
   ) => {
-    const response = await api.patch(`/messages/reaction`, {
+    return await api.patch(`/messages/reaction`, {
       conversationId,
       userId,
       emojiType,
       messageId,
     });
-    return response;
   },
+
   removeReaction: async (
     userId: string,
     messageId: string,
     conversationId: string,
   ) => {
-    const response = await api.patch(`/messages/remove-reaction`, {
+    return await api.patch(`/messages/remove-reaction`, {
       userId,
       messageId,
       conversationId,
     });
-    return response;
   },
+
   recalledMessage: async (
     userId: string,
     messageId: string,
     conversationId: string,
   ) => {
-    const response = await api.patch(`/messages/recalled`, {
+    return await api.patch(`/messages/recalled`, {
       userId,
       messageId,
       conversationId,
     });
-    return response;
   },
+
   pinnedMessage: async (
     userId: string,
     messageId: string,
     conversationId: string,
   ) => {
-    const response = await api.patch(`/messages/pinned`, {
+    return await api.patch(`/messages/pinned`, {
       userId,
       messageId,
       conversationId,
     });
-    return response;
   },
+
+  deleteMessageForMe: async (
+    userId: string,
+    messageId: string,
+    conversationId: string,
+  ) => {
+    return await api.patch(`/messages/delete-for-me`, {
+      userId,
+      messageId,
+      conversationId,
+    });
+  },
+
+  // 5. Gửi tin nhắn
   sendMessage: async (
     conversationId: string,
     senderId: string,
-
     repliedId?: string,
     content?: { text?: string; icon?: string },
-    files?: File[] | null,
+    files?: any[] | null,
   ) => {
     if (files && files.length > 0) {
       const formData = new FormData();
-
       formData.append("conversationId", conversationId);
       formData.append("senderId", senderId);
 
-      if (repliedId) {
-        formData.append("repliedId", repliedId);
-      }
-
-      if (content) {
-        formData.append("content", JSON.stringify(content));
-      }
+      if (repliedId) formData.append("repliedId", repliedId);
+      if (content) formData.append("content", JSON.stringify(content));
 
       files.forEach((file) => {
-        formData.append("files", file);
+        formData.append("files", file as any);
       });
 
       const response = await api.post(`/messages`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        headers: { "Content-Type": "multipart/form-data" },
       });
-
       return response.data;
     }
 
+    // Gửi tin nhắn text thuần túy
     const response = await api.post(`/messages`, {
       conversationId,
       senderId,
@@ -152,66 +143,66 @@ export const messageService = {
     return response.data;
   },
 
-  // Mobile-specific: upload files using React Native FormData ({uri, name, type})
+  // Dùng cho các trường hợp đặc biệt đã đóng gói sẵn FormData
   sendFormData: async (formData: FormData) => {
     const response = await api.post(`/messages`, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
+      headers: { "Content-Type": "multipart/form-data" },
     });
     return response.data;
   },
-  deleteMessageForMe: async (
-    userId: string,
+
+  // 6. Trạng thái đọc & Call
+  readReceipt: async (userId: string, conversationId: string) => {
+    return await api.patch(`/messages/read-receipt`, {
+      userId,
+      conversationId,
+    });
+  },
+
+  updateCallStatus: async (
     messageId: string,
+    status: string,
     conversationId: string,
   ) => {
-    const response = await api.patch(`/messages/delete-for-me`, {
-      userId,
-      messageId,
-      conversationId,
-    });
-    return response;
+    return await api.patch(
+      `/messages/conversation/${conversationId}/call-status`,
+      {
+        messageId,
+        status,
+      },
+    );
   },
-  readReceipt: async (userId: string, conversationId: string) => {
-    const response = await api.patch(`/messages/read-receipt`, {
-      userId,
-      conversationId,
-    });
-    return response;
-  },
+
+  // 7. Media & Tài liệu
   getMediasPreview: async (userId: string, conversationId: string) => {
-    const response = await api.get(
+    return await api.get(
       `/messages/conversation/${conversationId}/medias/preview`,
       {
         params: { userId },
       },
     );
-    return response;
   },
+
   getMediasFileType: async (
     conversationId: string,
     userId: string,
     type: "FILE" | "LINK",
   ) => {
-    const response = await api.get(
-      `/messages/conversation/${conversationId}/medias`,
-      {
-        params: { userId, type },
-      },
-    );
-    return response;
+    return await api.get(`/messages/conversation/${conversationId}/medias`, {
+      params: { userId, type },
+    });
   },
+
+  // 8. Chuyển tiếp (Forward)
   forwardMessagesToConversations: async (
     userId: string,
     messageIds: string[],
     targetConversationIds: string[],
   ) => {
-    const response = await api.post(`/messages/forward`, {
+    return await api.post(`/messages/forward`, {
       userId,
       messageIds,
       targetConversationIds,
     });
-    return response;
   },
 };

@@ -37,8 +37,24 @@ export const conversationService = {
   getConversationsFromUserId: (userId: string) =>
     api.get(`/conversations/user/${userId}`),
 
-  updateGroupSettings: (id: string, payload: any) =>
-    api.patch(`/conversations/${id}/settings`, payload),
+  updateGroupSettings: (
+    id: string,
+    payload: {
+      allowMembersInvite?: boolean;
+      approvalRequired?: boolean;
+      allowMembersSendMessages?: boolean;
+    },
+  ) => api.patch(`/conversations/${id}/settings`, payload),
+
+  updateConversationSetting: (
+    id: string,
+    payload: {
+      pinned?: boolean;
+      muted?: boolean;
+      mutedUntil?: string | null;
+      hidden?: boolean;
+    },
+  ) => api.patch(`/conversations/${id}/personal-settings`, payload),
 
   getJoinRequests: (id: string) =>
     api.get(`/conversations/${id}/join-requests`),
