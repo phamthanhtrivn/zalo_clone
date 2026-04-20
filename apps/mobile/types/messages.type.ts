@@ -13,19 +13,17 @@ export interface MessagesType {
   content: {
     text: string | null;
     icon: string | null;
-
     files: File[];
   };
   pinned: boolean;
   recalled: boolean;
   reactions: ReactionType[];
   readReceipts: ReadReceiptType[];
-  repliedId: string | null;
+  repliedId: MessagesType | null;
   call: string | null;
   expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
-  expired?: boolean;
 }
 
 export interface ReactionType {
@@ -43,7 +41,6 @@ export interface ReactionType {
   createdAt: string;
   updatedAt: string;
 }
-
 export interface ReadReceiptType {
   userId: {
     _id: string;

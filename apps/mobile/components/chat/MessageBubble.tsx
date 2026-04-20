@@ -12,13 +12,13 @@ import {
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
-
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { formatTime } from "@/utils/format-message-time..util";
 import type { MessagesType, ReactionType } from "@/types/messages.type";
 import ReactionSummary from "./ReactionSummary";
 import { truncateFileName } from "@/utils/render-file";
+
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 type Props = {
@@ -34,7 +34,6 @@ type Props = {
   onOpenReactionModal?: (reactions: ReactionType[]) => void;
   renderReadReceipts?: boolean;
   isHighlighted?: boolean;
-
   onReplyPress?: (messageId: string) => void;
   isGroup: boolean;
 };
@@ -76,6 +75,7 @@ const getFileIconName = (fileName: string): { name: any; color: string } => {
     return { name: "musical-notes", color: "#8b5cf6" };
   return { name: "document-outline", color: "#6b7280" };
 };
+
 const formatFileSize = (bytes: number) => {
   if (!bytes) return "";
   if (bytes < 1024) return `${bytes} B`;
@@ -96,7 +96,6 @@ export default function MessageBubble({
   onOpenReactionModal,
   renderReadReceipts = true,
   isHighlighted = false,
-
   onReplyPress,
   isGroup,
 }: Props) {
@@ -152,60 +151,6 @@ export default function MessageBubble({
       : isMe
         ? "#E5F1FF"
         : "white";
-  if (message.expired) {
-    return (
-      <View
-        style={{
-          flexDirection: isMe ? "row-reverse" : "row",
-          alignItems: "flex-end",
-          paddingHorizontal: 8,
-          marginBottom: 2,
-        }}
-      >
-        {!isMe &&
-          (showAvatar ? (
-            <View
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
-                overflow: "hidden",
-                backgroundColor: "#e5e7eb",
-                marginRight: 6,
-              }}
-            >
-              <Image
-                source={{ uri: message.senderId?.profile.avatarUrl }}
-                style={{ width: 32, height: 32 }}
-              />
-            </View>
-          ) : (
-            <View style={{ width: 32, marginRight: 6 }} />
-          ))}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 6,
-            backgroundColor: "#f0f0f0",
-            borderRadius: 12,
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            maxWidth: "75%",
-          }}
-        >
-          <Ionicons
-            name="information-circle-outline"
-            size={14}
-            color="#9ca3af"
-          />
-          <Text style={{ fontSize: 13, color: "#9ca3af", fontStyle: "italic" }}>
-            Tin nhắn đã hết hạn
-          </Text>
-        </View>
-      </View>
-    );
-  }
 
   if (message.recalled) {
     return (
@@ -382,9 +327,7 @@ export default function MessageBubble({
               >
                 {message.repliedId.content?.text ||
                   (message.repliedId.content?.files.length > 0
-                    ? message.repliedId.content.files[
-                        message.repliedId.content.files.length - 1
-                      ].fileName
+                    ? message.repliedId.content.files[0].fileName
                     : "[Tệp đính kèm]")}
               </Text>
             </TouchableOpacity>
@@ -604,7 +547,12 @@ export default function MessageBubble({
               {/* Prev */}
               {(previewIndex ?? 0) > 0 && (
                 <TouchableOpacity
-                  style={{ position: "absolute", left: 10, zIndex: 10 }}
+                  style={{
+                    position: "absolute",
+                    left: 20,
+                    top: "90%",
+                    zIndex: 10,
+                  }}
                   onPress={() => setPreviewIndex((previewIndex ?? 1) - 1)}
                 >
                   <Ionicons name="chevron-back" size={36} color="white" />
@@ -614,7 +562,12 @@ export default function MessageBubble({
               {/* Next */}
               {(previewIndex ?? 0) < mediaFiles.length - 1 && (
                 <TouchableOpacity
-                  style={{ position: "absolute", right: 10, zIndex: 10 }}
+                  style={{
+                    position: "absolute",
+                    right: 20,
+                    top: "90%",
+                    zIndex: 10,
+                  }}
                   onPress={() => setPreviewIndex((previewIndex ?? 0) + 1)}
                 >
                   <Ionicons name="chevron-forward" size={36} color="white" />

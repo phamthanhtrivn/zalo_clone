@@ -10,7 +10,7 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Text,
-  ToastAndroid,
+  // ToastAndroid,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -51,10 +51,10 @@ export default function Login() {
     try {
       await dispatch(signIn({ phone, password })).unwrap();
 
-      ToastAndroid.show("Đăng nhập thành công", ToastAndroid.SHORT);
+      // ToastAndroid.show("Đăng nhập thành công", ToastAndroid.SHORT);
     } catch (err: any) {
       console.log(err);
-      ToastAndroid.show("Đăng nhập thất bại", ToastAndroid.SHORT);
+      // ToastAndroid.show("Đăng nhập thất bại", ToastAndroid.SHORT);
     }
   };
 

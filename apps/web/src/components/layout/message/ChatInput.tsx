@@ -203,8 +203,8 @@ const ChatInput = ({
             </div>
             <p className="text-sm text-gray-500 truncate">
               {replyingMessage.content?.text ||
-                (replyingMessage.content?.file
-                  ? replyingMessage.content.file.fileName
+                (replyingMessage.content?.files
+                  ? replyingMessage.content.files[0].fileName
                   : "")}
             </p>
           </div>
