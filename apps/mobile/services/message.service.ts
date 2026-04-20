@@ -195,18 +195,21 @@ export const messageService = {
     return res;
   },
 
-  async updateCallStatus(
-    messageId: string,
-    status: string,
-    conversationId: string,
-  ) {
-    const res = await api.patch(
-      `/messages/conversation/${conversationId}/call-status`,
-      {
-        messageId,
-        status,
-      },
-    );
-    return res;
+  createCallMessage: async (data: {
+    conversationId: string;
+    senderId: string;
+    type: "VIDEO" | "VOICE";
+  }) => {
+    const response = await api.post(`/messages/call`, data);
+    return response.data;
+  },
+
+  updateCallStatus: async (data: {
+    messageId: string;
+    conversationId: string;
+    status: string;
+  }) => {
+    const response = await api.patch(`/messages/call`, data);
+    return response.data;
   },
 };

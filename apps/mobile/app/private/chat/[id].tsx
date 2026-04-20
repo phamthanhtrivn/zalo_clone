@@ -375,38 +375,34 @@ export default function ChatWindow() {
     }
   };
 
-  const handleVideoCall = async () => {
-    if (!id || !user?.userId || !conversation?.otherMemberId) {
+  const handleVideoCall = () => {
+    // 1. Kiểm tra sự tồn tại của đối tượng conversation
+    if (!conversation) {
+      Alert.alert("Lỗi", "Không tìm thấy thông tin hội thoại.");
+      return;
+    }
+
+    // 2. Lấy partnerId trực tiếp từ trường otherMemberId (dựa trên log thực tế của bạn)
+    const partnerId = (conversation as any).otherMemberId;
+
+    console.log("DEBUG - Partner ID thực tế từ log:", partnerId);
+
+    // 3. Kiểm tra các điều kiện bắt buộc trước khi gọi
+    if (!id || !user?.userId || !partnerId) {
       Alert.alert(
         "Lỗi",
-        "Không thể khởi tạo cuộc gọi. Thiếu thông tin người nhận.",
+        "Không thể xác định người nhận hoặc thông tin người gọi.",
       );
       return;
     }
 
-    try {
-      console.log("1. Đang tạo bản ghi cuộc gọi trong DB (Mobile)");
-
-      const res: any = await messageService.sendMessage(
-        id,
-        user.userId,
-        { text: "Cuộc gọi video" },
-        null,
-        "VIDEO",
-      );
-
-      const messageId = res.data?._id || res?._id;
-
-      if (!messageId) throw new Error("Không nhận được messageId");
-
-      console.log("2. Đã có messageId:", messageId, ". Bắt đầu signaling...");
-
-      // 2. Kích hoạt Context cuộc gọi
-      startCall(conversation.otherMemberId, id, "VIDEO", messageId);
-    } catch (error) {
-      console.error("Lỗi khởi tạo cuộc gọi:", error);
-      Alert.alert("Lỗi", "Không thể thực hiện cuộc gọi lúc này.");
-    }
+    // 4. Kích hoạt cuộc gọi
+    startCall(
+      partnerId,
+      conversation.name || "Người dùng",
+      id, // conversationId
+      "VIDEO",
+    );
   };
 
   // ================= EFFECTS =================
