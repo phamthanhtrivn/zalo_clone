@@ -97,6 +97,7 @@ const conversationSlice = createSlice({
 
       if (action.payload.name !== undefined) c.name = action.payload.name;
       if (action.payload.avatar !== undefined) c.avatar = action.payload.avatar;
+
       if (action.payload.pinned !== undefined) c.pinned = action.payload.pinned;
       if (action.payload.hidden !== undefined) c.hidden = action.payload.hidden;
       if (action.payload.muted !== undefined) c.muted = action.payload.muted;
@@ -152,20 +153,15 @@ const conversationSlice = createSlice({
     // 6. Xóa hội thoại
     removeConversation(
       state,
-      action: PayloadAction<string | { conversationId: string }>,
+      action: PayloadAction<{ conversationId: string } | string>,
     ) {
       const id =
         typeof action.payload === "string"
           ? action.payload
           : action.payload.conversationId;
+
       state.conversations = state.conversations.filter(
         (c) => c.conversationId !== id,
-      );
-    },
-
-    removeConversation(state, action: PayloadAction<string>) {
-      state.conversations = state.conversations.filter(
-        c => c.conversationId !== action.payload
       );
     },
     // conversationSlice.ts
@@ -174,7 +170,7 @@ const conversationSlice = createSlice({
       action: PayloadAction<{ conversationId: string; unreadCount: number }>,
     ) {
       const index = state.conversations.findIndex(
-        (c) => c.conversationId === action.payload.conversationId
+        (c) => c.conversationId === action.payload.conversationId,
       );
       if (index !== -1) {
         // ✅ Tạo object mới để trigger re-render

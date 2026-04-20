@@ -34,8 +34,14 @@ import {
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
-  markAsRead: (data: { userId: string; conversationId: string }) => Promise<any>;
-  markAsUnread: (data: { userId: string; conversationId: string }) => Promise<any>;
+  markAsRead: (data: {
+    userId: string;
+    conversationId: string;
+  }) => Promise<any>;
+  markAsUnread: (data: {
+    userId: string;
+    conversationId: string;
+  }) => Promise<any>;
 }
 
 const SocketContext = createContext<SocketContextType>({
@@ -61,34 +67,39 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const user = useAppSelector((state) => state.auth.user);
   const socketRef = useRef<Socket | null>(null);
 
-  const handleMarkAsRead = useCallback(async (data: { userId: string; conversationId: string }) => {
-    if (!socketRef.current) return;
+  const handleMarkAsRead = useCallback(
+    async (data: { userId: string; conversationId: string }) => {
+      if (!socketRef.current) return;
 
-    return new Promise((resolve, reject) => {
-      socketRef.current?.emit('mark_as_read', data, (response: any) => {
-        if (response?.success) {
-          resolve(response);
-        } else {
-          reject(response);
-        }
+      return new Promise((resolve, reject) => {
+        socketRef.current?.emit("mark_as_read", data, (response: any) => {
+          if (response?.success) {
+            resolve(response);
+          } else {
+            reject(response);
+          }
+        });
       });
-    });
-  }, []);
+    },
+    [],
+  );
 
-  const handleMarkAsUnread = useCallback(async (data: { userId: string; conversationId: string }) => {
-    if (!socketRef.current) return;
+  const handleMarkAsUnread = useCallback(
+    async (data: { userId: string; conversationId: string }) => {
+      if (!socketRef.current) return;
 
-    return new Promise((resolve, reject) => {
-      socketRef.current?.emit('mark_as_unread', data, (response: any) => {
-        if (response?.success) {
-          resolve(response);
-        } else {
-          reject(response);
-        }
+      return new Promise((resolve, reject) => {
+        socketRef.current?.emit("mark_as_unread", data, (response: any) => {
+          if (response?.success) {
+            resolve(response);
+          } else {
+            reject(response);
+          }
+        });
       });
-    });
-  }, []);
-
+    },
+    [],
+  );
 
   // --- HELPERS ---
   const navigateHome = () => {
@@ -144,12 +155,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       const lastMessage = data?.lastMessage
         ? data.lastMessage
         : {
-          _id: data?._id,
-          senderName,
-          content: data?.content ?? {},
-          recalled: Boolean(data?.recalled),
-          type: data?.type,
-        };
+            _id: data?._id,
+            senderName,
+            content: data?.content ?? {},
+            recalled: Boolean(data?.recalled),
+            type: data?.type,
+          };
 
       dispatch(
         updateConversationFromSocket({
@@ -170,13 +181,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       dispatch(updateRecallMessageInConversation(data));
     };
 
-    // 4. Tin nhắn hết hạn 
+    // 4. Tin nhắn hết hạn
     const handleMessagesExpired = (data: {
       conversationId: string;
       messageIds: string[];
     }) => {
       dispatch(removeExpiredMessages(data.messageIds));
-
     };
 
     // 5. Cập nhật Cài đặt hội thoại (Ghim, Ẩn, Tắt thông báo)
@@ -194,7 +204,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       if ("category" in data) patch.category = data.category;
       if ("expireDuration" in data) patch.expireDuration = data.expireDuration;
       if ("unreadCount" in data) {
-        console.log('📢 unreadCount from broadcast:', data.unreadCount);
+        console.log("📢 unreadCount from broadcast:", data.unreadCount);
         patch.unreadCount = data.unreadCount;
       }
       dispatch(updateConversationSetting(patch));
@@ -205,7 +215,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       dispatch(removeConversation({ conversationId: data.conversationId }));
     };
 
-    // 7. Read / Unread / Receipts 
+    // 7. Read / Unread / Receipts
     const handleUnreadUpdate = (data: {
       conversationId: string;
       userId: string;
@@ -226,24 +236,24 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       conversationId: string;
       unreadCount: number;
     }) => {
-      console.log('✅ mark_as_read:success', data);
+      console.log("✅ mark_as_read:success", data);
       dispatch(
         setUnreadCount({
           conversationId: data.conversationId,
           unreadCount: data.unreadCount,
-        })
+        }),
       );
     };
     const handleMarkAsReadBroadcast = (data: {
       conversationId: string;
       unreadCount: number;
     }) => {
-      console.log('📢 mark_as_read:broadcast (from other tabs)', data);
+      console.log("📢 mark_as_read:broadcast (from other tabs)", data);
       dispatch(
         setUnreadCount({
           conversationId: data.conversationId,
           unreadCount: data.unreadCount,
-        })
+        }),
       );
     };
     // ✅ THÊM: Handler cho mark_as_unread:success callback
@@ -251,24 +261,24 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       conversationId: string;
       unreadCount: number;
     }) => {
-      console.log('✅ mark_as_unread:success', data);
+      console.log("✅ mark_as_unread:success", data);
       dispatch(
         setUnreadCount({
           conversationId: data.conversationId,
           unreadCount: data.unreadCount,
-        })
+        }),
       );
     };
     const handleMarkAsUnreadBroadcast = (data: {
       conversationId: string;
       unreadCount: number;
     }) => {
-      console.log('📢 mark_as_unread:broadcast (from other tabs)', data);
+      console.log("📢 mark_as_unread:broadcast (from other tabs)", data);
       dispatch(
         setUnreadCount({
           conversationId: data.conversationId,
           unreadCount: data.unreadCount,
-        })
+        }),
       );
     };
     // ✅ THÊM: Error handlers
@@ -276,50 +286,20 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       conversationId: string;
       message: string;
     }) => {
-      console.error('❌ mark_as_read:error', data);
+      console.error("❌ mark_as_read:error", data);
     };
-
 
     const handleMarkAsUnreadError = (data: {
       conversationId: string;
       message: string;
     }) => {
-      console.error('❌ mark_as_unread:error', data);
+      console.error("❌ mark_as_unread:error", data);
     };
     socketInstance.on("message_read", handleMessageRead);
 
     // socketInstance.on("messages_unread_updated", handleUnreadUpdate);
 
-    // 8. Group Events 
-    const handleGroupDisbanded = (payload: any) => {
-      const conversationId =
-        payload?.conversationId ||
-        payload?.id ||
-        (typeof payload === "string" ? payload : "");
-      if (!conversationId) return;
-
-      dispatch(removeConversation({ conversationId }));
-
-      const path = window.location?.pathname || "";
-      if (path.includes(conversationId)) {
-        setGroupDisbandedConversationId(conversationId);
-        setGroupDisbandedDialogOpen(true);
-      }
-    };
-
-    const handleRemovedFromConversation = (payload: any) => {
-      const { conversationId } = payload;
-      if (!conversationId) return;
-
-      dispatch(removeConversation({ conversationId }));
-
-      const path = window.location?.pathname || "";
-      if (path.includes(conversationId)) {
-        alert("Bạn đã bị mời ra khỏi nhóm này.");
-        navigateHome();
-      }
-    };
-
+    // 8. Group Events
     const handleGroupSettingsUpdate = (data: any) => {
       dispatch(
         updateConversationSetting({
@@ -345,15 +325,37 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       dispatch(fetchConversations());
     };
 
+    const handleRemovedFromConversation = (payload: any) => {
+      const conversationId = payload?.conversationId;
+      if (!conversationId) return;
+
+      dispatch(removeConversation(conversationId));
+
+      const currentPath = window.location?.pathname || "";
+      if (currentPath.includes(conversationId)) {
+        alert("Bạn không còn là thành viên của nhóm này.");
+        window.location.href = "/";
+      }
+    };
+
+    const handleGroupDisbanded = (payload: any) => {
+      const conversationId = payload?.conversationId || payload?.id;
+      if (!conversationId) return;
+
+      dispatch(removeConversation(conversationId));
+
+      setGroupDisbandedDialogOpen(true);
+    };
+
     // Đăng ký các Listener
     socketInstance.on("connect", onConnect);
     socketInstance.on("disconnect", onDisconnect);
-    socketInstance.on('mark_as_read:success', handleMarkAsReadSuccess);
-    socketInstance.on('mark_as_unread:success', handleMarkAsUnreadSuccess);
-    socketInstance.on('mark_as_read:error', handleMarkAsReadError);
-    socketInstance.on('mark_as_unread:error', handleMarkAsUnreadError);
-    socketInstance.on('mark_as_read:broadcast', handleMarkAsReadBroadcast);
-    socketInstance.on('mark_as_unread:broadcast', handleMarkAsUnreadBroadcast);
+    socketInstance.on("mark_as_read:success", handleMarkAsReadSuccess);
+    socketInstance.on("mark_as_unread:success", handleMarkAsUnreadSuccess);
+    socketInstance.on("mark_as_read:error", handleMarkAsReadError);
+    socketInstance.on("mark_as_unread:error", handleMarkAsUnreadError);
+    socketInstance.on("mark_as_read:broadcast", handleMarkAsReadBroadcast);
+    socketInstance.on("mark_as_unread:broadcast", handleMarkAsUnreadBroadcast);
 
     socketInstance.on("new_conversation", handleNewConversation);
     socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
@@ -380,12 +382,15 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       // Hủy đăng ký listener khi unmount
       socketInstance.off("connect", onConnect);
       socketInstance.off("disconnect", onDisconnect);
-      socketInstance.off('mark_as_read:success', handleMarkAsReadSuccess);
-      socketInstance.off('mark_as_unread:success', handleMarkAsUnreadSuccess);
-      socketInstance.off('mark_as_read:error', handleMarkAsReadError);
-      socketInstance.off('mark_as_unread:error', handleMarkAsUnreadError);
-      socketInstance.off('mark_as_read:broadcast', handleMarkAsReadBroadcast);
-      socketInstance.off('mark_as_unread:broadcast', handleMarkAsUnreadBroadcast);
+      socketInstance.off("mark_as_read:success", handleMarkAsReadSuccess);
+      socketInstance.off("mark_as_unread:success", handleMarkAsUnreadSuccess);
+      socketInstance.off("mark_as_read:error", handleMarkAsReadError);
+      socketInstance.off("mark_as_unread:error", handleMarkAsUnreadError);
+      socketInstance.off("mark_as_read:broadcast", handleMarkAsReadBroadcast);
+      socketInstance.off(
+        "mark_as_unread:broadcast",
+        handleMarkAsUnreadBroadcast,
+      );
 
       socketInstance.off("new_conversation", handleNewConversation);
       socketInstance.off("new_message_sidebar", handleNewMessageSidebar);
@@ -407,10 +412,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         handleConversationDelete,
       );
 
-      socketInstance.off('messages_expired', handleMessagesExpired);
+      socketInstance.off("messages_expired", handleMessagesExpired);
       socketInstance.off("message_read", handleMessageRead);
       socketInstance.off("messages_unread_updated", handleUnreadUpdate);
-
 
       socketInstance.off("group_disbanded", handleGroupDisbanded);
       socketInstance.off(
@@ -425,7 +429,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [apiUrl, dispatch, user?.userId]);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected, markAsRead: handleMarkAsRead, markAsUnread: handleMarkAsUnread }}>
+    <SocketContext.Provider
+      value={{
+        socket,
+        isConnected,
+        markAsRead: handleMarkAsRead,
+        markAsUnread: handleMarkAsUnread,
+      }}
+    >
       {children}
 
       {/* Dialog thông báo giải tán nhóm */}

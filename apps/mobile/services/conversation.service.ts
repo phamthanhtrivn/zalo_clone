@@ -34,9 +34,6 @@ export const conversationService = {
 
   markAsRead: (id: string) => api.patch(`/conversations/${id}/read`),
 
-  getConversationsFromUserId: (userId: string) =>
-    api.get(`/conversations/user/${userId}`),
-
   updateGroupSettings: (
     id: string,
     payload: {
@@ -97,11 +94,17 @@ export const conversationService = {
   },
   getConversationsFromUserId: async (userId: string) => {
     const response = await api.get(`/conversations/user/${userId}`);
-    console.log('📊 API Response sample:', JSON.stringify(response.data?.[0], null, 2));
-    console.log('📊 unreadCount values:', response.data?.map((c: any) => ({
-      name: c.name,
-      unreadCount: c.unreadCount
-    })));
+    console.log(
+      "📊 API Response sample:",
+      JSON.stringify(response.data?.[0], null, 2),
+    );
+    console.log(
+      "📊 unreadCount values:",
+      response.data?.map((c: any) => ({
+        name: c.name,
+        unreadCount: c.unreadCount,
+      })),
+    );
     return response;
   },
   search: async (
@@ -119,5 +122,5 @@ export const conversationService = {
       },
     });
     return response;
-  }
-}
+  },
+};

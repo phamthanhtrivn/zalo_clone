@@ -11,7 +11,7 @@ import { conversationService } from "@/services/conversation.service";
 
 type ConversationState = {
   conversations: ConversationItemType[];
-  replyingMessage: any | null; // Tính năng Reply 
+  replyingMessage: any | null; // Tính năng Reply
   isLoading: boolean;
   error: string | null;
 };
@@ -47,7 +47,7 @@ const conversationSlice = createSlice({
       state.conversations = action.payload;
     },
 
-    // Thêm hội thoại mới lên đầu danh sách 
+    // Thêm hội thoại mới lên đầu danh sách
     addConversationToTop(state, action: PayloadAction<ConversationItemType>) {
       const exists = state.conversations.find(
         (c) => c.conversationId === action.payload.conversationId,
@@ -57,13 +57,15 @@ const conversationSlice = createSlice({
       }
     },
 
-    // Cập nhật thông tin hội thoại và đưa lên đầu 
+    // Cập nhật thông tin hội thoại và đưa lên đầu
     updateConversation(
       state,
-      action: PayloadAction<Partial<ConversationItemType> & { conversationId: string }>
+      action: PayloadAction<
+        Partial<ConversationItemType> & { conversationId: string }
+      >,
     ) {
       const index = state.conversations.findIndex(
-        (c) => c.conversationId === action.payload.conversationId
+        (c) => c.conversationId === action.payload.conversationId,
       );
       if (index !== -1) {
         const updated = {
@@ -75,7 +77,7 @@ const conversationSlice = createSlice({
       }
     },
 
-    // Logic Socket đặc thù từ 
+    // Logic Socket đặc thù từ
     updateConversationFromSocket(state, action: PayloadAction<any>) {
       const { conversationId, lastMessage, unreadCount, lastMessageAt } =
         action.payload;
@@ -116,7 +118,7 @@ const conversationSlice = createSlice({
       }>,
     ) {
       const c = state.conversations.find(
-        (c) => c.conversationId === action.payload.conversationId
+        (c) => c.conversationId === action.payload.conversationId,
       );
       if (!c) return;
 
@@ -125,9 +127,12 @@ const conversationSlice = createSlice({
       if (action.payload.pinned !== undefined) c.pinned = action.payload.pinned;
       if (action.payload.hidden !== undefined) c.hidden = action.payload.hidden;
       if (action.payload.muted !== undefined) c.muted = action.payload.muted;
-      if (action.payload.mutedUntil !== undefined) c.mutedUntil = action.payload.mutedUntil;
-      if (action.payload.category !== undefined) c.category = action.payload.category;
-      if (action.payload.expireDuration !== undefined) c.expireDuration = action.payload.expireDuration;
+      if (action.payload.mutedUntil !== undefined)
+        c.mutedUntil = action.payload.mutedUntil;
+      if (action.payload.category !== undefined)
+        c.category = action.payload.category;
+      if (action.payload.expireDuration !== undefined)
+        c.expireDuration = action.payload.expireDuration;
       if (action.payload.group !== undefined) {
         c.group = { ...c.group, ...action.payload.group };
       }
@@ -140,31 +145,25 @@ const conversationSlice = createSlice({
       action: PayloadAction<{
         conversationId: string;
         category: ConversationCategory | null;
-      }>
+      }>,
     ) {
       const c = state.conversations.find(
-        (c) => c.conversationId === action.payload.conversationId
+        (c) => c.conversationId === action.payload.conversationId,
       );
       if (c) c.category = action.payload.category;
     },
 
-    // removeConversation(
-    //   state,
-    //   action: PayloadAction<{ conversationId: string } | string>,
-    // ) {
-    //   const id =
-    //     typeof action.payload === "string"
-    //       ? action.payload
-    //       : action.payload.conversationId;
-    //   state.conversations = state.conversations.filter(
-    //     (c) => c.conversationId !== id,
-    //   );
-    // },
-    removeConversation(state, action: PayloadAction<string>) {
+    removeConversation(
+      state,
+      action: PayloadAction<{ conversationId: string } | string>,
+    ) {
+      const id =
+        typeof action.payload === "string"
+          ? action.payload
+          : action.payload.conversationId;
       state.conversations = state.conversations.filter(
-        (c) => c.conversationId !== action.payload
+        (c) => c.conversationId !== id,
       );
-
     },
 
     resetUnreadCount(state, action: PayloadAction<string>) {
@@ -174,7 +173,7 @@ const conversationSlice = createSlice({
       if (c) c.unreadCount = 0;
     },
 
-    // Tính năng tin nhắn tự xóa từ 
+    // Tính năng tin nhắn tự xóa từ
     removeExpiredMessages(state, action: PayloadAction<string[]>) {
       state.conversations = state.conversations.map((c) => {
         if (c.lastMessage && action.payload.includes(c.lastMessage._id)) {
@@ -197,11 +196,11 @@ const conversationSlice = createSlice({
 
     updateRecallMessageInConversation(
       state,
-      action: PayloadAction<{ conversationId: string; messageId: string }>
+      action: PayloadAction<{ conversationId: string; messageId: string }>,
     ) {
       const { conversationId, messageId } = action.payload;
       const conversation = state.conversations.find(
-        (c) => c.conversationId === conversationId
+        (c) => c.conversationId === conversationId,
       );
       if (conversation && conversation.lastMessage?._id === messageId) {
         conversation.lastMessage.recalled = true;
@@ -213,10 +212,10 @@ const conversationSlice = createSlice({
 
     setUnreadCount(
       state,
-      action: PayloadAction<{ conversationId: string; unreadCount: number }>
+      action: PayloadAction<{ conversationId: string; unreadCount: number }>,
     ) {
       const c = state.conversations.find(
-        (c) => c.conversationId === action.payload.conversationId
+        (c) => c.conversationId === action.payload.conversationId,
       );
       if (c) {
         c.unreadCount = action.payload.unreadCount;
@@ -230,12 +229,12 @@ const conversationSlice = createSlice({
         conversationId: string;
         userId: string;
         lastReadMessageId: string | null;
-      }>
+      }>,
     ) {
       const { conversationId, userId, lastReadMessageId } = action.payload;
 
       const conversation = state.conversations.find(
-        (c) => c.conversationId === conversationId
+        (c) => c.conversationId === conversationId,
       );
 
       if (!conversation) return;
@@ -252,7 +251,7 @@ const conversationSlice = createSlice({
       }
     },
 
-    // Quản lý tin nhắn đang Reply 
+    // Quản lý tin nhắn đang Reply
     setReplyingMessage(state, action: PayloadAction<any | null>) {
       state.replyingMessage = action.payload;
     },
@@ -292,7 +291,7 @@ export const {
   setUnreadCount,
   updateUnreadStateInMessages,
   clearReplyingMessage,
-  setReplyingMessage
+  setReplyingMessage,
 } = conversationSlice.actions;
 
 export default conversationSlice.reducer;
