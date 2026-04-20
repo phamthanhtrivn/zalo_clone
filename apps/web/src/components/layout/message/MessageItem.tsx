@@ -1,5 +1,5 @@
 import { Avatar, AvatarImage, AvatarFallback } from "../../ui/avatar";
-import { Quote, MoreHorizontal, Download } from "lucide-react";
+import { Quote, MoreHorizontal } from "lucide-react";
 import { MessageBubble } from "./MessageBubble";
 import { ReactionPicker } from "./ReactionPicker";
 import { ReactionSummary } from "./ReactionSummary";
@@ -13,19 +13,7 @@ import { RiUnpinLine } from "react-icons/ri";
 import { FaRegTrashAlt } from "react-icons/fa";
 import ViewDetailMessageModal from "./ViewDetailMessageModal";
 import { FaListCheck } from "react-icons/fa6";
-import { useAppDispatch } from "@/store";
-import { setReplyingMessage } from "@/store/slices/conversationSlice";
-import { saveAs } from "file-saver";
-
-const getIsExpired = (expired?: boolean, expiresAt?: string | null) => {
-  if (expired) return true;
-  if (!expiresAt) return false;
-
-  const expiresAtMs = new Date(expiresAt).getTime();
-  if (Number.isNaN(expiresAtMs)) return Boolean(expired);
-
-  return expiresAtMs <= Date.now();
-};
+import { useAppSelector } from "@/store";
 
 interface Props {
   message: MessagesType;
@@ -42,8 +30,11 @@ interface Props {
   setIsSelected: (isSelected: boolean) => void;
   selectedMessages: string[];
   toggleSelectMessage: (messageId: string) => void;
-  isGroup: boolean;
-  onJumpToMessage?: (messageId: string) => void;
+  onForwardMessages: (
+    messageIds: string[],
+    targetConversationIds: string[],
+  ) => void;
+
 }
 
 export const MessageItem = ({
@@ -61,118 +52,54 @@ export const MessageItem = ({
   setIsSelected,
   selectedMessages,
   toggleSelectMessage,
-  isGroup,
-  onJumpToMessage,
+  onForwardMessages,
+
 }: Props) => {
-  const dispatch = useAppDispatch();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [isExpired, setIsExpired] = useState(() =>
-    getIsExpired(message.expired, message.expiresAt),
+
+
+  const liveMessage = useAppSelector((state) =>
+    state.message.messagesByConversation[message.conversationId]?.find(
+      (m) => m._id === message._id
+    )
   );
-
-  // Tương thích với cả cấu trúc cũ (file) và cấu trúc mới (files array)
-  const files =
-    message.content?.files ||
-    (message.content?.file ? [message.content.file] : []);
-
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
     window.addEventListener("click", handleClickOutside);
     return () => window.removeEventListener("click", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    if (message.expired) {
-      setIsExpired(true);
-      return;
-    }
-
-    if (!message.expiresAt) {
-      setIsExpired(false);
-      return;
-    }
-
-    const expiresAtMs = new Date(message.expiresAt).getTime();
-    if (Number.isNaN(expiresAtMs)) {
-      setIsExpired(Boolean(message.expired));
-      return;
-    }
-
-    const remainingMs = expiresAtMs - Date.now();
-    if (remainingMs <= 0) {
-      setIsExpired(true);
-      return;
-    }
-
-    setIsExpired(false);
-    const timeoutId = window.setTimeout(() => setIsExpired(true), remainingMs + 50);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [message.expired, message.expiresAt]);
-
-  const handleDownloadAll = async () => {
-    try {
-      for (const file of files) {
-        const res = await fetch(file.fileKey);
-        const blob = await res.blob();
-        saveAs(blob, file.fileName);
-      }
-    } catch (err) {
-      console.error("Download all error:", err);
-    }
-  };
-
-  // --- Logic hiển thị tin nhắn hệ thống (từ nhánh HEAD) ---
-  if (message.type === "SYSTEM") {
-    return (
-      <div className="flex justify-center w-full my-4 px-10">
-        <div className="bg-gray-100/70 text-gray-500 text-[12px] px-4 py-1 rounded-full backdrop-blur-sm border border-gray-50 text-center">
-          {message.content?.text}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className={`flex items-end gap-2 ${isMe ? "justify-end" : ""}`}>
+    <div className={`flex items-end gap-2 ${isMe || message.expired ? "justify-end" : ""}`}>
       {!isMe &&
-        (showAvatar && message.senderId ? (
-          <Avatar className="w-8 h-8 shrink-0">
+        (showAvatar ? (
+          <Avatar className="w-8 h-8">
             <AvatarImage src={message.senderId.profile?.avatarUrl} />
             <AvatarFallback>
               {message.senderId.profile?.name?.charAt(0)}
             </AvatarFallback>
           </Avatar>
         ) : (
-          <div className="w-8 shrink-0" />
+          <div className="w-8" />
         ))}
 
       {/* BUBBLE WRAPPER */}
       <div
-        className={`flex group items-center gap-2 ${
-          isMe ? "flex-row-reverse" : "flex-row"
-        }`}
+        className={`flex group items-center gap-2 ${isMe ? "flex-row-reverse" : "flex-row"
+          }`}
       >
-        <div className="relative flex flex-col group/bubble">
-          {/* Tên người gửi trong Group (Từ nhánh KhongVanTam) */}
-          {!isMe && isGroup && showAvatar && (
-            <div className="text-[12px] text-gray-500 mb-1 ml-1 font-medium">
-              {message.senderId?.profile?.name}
-            </div>
-          )}
-
+        <div className="relative flex group/bubble">
           <MessageBubble
-            message={{ ...message, expired: isExpired }}
+            message={message}
             isMe={isMe}
             showTime={showTime}
             isSelected={isSelected}
             selectedMessages={selectedMessages}
             toggleSelectMessage={toggleSelectMessage}
-            onJumpToMessage={onJumpToMessage}
           />
 
-          {!message.recalled && !isExpired && (
+          {!message.recalled && (
             <>
               <ReactionPicker
                 messageId={message._id}
@@ -191,7 +118,7 @@ export const MessageItem = ({
         </div>
 
         {/* ACTIONS */}
-        {!message.recalled && !isExpired && (
+        {!message.recalled && (
           <div
             className="
             relative flex items-center gap-1
@@ -200,7 +127,6 @@ export const MessageItem = ({
           "
           >
             <button
-              onClick={() => dispatch(setReplyingMessage(message))}
               title="Trả lời"
               className="cursor-pointer w-7 h-7 flex items-center justify-center rounded-full bg-white shadow-sm border border-gray-100 text-gray-600 hover:bg-gray-50 hover:text-blue-500"
             >
@@ -218,7 +144,7 @@ export const MessageItem = ({
               <MoreHorizontal size={10} />
             </button>
 
-            {/* MENU */}
+            {/* MENU MORE ACTION */}
             {openMenuId === message._id && (
               <div
                 className={`
@@ -226,24 +152,13 @@ export const MessageItem = ({
                 ${isMe ? "right-full mr-2" : "left-full ml-2"}
                 w-44 bg-white border border-gray-200 rounded-xl shadow-xl z-50
                 py-1
+                animate-in fade-in zoom-in-95 duration-150
               `}
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* Nút tải tất cả (Từ nhánh KhongVanTam) */}
-                {files.length > 1 && (
-                  <button
-                    onClick={handleDownloadAll}
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer"
-                  >
-                    <Download size={14} />
-                    Tải tất cả ({files.length})
-                  </button>
-                )}
-
-                {files.length > 1 && <div className="my-1 border-t" />}
-
+                {/* Ghim */}
                 <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                   onClick={() => {
                     handlePinnedMessage(openMenuId);
                     setOpenMenuId(null);
@@ -251,56 +166,67 @@ export const MessageItem = ({
                 >
                   {!message.pinned ? (
                     <>
-                      <BsPinAngle /> <span>Ghim</span>
+                      <BsPinAngle className="text-base text-gray-500" />
+                      <span>Ghim tin nhắn</span>
                     </>
                   ) : (
                     <>
-                      <RiUnpinLine /> <span>Bỏ ghim</span>
+                      <RiUnpinLine className="text-base text-gray-500" />
+                      <span>Bỏ ghim tin nhắn</span>
                     </>
                   )}
                 </button>
 
+                {/* Chọn nhiều tin nhắn */}
                 <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                   onClick={() => {
                     setIsSelected(true);
                     toggleSelectMessage(message._id);
                     setOpenMenuId(null);
                   }}
                 >
-                  <FaListCheck /> <span>Chọn nhiều</span>
+                  <FaListCheck className="text-base text-gray-500" />
+                  <span>Chọn nhiều tin nhắn</span>
                 </button>
 
+                {/* Chi tiết */}
                 <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                   onClick={() => {
                     setShowDetailModal(true);
                     setOpenMenuId(null);
                   }}
                 >
-                  <IoIosInformationCircleOutline />
-                  <span>Chi tiết</span>
+                  <IoIosInformationCircleOutline className="text-base text-gray-500" />
+                  <span>Xem chi tiết</span>
                 </button>
 
-                <div className="my-1 border-t" />
+                <div className="my-1 border-t border-gray-200" />
 
+                {/* Divider */}
                 {isMe && (
-                  <button
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-500 hover:bg-red-50 cursor-pointer"
-                    onClick={() => {
-                      handleRecalledMessage(openMenuId);
-                      setOpenMenuId(null);
-                    }}
-                  >
-                    <CgUndo /> <span>Thu hồi</span>
-                  </button>
+                  <>
+                    <button
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                      onClick={() => {
+                        handleRecalledMessage(openMenuId);
+                        setOpenMenuId(null);
+                      }}
+                    >
+                      <CgUndo className="text-base" />
+                      <span>Thu hồi</span>
+                    </button>
+                  </>
                 )}
 
+                {/* Xóa chỉ ở phía tôi */}
                 <button
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-500 hover:bg-red-50 cursor-pointer"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                   onClick={() => handleDeleteMessageForMe(message._id)}
                 >
-                  <FaRegTrashAlt /> <span>Xóa phía tôi</span>
+                  <FaRegTrashAlt className="text-base" />
+                  <span>Xóa chỉ ở phía tôi</span>
                 </button>
               </div>
             )}
@@ -308,9 +234,11 @@ export const MessageItem = ({
         )}
       </div>
 
+
+
       {showDetailModal && (
         <ViewDetailMessageModal
-          selectedMessage={message}
+          selectedMessage={liveMessage || message}
           setShowDetailModal={() => setShowDetailModal(false)}
         />
       )}

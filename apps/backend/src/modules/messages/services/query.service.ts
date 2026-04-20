@@ -479,7 +479,6 @@ export class MessagesQueryService {
     const objectConversationId = new Types.ObjectId(conversationId);
     const objectUserId = new Types.ObjectId(userId);
 
-    // Tìm tất cả messages cần cập nhật readReceipts
     const findFilter: any = {
       conversationId: objectConversationId,
     };
@@ -494,7 +493,6 @@ export class MessagesQueryService {
       .sort({ _id: 1 })
       .lean();
 
-    // Format messages để trả về
     return messages.map(msg => ({
       _id: msg._id,
       readReceipts: msg.readReceipts,

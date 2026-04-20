@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect } from "react";
 import {
   formatTime,
   getDateLabel,
@@ -7,6 +7,8 @@ import {
 import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import type { MessagesType } from "@/types/messages..type";
 import type { RefObject } from "react";
+import { useSocket } from "@/contexts/SocketContext";
+import { setMessages } from "@/store/slices/messageSlice";
 
 type Props = {
   messages: MessagesType[];
@@ -21,7 +23,7 @@ const MessageList = ({
   containerRef,
   handleScrollToTop,
 }: Props) => {
-  // Trong ConversationPage component, thêm useEffect để xử lý read_receipt
+  const { socket } = useSocket();
   useEffect(() => {
     if (!socket || !id) return;
 
