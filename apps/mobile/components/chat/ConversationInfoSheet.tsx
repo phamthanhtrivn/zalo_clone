@@ -340,7 +340,6 @@ const ConversationInfoSheet = ({ visible, onClose, conversation }: any) => {
       },
     ]);
   };
-
   const handleUpdateSetting = async (
     key: keyof typeof localSettings,
     value: boolean,

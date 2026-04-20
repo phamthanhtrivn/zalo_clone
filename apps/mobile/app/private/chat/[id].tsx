@@ -225,25 +225,6 @@ export default function ChatWindow() {
     }
   };
 
-  const handleVideoCall = async () => {
-    if (!id || !user?.userId || !conversation?.otherMemberId) {
-      Alert.alert("Lỗi", "Không thể gọi lúc này.");
-      return;
-    }
-    try {
-      const res: any = await messageService.sendMessage(
-        id,
-        user.userId,
-        undefined,
-        { text: "Cuộc gọi video" },
-      );
-      const messageId = res.data?._id || res?._id;
-      startCall(conversation.otherMemberId, id, "VIDEO", messageId);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   const handleTogglePin = async (messageId: string) => {
     try {
       await messageService.pinnedMessage(user!.userId, messageId, id!);
@@ -288,6 +269,35 @@ export default function ChatWindow() {
   const scrollToBottom = (animated = true) => {
     flatListRef.current?.scrollToEnd({ animated });
     setShowScrollToBottom(false);
+  };
+  const handleVideoCall = () => {
+    // 1. Kiểm tra sự tồn tại của đối tượng conversation
+    if (!conversation) {
+      Alert.alert("Lỗi", "Không tìm thấy thông tin hội thoại.");
+      return;
+    }
+
+    // 2. Lấy partnerId trực tiếp từ trường otherMemberId (dựa trên log thực tế của bạn)
+    const partnerId = (conversation as any).otherMemberId;
+
+    console.log("DEBUG - Partner ID thực tế từ log:", partnerId);
+
+    // 3. Kiểm tra các điều kiện bắt buộc trước khi gọi
+    if (!id || !user?.userId || !partnerId) {
+      Alert.alert(
+        "Lỗi",
+        "Không thể xác định người nhận hoặc thông tin người gọi.",
+      );
+      return;
+    }
+
+    // 4. Kích hoạt cuộc gọi
+    startCall(
+      partnerId,
+      conversation.name || "Người dùng",
+      id, // conversationId
+      "VIDEO",
+    );
   };
 
   // ================= SOCKET LISTENERS =================

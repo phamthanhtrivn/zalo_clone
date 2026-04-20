@@ -54,7 +54,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
     if (!socketRef.current) {
       socketRef.current = io(apiUrl, {
-        transports: ["websocket"], 
+        transports: ["websocket"],
         auth: {
           userId: userId,
         },
@@ -77,9 +77,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsConnected(false);
     });
 
-    // 2. Tin nhắn mới & Thu hồi 
+    // 2. Tin nhắn mới & Thu hồi
     const handleNewMessageSidebar = (data: any) => {
-
       dispatch(updateConversation(data));
     };
 
@@ -87,7 +86,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       dispatch(updateRecallMessageInConversation(data));
     };
 
-    // 3. Tin nhắn hết hạn 
+    // 3. Tin nhắn hết hạn
     const handleMessagesExpired = (data: {
       conversationId: string;
       messageIds: string[];
@@ -98,7 +97,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     // 4. Cập nhật cài đặt cá nhân (Ghim, Ẩn, Tắt thông báo)
     const handleConversationUpdate = (data: any) => {
       if (data.unreadCount !== undefined && Object.keys(data).length === 2) {
-        return; 
+        return;
       }
       const patch: any = { conversationId: data.conversationId };
 
@@ -116,7 +115,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       dispatch(updateConversationSetting(patch));
     };
 
-    // 5. Quản lý hội thoại & Nhóm 
+    // 5. Quản lý hội thoại & Nhóm
     const handleNewConversation = (conversation: any) => {
       if (!conversation?.conversationId) return;
 
@@ -133,7 +132,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       dispatch(
         updateConversationSetting({
           conversationId: data.conversationId,
-          group: data.group, 
+          group: data.group,
         }),
       );
     };
@@ -149,6 +148,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       );
     };
 
+    const handleGroupDisbanded = (payload: any) => {
+      const convId = payload?.conversationId || payload?.id;
+      if (convId) {
+        dispatch(removeConversation(convId));
+      }
+    };
+
     socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
     socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
     socketInstance.on("messages_expired", handleMessagesExpired);
@@ -161,6 +167,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on("new_conversation", handleNewConversation);
     socketInstance.on("group_settings_updated", handleGroupSettingsUpdate);
     socketInstance.on("group_updated", handleGroupUpdate);
+    socketInstance.on("group_disbanded", handleGroupDisbanded);
 
     return () => {
       socketInstance.off("connect");
@@ -175,6 +182,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.off("new_conversation");
       socketInstance.off("group_settings_updated");
       socketInstance.off("group_updated");
+      socketInstance.off("group_disbanded");
     };
   }, [apiUrl, user?.userId, dispatch]);
 

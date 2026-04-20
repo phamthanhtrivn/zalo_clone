@@ -113,23 +113,26 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
       let finalStatus = reason;
 
       if (!videoAccepted) {
-        if (isCalling)
-          finalStatus = CallStatus.MISSED; //người gọi tự huỷ
-        else if (videoCallData.isReceiving) finalStatus = CallStatus.REJECTED; // người nghe từ chối
+        if (isCalling) finalStatus = CallStatus.MISSED;
+        else if (videoCallData.isReceiving) finalStatus = CallStatus.REJECTED;
       }
 
-      // CHỈ gửi socket nếu không phải do nhận lệnh từ người kia (isRemote = false)
       if (!isRemote) {
+        // --- FIX QUAN TRỌNG: Xác định đúng ID đối phương ---
+        // Nếu mình là người gọi (isCalling), thì đối phương là videoCallData.from (trước đó là targetId)
+        // Nếu mình là người nhận (isReceiving), thì đối phương là videoCallData.from
+        const partnerId = isCalling ? videoCallData.from : videoCallData.from;
+
         if (finalStatus === CallStatus.REJECTED) {
           socket?.emit("call:reject", {
-            to: videoCallData.from,
+            to: partnerId,
             conversationId: videoCallData.conversationId,
             reason: "Người nghe từ chối cuộc gọi",
             messageId: videoCallData.messageId,
           });
         } else {
           socket?.emit("call:end", {
-            to: videoCallData.from,
+            to: partnerId,
             conversationId: videoCallData.conversationId,
             status: finalStatus,
             messageId: videoCallData.messageId,
@@ -142,7 +145,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
         peerRef.current.destroy();
         peerRef.current = null;
       }
-
       setIsCalling(false);
       setVideoAccepted(false);
       setCallEnded(true);
@@ -156,7 +158,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     if (!socket) return;
     const handleIncomingSignal = (data: any) => {
-      if ((isCalling || videoAccepted) && data.signal.type === "offer") {
+      // 1. Nếu đang bận thì báo bận ngay
+      if ((isCalling || videoAccepted) && data.signal?.type === "offer") {
         socket.emit("call:respond_status", {
           to: data.from,
           status: CallStatus.BUSY,
@@ -165,38 +168,50 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
 
-      if (data.signal.type === "offer") {
+      // 2. PHẢI SET STATE UI TRƯỚC (Để hiện Popup trả lời ngay lập tức)
+      if (data.signal?.type === "offer") {
+        console.log("Web nhận cuộc gọi từ Mobile, hiện Popup...");
+        setCallEnded(false);
         setVideoCallData({
           ...data,
           isReceiving: true,
           from: data.from,
-          fromName: data.fromName,
-          fromAvatar: data.fromAvatar,
-          callType: data.callType,
-          conversationId: data.conversationId,
-          messageId: data.messageId,
         });
         ringtoneRef.current.play().catch(() => {});
         setPendingSignals([]);
-      } else {
-        setVideoCallData((prev) => ({
-          ...prev,
-          signal: data.signal,
-        }));
+
+        // Cập nhật trạng thái Ringing lên DB
+        if (data.messageId) {
+          messageService.updateCallStatus({
+            messageId: data.messageId,
+            conversationId: data.conversationId,
+            status: CallStatus.RINGING,
+          });
+        }
       }
 
-      if (data.messageId && data.signal.type === "offer") {
-        messageService.updateCallStatus({
-          messageId: data.messageId,
-          conversationId: data.conversationId,
-          status: CallStatus.RINGING,
-        });
+      // 3. XỬ LÝ ANSWER (Nếu là người gọi nhận được phản hồi)
+      if (data.signal?.type === "answer") {
+        setVideoAccepted(true);
+        setCallEnded(false);
+        setIsCalling(false);
+        dialingRef.current.pause();
       }
 
-      if (peerRef.current) {
-        peerRef.current.signal(data.signal);
-      } else {
-        setPendingSignals((prev) => [...prev, data.signal]);
+      // 4. CUỐI CÙNG MỚI XỬ LÝ PEER VÀ BỌC TRONG TRY-CATCH (Để không làm treo UI)
+      try {
+        if (data.signal) {
+          if (peerRef.current) {
+            peerRef.current.signal(data.signal);
+          } else if (data.signal.type === "offer") {
+            setPendingSignals([data.signal]);
+          }
+        }
+      } catch (err) {
+        console.warn(
+          "Lờ đi lỗi định dạng SDP từ Mobile để giữ Popup UI:",
+          err.message,
+        );
       }
     };
 
@@ -306,8 +321,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const answerCall = async () => {
     setVideoAccepted(true);
+    setCallEnded(false);
     ringtoneRef.current.pause();
-
+    setVideoCallData((prev) => ({ ...prev, fromName: prev.fromName }));
     if (videoCallData.messageId) {
       try {
         await messageService.updateCallStatus({

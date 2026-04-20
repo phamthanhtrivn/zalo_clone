@@ -159,20 +159,6 @@ export const messageService = {
     });
   },
 
-  updateCallStatus: async (
-    messageId: string,
-    status: string,
-    conversationId: string,
-  ) => {
-    return await api.patch(
-      `/messages/conversation/${conversationId}/call-status`,
-      {
-        messageId,
-        status,
-      },
-    );
-  },
-
   // 7. Media & Tài liệu
   getMediasPreview: async (userId: string, conversationId: string) => {
     return await api.get(
@@ -199,10 +185,29 @@ export const messageService = {
     messageIds: string[],
     targetConversationIds: string[],
   ) => {
-    return await api.post(`/messages/forward`, {
+    const res = await api.post(`/messages/forward`, {
       userId,
       messageIds,
       targetConversationIds,
     });
+    return res;
+  },
+
+  createCallMessage: async (data: {
+    conversationId: string;
+    senderId: string;
+    type: "VIDEO" | "VOICE";
+  }) => {
+    const response = await api.post(`/messages/call`, data);
+    return response.data;
+  },
+
+  updateCallStatus: async (data: {
+    messageId: string;
+    conversationId: string;
+    status: string;
+  }) => {
+    const response = await api.patch(`/messages/call`, data);
+    return response.data;
   },
 };
