@@ -1479,7 +1479,7 @@ const ConversationInfoPanel = ({
             <AlertDialogTitle>Thông báo</AlertDialogTitle>
           </AlertDialogHeader>
           <AlertDialogDescription>
-            {leaveGroupErrorMessage}
+            Bạn cần chuyển quyền Trưởng nhóm trước khi rời đi.
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogAction
