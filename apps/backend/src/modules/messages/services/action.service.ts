@@ -26,6 +26,7 @@ import { RemoveReactionDto } from '../dto/remove-reaction.dto';
 import { ReadReceiptDto } from '../dto/read-reciept.dto';
 import { ConversationType } from 'src/common/types/enums/conversation-type';
 import { MemberRole } from 'src/common/types/enums/member-role';
+import { ConversationSetting } from 'src/modules/conversation-settings/schemas/conversation-setting.schema';
 
 @Injectable()
 export class MessagesActionService {
@@ -41,7 +42,10 @@ export class MessagesActionService {
     @Inject(forwardRef(() => ConversationsService))
     private readonly conversationService: ConversationsService,
     private readonly redisService: RedisService,
-  ) {}
+    @InjectModel(ConversationSetting.name)
+    private readonly conversationSettingModel: Model<ConversationSetting>,
+
+  ) { }
 
   async sendMessage(
     sendMessageDto: SendMessageDto,
@@ -58,10 +62,21 @@ export class MessagesActionService {
         }
       }
 
-      const conversation =
-        await this.conversationModel.findById(conversationId);
+      const conversation = await this.conversationModel.findById(conversationId);
       if (!conversation) {
         throw new NotFoundException('Conversation not found');
+      }
+      const conversationSetting = await this.conversationSettingModel.findOne({
+        userId: new Types.ObjectId(senderId),
+        conversationId: new Types.ObjectId(conversationId),
+      });
+      let expiresAt: Date | undefined;
+      if (conversationSetting?.expireDuration && conversationSetting.expireDuration > 0) {
+        expiresAt = new Date(Date.now() + conversationSetting.expireDuration);
+      }
+
+      if (sendMessageDto.expireDuration) {
+        expiresAt = new Date(Date.now() + sendMessageDto.expireDuration);
       }
 
       const member = await this.memberModel.findOne({
@@ -93,9 +108,7 @@ export class MessagesActionService {
       };
 
       if (files && files.length > 0) {
-        formattedContent.files = await Promise.all(
-          files.map((file) => this.storageService.uploadFile(file)),
-        );
+        formattedContent.files = await Promise.all(files.map((file) => this.storageService.uploadFile(file)));
       }
 
       if (
@@ -113,6 +126,7 @@ export class MessagesActionService {
         conversationId: new Types.ObjectId(conversationId),
         content: formattedContent,
         pinned: false,
+        expiresAt,
         recalled: false,
         reactions: [],
         readReceipts: [{ userId: new Types.ObjectId(senderId) }],
@@ -140,8 +154,8 @@ export class MessagesActionService {
 
       if (populatedMessage) {
         const conversationIdStr = conversationId.toString();
-        const transformedMessage =
-          this.transformService.transformMessage(populatedMessage);
+        const transformedMessage = this.transformService.transformMessage(populatedMessage);
+
 
         await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
           room: conversationIdStr,

@@ -49,7 +49,12 @@ const ConversationPage = () => {
   const isJumpingRef = useRef(false);
   const isFetchingRef = useRef(false);
   const isFetchingNewerRef = useRef(false);
-
+  // const conversation = useAppSelector((state) => {
+  //   const found = state.conversation.conversations.find(
+  //     (c) => c.conversationId === id,
+  //   );
+  //   return found ?? null;
+  // });
   const [isSelected, setIsSelected] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [showForwardModal, setShowForwardModal] = useState(false);
@@ -339,13 +344,13 @@ const ConversationPage = () => {
         prev.map((msg) =>
           msg._id === data.messageId
             ? {
-                ...msg,
-                call: {
-                  ...(msg.call || {}),
-                  status: data.status,
-                  duration: data.duration ?? msg.call?.duration ?? 0,
-                },
-              }
+              ...msg,
+              call: {
+                ...(msg.call || {}),
+                status: data.status,
+                duration: data.duration ?? msg.call?.duration ?? 0,
+              },
+            }
             : msg,
         ),
       );
@@ -361,7 +366,7 @@ const ConversationPage = () => {
       if (
         container &&
         container.scrollHeight - container.scrollTop - container.clientHeight <
-          150
+        150
       ) {
         requestAnimationFrame(() => {
           container.scrollTop = container.scrollHeight;
@@ -405,8 +410,18 @@ const ConversationPage = () => {
       );
       setPinnedMessages(data.pinnedMessages);
     });
+    const handleMessagesExpired = (data: { conversationId: string, messageIds: string[] }) => {
+      if (data.conversationId !== id) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          data.messageIds.includes(m._id) ? { ...m, expired: true } : m,
+        ),
+      );
+    };
+
     socket.on("read_receipt", handleReadReceipt);
     socket.on("call_updated", handleCallUpdated);
+    socket.on("messages_expired", handleMessagesExpired);
 
     return () => {
       [

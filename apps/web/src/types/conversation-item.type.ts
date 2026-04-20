@@ -4,7 +4,6 @@ export interface ConversationItemType {
   name: string;
   avatar: string;
   otherMemberId?: string | null;
-  unreadCount?: number;
   muted: boolean;
   mutedUntil?: string | null;
   pinned: boolean;
@@ -12,7 +11,6 @@ export interface ConversationItemType {
   category?: ConversationCategory;
   deletedAt: string | Date | null;
   expireDuration: number;
-  mutedUntil: Number | null;
   lastMessage: {
     _id: string;
     senderName: string;

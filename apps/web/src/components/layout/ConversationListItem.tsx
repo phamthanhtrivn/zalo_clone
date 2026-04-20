@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { cn } from "@/lib/utils";
@@ -59,6 +59,15 @@ const CATEGORY_STYLE = {
   later: "bg-yellow-500 before:bg-yellow-500",
   colleague: "bg-blue-500 before:bg-blue-500",
 };
+const getIsExpired = (expired?: boolean, expiresAt?: string | null) => {
+  if (expired) return true;
+  if (!expiresAt) return false;
+
+  const expiresAtMs = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiresAtMs)) return Boolean(expired);
+
+  return expiresAtMs <= Date.now();
+};
 
 const ConversationListItem = ({
   conversation,
@@ -71,9 +80,87 @@ const ConversationListItem = ({
   const user = useAppSelector((state) => state.auth.user);
   const [hoverMenu, setHoverMenu] = useState<string | null>(null);
   const { socket } = useSocket();
-
+  const [isLastMessageExpired, setIsLastMessageExpired] = useState(() =>
+    getIsExpired(conversation.lastMessage?.expired, conversation.lastMessage?.expiresAt),
+  );
   const closeSubMenu = () => setHoverMenu(null);
   const isDirect = conversation.type === "DIRECT";
+
+  const { markAsRead, markAsUnread } = useSocket(); // ✅ Lấy từ context
+  const handleConversationClick = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    navigate(`/conversation/${conversation.conversationId}`);
+
+    if (conversation.unreadCount > 0 && user?.userId && socket) {
+      console.log(`📖 Marking conversation ${conversation.conversationId} as read`);
+
+
+      dispatch(
+        setUnreadCount({
+          conversationId: conversation.conversationId,
+          unreadCount: 0,
+        })
+      );
+
+      try {
+        await markAsRead({
+          userId: user.userId,
+          conversationId: conversation.conversationId,
+        });
+      } catch (error) {
+        console.error("Failed to mark as read:", error);
+        dispatch(
+          setUnreadCount({
+            conversationId: conversation.conversationId,
+            unreadCount: conversation.unreadCount,
+          })
+        );
+      }
+    }
+  }, [conversation, user, socket, markAsRead, dispatch, navigate]);
+  const handleMarkUnread = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOpenMenu(null);
+
+    if (!user?.userId) return;
+
+    const prevUnreadCount = conversation.unreadCount;
+    const isCurrentlyUnread = prevUnreadCount > 0;
+
+    dispatch(
+      setUnreadCount({
+        conversationId: conversation.conversationId,
+        unreadCount: isCurrentlyUnread ? 0 : 1,
+      })
+    );
+
+    try {
+      if (isCurrentlyUnread) {
+        console.log("📖 Marking as read...");
+        await markAsRead({
+          userId: user.userId,
+          conversationId: conversation.conversationId,
+        });
+      } else {
+        console.log("📝 Marking as unread...");
+        await markAsUnread({
+          userId: user.userId,
+          conversationId: conversation.conversationId,
+        });
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      dispatch(
+        setUnreadCount({
+          conversationId: conversation.conversationId,
+          unreadCount: prevUnreadCount,
+        })
+      );
+    }
+  };
 
   const { refs, floatingStyles } = useFloating({
     placement: "bottom-end",
@@ -88,12 +175,11 @@ const ConversationListItem = ({
   });
 
   // --- LOGIC HIỂN THỊ PREVIEW (TỪ NHÁNH HEAD) ---
-  const previewContent = useMemo(() => {
+  const getPreviewContent = useMemo(() => {
     const lastMsg = conversation.lastMessage;
     if (!lastMsg) return "";
     if (lastMsg.recalled) return "Tin nhắn đã bị thu hồi";
-    if (lastMsg.expired) return "Tin nhắn đã hết hạn";
-
+    if (isLastMessageExpired) return "Tin nhắn đã hết hạn";
     const content = lastMsg.content;
     if (!content) return "";
 
@@ -101,25 +187,27 @@ const ConversationListItem = ({
     let text = "";
 
     if (content.text && /https?:\/\//.test(content.text)) {
-      icon = <HiMiniLink className="inline mr-1" />;
+      icon = <HiMiniLink />;
       text = content.text;
     } else if (content.icon) {
-      icon = <LuSticker className="inline mr-1" />;
+      icon = <LuSticker />;
       text = "Sticker";
     } else if (Array.isArray(content.files) && content.files.length > 0) {
       switch (content.files[content.files.length - 1].type) {
         case "IMAGE":
-          icon = <CiImageOn className="inline mr-1" />;
+          icon = <CiImageOn />;
           text = "Hình ảnh";
           break;
         case "VIDEO":
-          icon = <RiVideoLine className="inline mr-1" />;
+          icon = <RiVideoLine />;
           text = "Video";
           break;
         case "FILE":
-          icon = <GoFileSymlinkFile className="inline mr-1" />;
+          icon = <GoFileSymlinkFile />;
           text = content.files[0].fileName;
           break;
+        default:
+          text = "";
       }
     } else if (content.text) {
       text = content.text;
@@ -131,49 +219,7 @@ const ConversationListItem = ({
         <span className="truncate">{text}</span>
       </span>
     );
-  }, [conversation.lastMessage]);
-
-  // --- HANDLERS TỪ NHÁNH KhongVanTam ---
-  const handleMarkUnread = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setOpenMenu(null);
-    if (!user?.userId || !socket) return;
-
-    const prevUnreadCount = conversation.unreadCount;
-    const newUnreadCount = prevUnreadCount > 0 ? 0 : 1;
-
-    dispatch(
-      setUnreadCount({
-        conversationId: conversation.conversationId,
-        unreadCount: newUnreadCount,
-      }),
-    );
-
-    if (prevUnreadCount > 0) {
-      socket.emit(
-        "mark_as_read",
-        {
-          userId: user.userId,
-          conversationId: conversation.conversationId,
-        },
-        (response: any) => {
-          if (!response?.success) console.error("Failed to mark as read");
-        },
-      );
-    } else {
-      socket.emit(
-        "mark_as_unread",
-        {
-          userId: user.userId,
-          conversationId: conversation.conversationId,
-        },
-        (response: any) => {
-          if (!response?.success) console.error("Failed to mark as unread");
-        },
-      );
-    }
-  };
+  }, [conversation.lastMessage, isLastMessageExpired]);
 
   const handlePinConversation = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -249,10 +295,10 @@ const ConversationListItem = ({
       duration === 0
         ? await unmuteConversation(user?.userId, conversation.conversationId)
         : await muteConversation(
-            user?.userId,
-            conversation.conversationId,
-            duration,
-          );
+          user?.userId,
+          conversation.conversationId,
+          duration,
+        );
     } catch (error) {
       dispatch(
         updateConversationSetting({
@@ -296,7 +342,39 @@ const ConversationListItem = ({
       console.error("Set category failed:", error);
     }
   };
+  useEffect(() => {
+    const lastMessage = conversation.lastMessage;
 
+    if (lastMessage?.expired) {
+      setIsLastMessageExpired(true);
+      return;
+    }
+
+    if (!lastMessage?.expiresAt) {
+      setIsLastMessageExpired(false);
+      return;
+    }
+
+    const expiresAtMs = new Date(lastMessage.expiresAt).getTime();
+    if (Number.isNaN(expiresAtMs)) {
+      setIsLastMessageExpired(Boolean(lastMessage.expired));
+      return;
+    }
+
+    const remainingMs = expiresAtMs - Date.now();
+    if (remainingMs <= 0) {
+      setIsLastMessageExpired(true);
+      return;
+    }
+
+    setIsLastMessageExpired(false);
+    const timeoutId = window.setTimeout(
+      () => setIsLastMessageExpired(true),
+      remainingMs + 50,
+    );
+
+    return () => window.clearTimeout(timeoutId);
+  }, [conversation.lastMessage]);
   const handleDeleteConversation = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -342,9 +420,9 @@ const ConversationListItem = ({
 
   return (
     <div
-      onClick={() => navigate(`/conversation/${conversation.conversationId}`)}
+      onClick={handleConversationClick}
       className={cn(
-        "flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors group mt-2 mx-2 rounded-lg relative",
+        "flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors group mt-2 mx-2 rounded-lg",
         isActive ? "bg-[#e5efff]" : "hover:bg-[#f3f5f6]",
       )}
     >
@@ -646,22 +724,24 @@ const ConversationListItem = ({
             </span>
           )}
 
-          <span
-            className={cn(
-              "truncate flex-1 min-w-0 flex items-center gap-1",
-              conversation.unreadCount > 0
-                ? "font-semibold text-gray-900"
-                : "text-gray-500",
-            )}
-          >
-            {conversation.type === "GROUP" &&
-              conversation.lastMessage?.senderName &&
-              conversation.lastMessage.senderName !== "Bạn" && (
-                <span className="shrink-0">
-                  {conversation.lastMessage.senderName}:
-                </span>
+          <span className="text-[13px] text-gray-500 flex items-center gap-1 truncate">
+            {/* sender */}
+            <span className="shrink-0">
+              {conversation.type === "PRIVATE" &&
+                conversation.lastMessage?.senderName !== "Bạn"
+                ? ""
+                : `${conversation.lastMessage?.senderName ?? ""}: `}
+            </span>
+
+            {/* message content */}
+            <span
+              className={cn(
+                "flex items-center gap-1 truncate",
+                conversation.unreadCount > 0 ? "font-semibold text-gray-900" : "text-gray-500"
               )}
-            <div className="truncate">{previewContent}</div>
+            >
+              {getPreviewContent}
+            </span>
           </span>
         </p>
       </div>

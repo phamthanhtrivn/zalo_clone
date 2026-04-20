@@ -112,6 +112,7 @@ const conversationSlice = createSlice({
         category?: ConversationCategory | null;
         expireDuration?: number;
         group?: any;
+        unreadCount?: number;
       }>,
     ) {
       const c = state.conversations.find(
@@ -130,6 +131,8 @@ const conversationSlice = createSlice({
       if (action.payload.group !== undefined) {
         c.group = { ...c.group, ...action.payload.group };
       }
+      if (action.payload.unreadCount !== undefined)
+        c.unreadCount = action.payload.unreadCount;
     },
 
     setCategoryLocal(
@@ -145,17 +148,23 @@ const conversationSlice = createSlice({
       if (c) c.category = action.payload.category;
     },
 
-    removeConversation(
-      state,
-      action: PayloadAction<{ conversationId: string } | string>,
-    ) {
-      const id =
-        typeof action.payload === "string"
-          ? action.payload
-          : action.payload.conversationId;
+    // removeConversation(
+    //   state,
+    //   action: PayloadAction<{ conversationId: string } | string>,
+    // ) {
+    //   const id =
+    //     typeof action.payload === "string"
+    //       ? action.payload
+    //       : action.payload.conversationId;
+    //   state.conversations = state.conversations.filter(
+    //     (c) => c.conversationId !== id,
+    //   );
+    // },
+    removeConversation(state, action: PayloadAction<string>) {
       state.conversations = state.conversations.filter(
-        (c) => c.conversationId !== id,
+        (c) => c.conversationId !== action.payload
       );
+
     },
 
     resetUnreadCount(state, action: PayloadAction<string>) {
@@ -167,18 +176,23 @@ const conversationSlice = createSlice({
 
     // Tính năng tin nhắn tự xóa từ 
     removeExpiredMessages(state, action: PayloadAction<string[]>) {
-      for (const c of state.conversations) {
+      state.conversations = state.conversations.map((c) => {
         if (c.lastMessage && action.payload.includes(c.lastMessage._id)) {
-          c.lastMessage = {
-            ...c.lastMessage,
-            expired: true,
-            content: {
-              ...c.lastMessage.content,
-              text: "Tin nhắn đã hết hạn",
+          return {
+            ...c,
+            lastMessage: {
+              ...c.lastMessage,
+              expired: true,
+              content: {
+                ...c.lastMessage.content,
+                text: "Tin nhắn đã hết hạn",
+              },
             },
+            lastMessageAt: new Date().toISOString(),
           };
         }
-      }
+        return c;
+      });
     },
 
     updateRecallMessageInConversation(
@@ -219,23 +233,23 @@ const conversationSlice = createSlice({
       }>
     ) {
       const { conversationId, userId, lastReadMessageId } = action.payload;
+
       const conversation = state.conversations.find(
         (c) => c.conversationId === conversationId
       );
 
-      if (!conversation || !conversation.messages) return;
+      if (!conversation) return;
 
-      conversation.messages = conversation.messages.map((msg) => {
-        if (!lastReadMessageId || msg._id > lastReadMessageId) {
-          return {
-            ...msg,
-            readReceipts: msg.readReceipts?.filter(
-              (r) => r.userId !== userId
-            ),
-          };
-        }
-        return msg;
-      });
+      // Cập nhật unreadCount cho conversation
+      if (conversation.messages) {
+        const newUnreadCount = conversation.messages.filter((msg) => {
+          if (msg.senderId._id === userId) return false; // Không tính tin nhắn của chính user
+          if (!lastReadMessageId) return true;
+          return msg._id > lastReadMessageId;
+        }).length;
+
+        conversation.unreadCount = newUnreadCount;
+      }
     },
 
     // Quản lý tin nhắn đang Reply 
