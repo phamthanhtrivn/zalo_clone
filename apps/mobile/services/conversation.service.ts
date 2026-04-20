@@ -10,4 +10,20 @@ export const conversationService = {
     })));
     return response;
   },
+  search: async (
+    userId: string,
+    keyword: string,
+    scope: "all" | "contacts" | "messages" | "files" | "groups" = "all",
+    limit = 8,
+  ) => {
+    const response = await api.get("/conversations/search", {
+      params: {
+        userId,
+        keyword,
+        scope,
+        limit,
+      },
+    });
+    return response;
+  },
 };

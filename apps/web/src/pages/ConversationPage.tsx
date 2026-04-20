@@ -17,6 +17,7 @@ import ForwardModal from "@/components/layout/message/ForwardModal";
 
 const ConversationPage = () => {
   const { id } = useParams();
+  const location = useLocation();
   const dispatch = useAppDispatch();
   const conversations = useAppSelector(
     (state) => state.conversation.conversations,
@@ -50,8 +51,10 @@ const ConversationPage = () => {
   const lastMessageId = messages[messages.length - 1]?._id;
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
+  const pendingJumpMessageIdRef = useRef<string | null>(null);
 
   const { socket } = useSocket();
+  const selectedMessageId = new URLSearchParams(location.search).get("messageId");
   // Trong ConversationPage component, thêm useEffect để xử lý read_receipt
   // ConversationPage.tsx - useEffect đã đúng, chỉ cần kiểm tra
   // ConversationPage.tsx
@@ -572,12 +575,26 @@ const ConversationPage = () => {
     setPrevCursor(null);
 
     isFirstLoad.current = true;
+    pendingJumpMessageIdRef.current = selectedMessageId;
 
     handleLoadMessagesFromConversation();
     handleLoadPinnedMessages();
     handleOpenConversation();
     dispatch(clearReplyingMessage());
-  }, [id]);
+  }, [id, selectedMessageId]);
+
+  useEffect(() => {
+    if (!pendingJumpMessageIdRef.current || !messages.length) return;
+
+    const targetMessageId = pendingJumpMessageIdRef.current;
+    pendingJumpMessageIdRef.current = null;
+
+    const timeoutId = setTimeout(() => {
+      handleJumpToMessage(targetMessageId);
+    }, 250);
+
+    return () => clearTimeout(timeoutId);
+  }, [messages]);
 
   useEffect(() => {
     if (containerRef.current && isFirstLoad.current && messages.length) {

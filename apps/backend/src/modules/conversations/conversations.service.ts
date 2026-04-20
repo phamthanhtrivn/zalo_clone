@@ -19,6 +19,7 @@ import { ConversationItemDto } from './dto/conversation-item.dto';
 import { StorageService } from 'src/common/storage/storage.service';
 import { ConversationType } from 'src/common/types/enums/conversation-type';
 import { MemberRole } from 'src/common/types/enums/member-role';
+import { SearchConversationsDto } from './dto/search-conversations.dto';
 
 @Injectable()
 export class ConversationsService {
@@ -30,6 +31,10 @@ export class ConversationsService {
     @InjectConnection() private connection: Connection,
     private readonly storageService: StorageService,
   ) { }
+
+  private escapeRegex(value: string) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
 
   async createGroup(creatorId: string, dto: CreateGroupDto) {
     const uniqueMemberIds = [...new Set(dto.memberIds)];
@@ -753,5 +758,139 @@ export class ConversationsService {
       ...c,
       avatar: c.avatar ? this.storageService.signFileUrl(c.avatar) : null,
     }));
+  }
+
+  async search(query: SearchConversationsDto) {
+    const userObjectId = new Types.ObjectId(query.userId);
+    const keyword = query.keyword.trim();
+    const scope = query.scope ?? 'all';
+    const limit = Math.min(Math.max(Number(query.limit ?? '8'), 1), 20);
+    const regex = new RegExp(this.escapeRegex(keyword), 'i');
+
+    const conversationItems = await this.getConversationsFromUser(query.userId);
+    const conversationIds = conversationItems.map((conversation) => conversation.conversationId);
+    const conversationMap = new Map(
+      conversationItems.map((conversation) => [conversation.conversationId.toString(), conversation]),
+    );
+
+    if (!conversationIds.length) {
+      return {
+        contacts: [],
+        groups: [],
+        messages: [],
+        files: [],
+      };
+    }
+
+    const objectConversationIds = conversationIds.map((id) => new Types.ObjectId(id));
+
+    const contacts =
+      scope === 'all' || scope === 'contacts'
+        ? conversationItems
+            .filter(
+              (conversation) =>
+                conversation.type === ConversationType.DIRECT &&
+                regex.test(conversation.name ?? ''),
+            )
+            .slice(0, limit)
+            .map((conversation) => ({
+              conversationId: conversation.conversationId,
+              name: conversation.name,
+              avatar: conversation.avatar,
+              lastMessageAt: conversation.lastMessageAt,
+            }))
+        : [];
+
+    const groups =
+      scope === 'all' || scope === 'groups'
+        ? conversationItems
+            .filter(
+              (conversation) =>
+                conversation.type === ConversationType.GROUP &&
+                regex.test(conversation.name ?? ''),
+            )
+            .slice(0, limit)
+            .map((conversation) => ({
+              conversationId: conversation.conversationId,
+              name: conversation.name,
+              avatar: conversation.avatar,
+              lastMessageAt: conversation.lastMessageAt,
+              memberLabel: 'Nhom',
+            }))
+        : [];
+
+    const rawMessages =
+      scope === 'all' || scope === 'messages'
+        ? await this.messageModel
+            .find({
+              conversationId: { $in: objectConversationIds },
+              deletedFor: { $ne: userObjectId },
+              recalled: { $ne: true },
+              expired: { $ne: true },
+              'content.text': regex,
+            })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .populate('senderId', 'profile.name profile.avatarUrl')
+            .lean<any[]>()
+        : [];
+
+    const messages = rawMessages.map((message) => {
+      const conversation = conversationMap.get(message.conversationId.toString());
+      return {
+        messageId: message._id.toString(),
+        conversationId: message.conversationId.toString(),
+        conversationName: conversation?.name ?? 'Cuoc tro chuyen',
+        conversationAvatar: conversation?.avatar ?? null,
+        senderName: message.senderId?.profile?.name ?? 'Nguoi dung',
+        text: message.content?.text ?? '',
+        createdAt: message.createdAt,
+      };
+    });
+
+    const rawFileMessages =
+      scope === 'all' || scope === 'files'
+        ? await this.messageModel
+            .find({
+              conversationId: { $in: objectConversationIds },
+              deletedFor: { $ne: userObjectId },
+              recalled: { $ne: true },
+              expired: { $ne: true },
+              'content.files.fileName': regex,
+            })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .populate('senderId', 'profile.name profile.avatarUrl')
+            .lean<any[]>()
+        : [];
+
+    const files = rawFileMessages.flatMap((message) => {
+      const conversation = conversationMap.get(message.conversationId.toString());
+      const matchedFiles = (message.content?.files ?? []).filter((file: any) =>
+        regex.test(file.fileName ?? ''),
+      );
+
+      return matchedFiles.map((file: any) => ({
+        messageId: message._id.toString(),
+        conversationId: message.conversationId.toString(),
+        conversationName: conversation?.name ?? 'Cuoc tro chuyen',
+        conversationAvatar: conversation?.avatar ?? null,
+        senderName: message.senderId?.profile?.name ?? 'Nguoi dung',
+        createdAt: message.createdAt,
+        file: {
+          fileName: file.fileName,
+          fileSize: file.fileSize,
+          type: file.type,
+          fileKey: this.storageService.signFileUrl(file.fileKey),
+        },
+      }));
+    }).slice(0, limit);
+
+    return {
+      contacts,
+      groups,
+      messages,
+      files,
+    };
   }
 }

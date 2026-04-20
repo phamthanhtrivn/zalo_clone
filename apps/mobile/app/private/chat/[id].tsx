@@ -37,7 +37,7 @@ import { setConversations, setReplyingMessage, clearReplyingMessage } from "@/st
 
 export default function ChatWindow() {
   const conversations = useAppSelector((state) => state.conversation.conversations);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, messageId } = useLocalSearchParams<{ id: string; messageId?: string }>();
   const { socket } = useSocket();
   const user = useAppSelector((state) => state.auth.user);
   const router = useRouter();
@@ -85,6 +85,7 @@ export default function ChatWindow() {
   const isFetchingNewerRef = useRef(false);
   const isJumpingRef = useRef(false);
   const prevCursorRef = useRef<string | null>(null);
+  const pendingJumpMessageIdRef = useRef<string | null>(null);
 
   const isPinned = contextMenuMsg && pinnedMessages.some((m) => m._id === contextMenuMsg._id);
 
@@ -443,16 +444,30 @@ export default function ChatWindow() {
   // ================= EFFECTS =================
   useEffect(() => {
     if (id && user?.userId) {
+      pendingJumpMessageIdRef.current = messageId ?? null;
       fetchInitialMessages();
       messageService.readReceipt(user.userId, id);
 
       dispatch(clearReplyingMessage());
     }
-  }, [id, user?.userId]);
+  }, [id, user?.userId, messageId]);
 
   useEffect(() => {
     prevCursorRef.current = prevCursor;
   }, [prevCursor]);
+
+  useEffect(() => {
+    if (!pendingJumpMessageIdRef.current || !messages.length) return;
+
+    const targetMessageId = pendingJumpMessageIdRef.current;
+    pendingJumpMessageIdRef.current = null;
+
+    const timeoutId = setTimeout(() => {
+      handleJumpToMessage(targetMessageId);
+    }, 250);
+
+    return () => clearTimeout(timeoutId);
+  }, [messages]);
 
   useEffect(() => {
     const expiringMessages = messages.filter(

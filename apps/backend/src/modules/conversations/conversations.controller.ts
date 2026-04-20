@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { TransferOwnerDto } from './dto/transfer-owenr.dto';
 import { RemoveMemberDto } from './dto/remove-member.dto';
 import { AddMemberDto } from './dto/add-member.dto';
+import { SearchConversationsDto } from './dto/search-conversations.dto';
 
 @Controller('conversations')
 export class ConversationsController {
@@ -79,5 +81,10 @@ export class ConversationsController {
   @Get('/user/:userId')
   async getConversationsFromUserId(@Param('userId') userId: string) {
     return this.conversationsService.getConversationsFromUser(userId);
+  }
+
+  @Get('search')
+  async search(@Query() query: SearchConversationsDto) {
+    return this.conversationsService.search(query);
   }
 }
