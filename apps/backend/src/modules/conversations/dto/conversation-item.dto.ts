@@ -10,7 +10,7 @@ export type ConversationCategory =
   | null;
 
 export class ConversationItemDto {
-  conversationId: string | undefined;
+  conversationId: string;
   type: string | undefined;
   name: string | undefined;
   avatar?: string;
@@ -27,9 +27,12 @@ export class ConversationItemDto {
   expireDuration: number | undefined;
 
   lastMessage?: {
+    _id: string;
     senderName: string;
     content: Content;
     recalled: boolean;
+    expired?: boolean;
+    expiresAt?: Date | null;
   };
   lastMessageAt: Date | undefined;
 }

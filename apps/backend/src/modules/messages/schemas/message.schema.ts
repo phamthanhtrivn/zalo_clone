@@ -132,4 +132,4 @@ MessageSchema.index({
   createdAt: -1,
 });
 MessageSchema.index({ senderId: 1 });
-MessageSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+// MessageSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });

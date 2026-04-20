@@ -28,6 +28,7 @@ import { ConversationType } from 'src/common/types/enums/conversation-type';
 import { MemberRole } from 'src/common/types/enums/member-role';
 import { ConversationSetting } from 'src/modules/conversation-settings/schemas/conversation-setting.schema';
 
+
 @Injectable()
 export class MessagesActionService {
   constructor(
@@ -44,7 +45,6 @@ export class MessagesActionService {
     private readonly redisService: RedisService,
     @InjectModel(ConversationSetting.name)
     private readonly conversationSettingModel: Model<ConversationSetting>,
-
   ) { }
 
   async sendMessage(

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -83,6 +84,16 @@ const formatFileSize = (bytes: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const getIsExpired = (expired?: boolean, expiresAt?: string | null) => {
+  if (expired) return true;
+  if (!expiresAt) return false;
+
+  const expiresAtMs = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiresAtMs)) return Boolean(expired);
+
+  return expiresAtMs <= Date.now();
+};
+
 export default function MessageBubble({
   message,
   isMe,
@@ -104,11 +115,43 @@ export default function MessageBubble({
 
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [isExpired, setIsExpired] = useState(() =>
+    getIsExpired(message.expired, message.expiresAt),
+  );
 
   const mediaFiles = files.filter(
     (f: any) => f.type === "IMAGE" || f.type === "VIDEO",
   );
   const docFiles = files.filter((f: any) => f.type === "FILE");
+
+  useEffect(() => {
+    if (message.expired) {
+      setIsExpired(true);
+      return;
+    }
+
+    if (!message.expiresAt) {
+      setIsExpired(false);
+      return;
+    }
+
+    const expiresAtMs = new Date(message.expiresAt).getTime();
+    if (Number.isNaN(expiresAtMs)) {
+      setIsExpired(Boolean(message.expired));
+      return;
+    }
+
+    const remainingMs = expiresAtMs - Date.now();
+    if (remainingMs <= 0) {
+      setIsExpired(true);
+      return;
+    }
+
+    setIsExpired(false);
+    const timeoutId = setTimeout(() => setIsExpired(true), remainingMs + 50);
+
+    return () => clearTimeout(timeoutId);
+  }, [message.expired, message.expiresAt]);
 
   const handleDownload = async (file: any) => {
     try {
@@ -151,6 +194,57 @@ export default function MessageBubble({
       : isMe
         ? "#E5F1FF"
         : "white";
+  if (isExpired) {
+    return (
+      <View
+        style={{
+          flexDirection: isMe ? "row-reverse" : "row",
+          alignItems: "flex-end",
+          paddingHorizontal: 8,
+          marginBottom: 2,
+        }}
+      >
+        {!isMe && (
+          showAvatar ? (
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                overflow: "hidden",
+                backgroundColor: "#e5e7eb",
+                marginRight: 6,
+              }}
+            >
+              <Image
+                source={{ uri: message.senderId?.profile.avatarUrl }}
+                style={{ width: 32, height: 32 }}
+              />
+            </View>
+          ) : (
+            <View style={{ width: 32, marginRight: 6 }} />
+          )
+        )}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            backgroundColor: "#f0f0f0",
+            borderRadius: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            maxWidth: "75%",
+          }}
+        >
+          <Ionicons name="information-circle-outline" size={14} color="#9ca3af" />
+          <Text style={{ fontSize: 13, color: "#9ca3af", fontStyle: "italic" }}>
+            Tin nhắn đã hết hạn
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   if (message.recalled) {
     return (

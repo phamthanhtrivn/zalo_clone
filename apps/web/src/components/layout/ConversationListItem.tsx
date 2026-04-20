@@ -79,10 +79,11 @@ const ConversationListItem = ({
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
   const [hoverMenu, setHoverMenu] = useState<string | null>(null);
-  const { socket } = useSocket();
   const [isLastMessageExpired, setIsLastMessageExpired] = useState(() =>
     getIsExpired(conversation.lastMessage?.expired, conversation.lastMessage?.expiresAt),
   );
+  const { socket } = useSocket();
+
   const closeSubMenu = () => setHoverMenu(null);
   const isDirect = conversation.type === "DIRECT";
 
@@ -91,12 +92,14 @@ const ConversationListItem = ({
     e.preventDefault();
     e.stopPropagation();
 
+    // Chuyển hướng đến conversation
     navigate(`/conversation/${conversation.conversationId}`);
 
+    // ✅ Nếu có tin nhắn chưa đọc, đánh dấu đã đọc
     if (conversation.unreadCount > 0 && user?.userId && socket) {
       console.log(`📖 Marking conversation ${conversation.conversationId} as read`);
 
-
+      // Optimistic update
       dispatch(
         setUnreadCount({
           conversationId: conversation.conversationId,
@@ -111,6 +114,7 @@ const ConversationListItem = ({
         });
       } catch (error) {
         console.error("Failed to mark as read:", error);
+        // Rollback nếu có lỗi
         dispatch(
           setUnreadCount({
             conversationId: conversation.conversationId,
@@ -130,6 +134,7 @@ const ConversationListItem = ({
     const prevUnreadCount = conversation.unreadCount;
     const isCurrentlyUnread = prevUnreadCount > 0;
 
+    // ✅ Optimistic update
     dispatch(
       setUnreadCount({
         conversationId: conversation.conversationId,
@@ -174,7 +179,40 @@ const ConversationListItem = ({
     whileElementsMounted: autoUpdate,
   });
 
-  // --- LOGIC HIỂN THỊ PREVIEW (TỪ NHÁNH HEAD) ---
+  useEffect(() => {
+    const lastMessage = conversation.lastMessage;
+
+    if (lastMessage?.expired) {
+      setIsLastMessageExpired(true);
+      return;
+    }
+
+    if (!lastMessage?.expiresAt) {
+      setIsLastMessageExpired(false);
+      return;
+    }
+
+    const expiresAtMs = new Date(lastMessage.expiresAt).getTime();
+    if (Number.isNaN(expiresAtMs)) {
+      setIsLastMessageExpired(Boolean(lastMessage.expired));
+      return;
+    }
+
+    const remainingMs = expiresAtMs - Date.now();
+    if (remainingMs <= 0) {
+      setIsLastMessageExpired(true);
+      return;
+    }
+
+    setIsLastMessageExpired(false);
+    const timeoutId = window.setTimeout(
+      () => setIsLastMessageExpired(true),
+      remainingMs + 50,
+    );
+
+    return () => window.clearTimeout(timeoutId);
+  }, [conversation.lastMessage]);
+
   const getPreviewContent = useMemo(() => {
     const lastMsg = conversation.lastMessage;
     if (!lastMsg) return "";
@@ -462,7 +500,7 @@ const ConversationListItem = ({
               </span>
 
               {conversation.unreadCount > 0 && (
-                <span className="mt-1 bg-red-500 text-white text-[10px] px-2 py-[1px] rounded-full">
+                <span span className="mt-1 bg-red-500 text-white text-[10px] px-2 py-[1px] rounded-full">
                   {conversation.unreadCount > 99
                     ? "99+"
                     : conversation.unreadCount}
@@ -723,7 +761,6 @@ const ConversationListItem = ({
               }
             </span>
           )}
-
           <span className="text-[13px] text-gray-500 flex items-center gap-1 truncate">
             {/* sender */}
             <span className="shrink-0">
@@ -745,7 +782,7 @@ const ConversationListItem = ({
           </span>
         </p>
       </div>
-    </div>
+    </div >
   );
 };
 

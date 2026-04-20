@@ -135,7 +135,7 @@ export const conversationService = {
     );
     return response.data;
   },
-  
+
   updateGroupMetadata: async (
     id: string,
     payload: { name?: string; avatar?: File },
@@ -145,7 +145,7 @@ export const conversationService = {
     if (payload.avatar) formData.append("avatar", payload.avatar);
 
     const response = await apiClient.patch(
-      `/api/conversations/${id}/group-info`, 
+      `/api/conversations/${id}/group-info`,
       formData,
       {
         headers: {
@@ -153,6 +153,21 @@ export const conversationService = {
         },
       },
     );
-    return response.data;
   },
+  search: async (
+    userId: string,
+    keyword: string,
+    scope: "all" | "contacts" | "messages" | "files" | "groups" = "all",
+    limit = 8,
+  ) => {
+    const response = await apiClient.get("/api/conversations/search", {
+      params: {
+        userId,
+        keyword,
+        scope,
+        limit,
+      },
+    });
+    return response.data;
+  }
 };

@@ -2,7 +2,7 @@ import { useLocation } from "react-router-dom";
 import { SidebarSearch } from "./SidebarSearch";
 import { ContactMenu } from "./ContactMenu";
 import ConversationList from "./ConversationList";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { conversationService } from "@/services/conversation.service";
 import { setConversations } from "@/store/slices/conversationSlice";
 import { useAppDispatch, useAppSelector } from "@/store";
@@ -12,7 +12,7 @@ export const SidebarSecondary = () => {
   const isContactsRoute = location.pathname.startsWith("/contacts");
   const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
-
+  const [isSearching, setIsSearching] = useState(false);
   useEffect(() => {
     if (!user?.userId) return;
     const fetch = async () => {
@@ -38,9 +38,15 @@ export const SidebarSecondary = () => {
         </div>
       ) : (
         /* Chat List Sidebar (Default) */
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full relative">
           <SidebarSearch />
-          <ConversationList />
+          {/* ✅ Bây giờ isSearching đã được định nghĩa */}
+          {!isSearching ? (
+            <ConversationList />
+          ) : (
+            /* Search Results sẽ hiển thị thay thế ConversationList */
+            <div className="flex-1 overflow-hidden" />
+          )}
         </div>
       )}
     </aside>

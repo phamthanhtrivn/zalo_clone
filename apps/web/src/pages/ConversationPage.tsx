@@ -59,9 +59,19 @@ const ConversationPage = () => {
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [loadingForward, setLoadingForward] = useState(false);
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastProcessedMessageIdRef = useRef<string | null>(null);
+  const pendingJumpMessageIdRef = useRef<string | null>(null);
 
   const lastMessageId = messages[messages.length - 1]?._id;
   const { socket } = useSocket();
+  const selectedMessageId = new URLSearchParams(location.search).get("messageId");
+  // Trong ConversationPage component, thêm useEffect để xử lý read_receipt
+  // ConversationPage.tsx - useEffect đã đúng, chỉ cần kiểm tra
+  // ConversationPage.tsx
+  // ConversationPage.tsx
+  // ConversationPage.tsx
+
 
   // --- LOGIC THÔNG BÁO ---
   const toastAlert = useCallback((noti: string) => {
@@ -137,6 +147,51 @@ const ConversationPage = () => {
       console.error(err);
     }
   };
+
+
+  // ✅ SỬA: Chỉ xử lý read_receipt, bỏ qua messages_unread_updated
+  // ConversationPage.tsx
+  const processingRef = useRef<Set<string>>(new Set());
+  // ConversationPage.tsx
+  const handleReadReceipt = useCallback((data: {
+    conversationId: string;
+    messages: Array<{ _id: string; readReceipts: any[] }>;
+  }) => {
+    if (data.conversationId !== id) return;
+    console.log('📖 Client received read_receipt:');
+    data.messages.forEach(msg => {
+      console.log(`  Message ${msg._id}:`);
+      msg.readReceipts?.forEach((receipt, idx) => {
+        console.log(`    Receipt ${idx}:`, {
+          userId: receipt.userId?._id,
+          hasProfile: !!receipt.userId?.profile,
+          avatarUrl: receipt.userId?.profile?.avatarUrl,
+          fullData: receipt
+        });
+      });
+    });
+
+    setMessages((prev) => {
+      const updatedMap = new Map(data.messages.map((m) => [m._id, m.readReceipts]));
+      let hasChanges = false;
+
+      const newMessages = prev.map((msg) => {
+        const newReadReceipts = updatedMap.get(msg._id);
+        if (newReadReceipts) {
+          const currentReceipts = msg.readReceipts || [];
+          // Kiểm tra xem có thay đổi không
+          if (currentReceipts.length !== newReadReceipts.length) {
+            hasChanges = true;
+            return { ...msg, readReceipts: newReadReceipts };
+          }
+        }
+        return msg;
+      });
+
+      return hasChanges ? newMessages : prev;
+    });
+  }, [id]);
+
 
   const handleScrollToTop = async () => {
     const container = containerRef.current;
@@ -321,12 +376,31 @@ const ConversationPage = () => {
   // --- EFFECTS ---
   useEffect(() => {
     setMessages([]);
+    setPinnedMessages([]);
+    setNextCursor(null);
+    setPrevCursor(null);
+
+    isFirstLoad.current = true;
+    pendingJumpMessageIdRef.current = selectedMessageId;
+
     handleLoadMessagesFromConversation();
     handleLoadPinnedMessages();
     messageService.readReceipt(currentUserId, id!);
     dispatch(clearReplyingMessage());
-    isFirstLoad.current = true;
-  }, [id, currentUserId]);
+  }, [id, selectedMessageId]);
+
+  useEffect(() => {
+    if (!pendingJumpMessageIdRef.current || !messages.length) return;
+
+    const targetMessageId = pendingJumpMessageIdRef.current;
+    pendingJumpMessageIdRef.current = null;
+
+    const timeoutId = setTimeout(() => {
+      handleJumpToMessage(targetMessageId);
+    }, 250);
+
+    return () => clearTimeout(timeoutId);
+  }, [messages]);
 
   useEffect(() => {
     if (containerRef.current && isFirstLoad.current && messages.length) {
@@ -374,6 +448,7 @@ const ConversationPage = () => {
       }
     };
 
+
     const handleReadReceipt = (data: any) => {
       if (data.conversationId === id) {
         const updatedMap = new Map(
@@ -387,6 +462,73 @@ const ConversationPage = () => {
           ),
         );
       }
+    }
+
+    const handleMessageReacted = (data: {
+      messageId: string;
+      reactions: any[];
+    }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId ? { ...m, reactions: data.reactions } : m,
+        ),
+      );
+    };
+
+    const handleMessageRecalled = (data: { messageId: string }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId ? { ...m, recalled: true } : m,
+        ),
+      );
+    };
+
+    const handleMessagePinned = (data: {
+      messageId: string;
+      pinned: boolean;
+      pinnedMessages: any[];
+    }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId ? { ...m, pinned: data.pinned } : m,
+        ),
+      );
+
+      setPinnedMessages(data.pinnedMessages);
+    };
+
+    // const handleReadReceipt = (data: {
+    //   conversationId: string;
+    //   messages: MessagesType[];
+    // }) => {
+    //   if (data.conversationId === id) {
+    //     setMessages((prev) => {
+    //       const updatedMap = new Map(
+    //         data.messages.map((m) => [m._id, m.readReceipts]),
+    //       );
+
+    //       return prev.map((m) => {
+    //         const newReadReceipts = updatedMap.get(m._id);
+
+    //         if (!newReadReceipts) return m;
+
+    //         return {
+    //           ...m,
+    //           readReceipts: newReadReceipts,
+    //         };
+    //       });
+    //     });
+    //   }
+    // };
+
+    const handleMessagesExpired = (data: { conversationId: string, messageIds: string[] }) => {
+      if (data.conversationId !== id) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          data.messageIds.includes(m._id) ? { ...m, expired: true } : m,
+        ),
+      );
+
     };
 
     socket.on("new_message", handleNewMessage);
@@ -410,14 +552,7 @@ const ConversationPage = () => {
       );
       setPinnedMessages(data.pinnedMessages);
     });
-    const handleMessagesExpired = (data: { conversationId: string, messageIds: string[] }) => {
-      if (data.conversationId !== id) return;
-      setMessages((prev) =>
-        prev.map((m) =>
-          data.messageIds.includes(m._id) ? { ...m, expired: true } : m,
-        ),
-      );
-    };
+
 
     socket.on("read_receipt", handleReadReceipt);
     socket.on("call_updated", handleCallUpdated);
@@ -431,8 +566,13 @@ const ConversationPage = () => {
         "message_pinned",
         "read_receipt",
         "call_updated",
+        "messages_expired"
       ].forEach((ev) => socket.off(ev));
+
       socket.emit("leave_room", id);
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
     };
   }, [socket, id]);
 

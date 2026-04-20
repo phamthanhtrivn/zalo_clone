@@ -43,10 +43,8 @@ import {
 } from "@/store/slices/conversationSlice";
 
 export default function ChatWindow() {
-  const conversations = useAppSelector(
-    (state) => state.conversation.conversations,
-  );
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const conversations = useAppSelector((state) => state.conversation.conversations);
+  const { id, messageId } = useLocalSearchParams<{ id: string; messageId?: string }>();
   const { socket } = useSocket();
   const user = useAppSelector((state) => state.auth.user);
   const router = useRouter();
@@ -101,6 +99,7 @@ export default function ChatWindow() {
   const isFetchingNewerRef = useRef(false);
   const isJumpingRef = useRef(false);
   const prevCursorRef = useRef<string | null>(null);
+  const pendingJumpMessageIdRef = useRef<string | null>(null);
 
   const isPinned =
     contextMenuMsg && pinnedMessages.some((m) => m._id === contextMenuMsg._id);
@@ -134,7 +133,7 @@ export default function ChatWindow() {
         const isOldestFirst =
           msgs.length >= 2 &&
           new Date(msgs[0].createdAt) <
-            new Date(msgs[msgs.length - 1].createdAt);
+          new Date(msgs[msgs.length - 1].createdAt);
         const sorted = isOldestFirst ? msgs : [...msgs].reverse();
 
         setMessages(sorted);
@@ -169,7 +168,7 @@ export default function ChatWindow() {
         const isOldestFirst =
           newMsgs.length >= 2 &&
           new Date(newMsgs[0].createdAt) <
-            new Date(newMsgs[newMsgs.length - 1].createdAt);
+          new Date(newMsgs[newMsgs.length - 1].createdAt);
         const sortedNew = isOldestFirst ? newMsgs : [...newMsgs].reverse();
 
         setMessages((prev) => {
@@ -213,7 +212,7 @@ export default function ChatWindow() {
         const isOldestFirst =
           newMsgs.length >= 2 &&
           new Date(newMsgs[0].createdAt) <
-            new Date(newMsgs[newMsgs.length - 1].createdAt);
+          new Date(newMsgs[newMsgs.length - 1].createdAt);
         const sortedNew = isOldestFirst ? newMsgs : [...newMsgs].reverse();
 
         setMessages((prev) => {
@@ -452,15 +451,71 @@ export default function ChatWindow() {
   // ================= EFFECTS =================
   useEffect(() => {
     if (id && user?.userId) {
+      pendingJumpMessageIdRef.current = messageId ?? null;
       fetchInitialMessages();
       messageService.readReceipt(user.userId, id);
       dispatch(clearReplyingMessage());
     }
-  }, [id, user?.userId]);
+  }, [id, user?.userId, messageId]);
 
   useEffect(() => {
     prevCursorRef.current = prevCursor;
   }, [prevCursor]);
+
+  useEffect(() => {
+    if (!pendingJumpMessageIdRef.current || !messages.length) return;
+
+    const targetMessageId = pendingJumpMessageIdRef.current;
+    pendingJumpMessageIdRef.current = null;
+
+    const timeoutId = setTimeout(() => {
+      handleJumpToMessage(targetMessageId);
+    }, 250);
+
+    return () => clearTimeout(timeoutId);
+  }, [messages]);
+
+  useEffect(() => {
+    const expiringMessages = messages.filter(
+      (message) => !message.expired && message.expiresAt,
+    );
+
+    if (!expiringMessages.length) return;
+
+    const nextExpiryAt = Math.min(
+      ...expiringMessages
+        .map((message) => new Date(message.expiresAt!).getTime())
+        .filter((time) => !Number.isNaN(time)),
+    );
+
+    if (!Number.isFinite(nextExpiryAt)) return;
+
+    const syncExpiredMessages = () => {
+      setMessages((prev) =>
+        prev.map((message) => {
+          if (message.expired || !message.expiresAt) return message;
+
+          const expiresAtMs = new Date(message.expiresAt).getTime();
+          if (Number.isNaN(expiresAtMs) || expiresAtMs > Date.now()) {
+            return message;
+          }
+
+          return { ...message, expired: true };
+        }),
+      );
+    };
+
+    const delay = nextExpiryAt - Date.now();
+    if (delay <= 0) {
+      syncExpiredMessages();
+      return;
+    }
+
+    const timeoutId = setTimeout(syncExpiredMessages, delay + 50);
+    return () => clearTimeout(timeoutId);
+  }, [messages]);
+
+
 
   // ===== SOCKET =====
   useEffect(() => {
@@ -511,10 +566,16 @@ export default function ChatWindow() {
       );
     };
 
-    const handleReadReceipt = (data: {
-      conversationId: string;
-      messages: MessagesType[];
-    }) => {
+
+    const handleMessagesExpired = (data: { conversationId: string, messageIds: string[] }) => {
+      if (data.conversationId !== id) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          data.messageIds.includes(m._id) ? { ...m, expired: true } : m
+        )
+      );
+    };
+    const handleReadReceipt = (data: { conversationId: string; messages: MessagesType[] }) => {
       if (data.conversationId === id) {
         setMessages((prev) => {
           const updatedMap = new Map(
@@ -528,12 +589,13 @@ export default function ChatWindow() {
         });
       }
     };
-
+    socket.on("read_receipt", handleReadReceipt);
+    socket.on("messages_expired", handleMessagesExpired);
     socket.on("new_message", handleNewMessage);
     socket.on("message_reacted", handleMessageReacted);
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
-    socket.on("read_receipt", handleReadReceipt);
+
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -541,6 +603,9 @@ export default function ChatWindow() {
       socket.off("message_recalled", handleMessageRecalled);
       socket.off("message_pinned", handleMessagePinned);
       socket.off("read_receipt", handleReadReceipt);
+      socket.off("messages_expired", handleMessagesExpired);
+
+
       socket.emit("leave_room", id);
     };
   }, [socket, id, user?.userId]);
@@ -568,7 +633,7 @@ export default function ChatWindow() {
     const showDivider =
       !older ||
       new Date(older.createdAt).toDateString() !==
-        new Date(item.createdAt).toDateString();
+      new Date(item.createdAt).toDateString();
 
     const isSelected = selectedMessages.includes(item._id);
 
@@ -965,23 +1030,23 @@ export default function ChatWindow() {
             {contextMenuMsg.reactions?.some(
               (r) => r.userId?._id === user?.userId,
             ) && (
-              <TouchableOpacity
-                onPress={() => {
-                  handleRemoveReaction(contextMenuMsg._id);
-                  setContextMenuMsg(null);
-                }}
-                style={{
-                  width: 36,
-                  height: 36,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  borderRadius: 18,
-                  backgroundColor: "#f3f4f6",
-                }}
-              >
-                <Ionicons name="close" size={18} color="#6b7280" />
-              </TouchableOpacity>
-            )}
+                <TouchableOpacity
+                  onPress={() => {
+                    handleRemoveReaction(contextMenuMsg._id);
+                    setContextMenuMsg(null);
+                  }}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    borderRadius: 18,
+                    backgroundColor: "#f3f4f6",
+                  }}
+                >
+                  <Ionicons name="close" size={18} color="#6b7280" />
+                </TouchableOpacity>
+              )}
           </View>
 
           {/* ===== MENU ===== */}

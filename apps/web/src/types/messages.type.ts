@@ -61,4 +61,5 @@ export interface ReadReceiptType {
   };
   createdAt: string;
   updatedAt: string;
+
 }

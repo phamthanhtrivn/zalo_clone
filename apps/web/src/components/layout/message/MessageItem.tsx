@@ -17,6 +17,16 @@ import { useAppDispatch } from "@/store";
 import { setReplyingMessage } from "@/store/slices/conversationSlice";
 import { saveAs } from "file-saver";
 
+const getIsExpired = (expired?: boolean, expiresAt?: string | null) => {
+  if (expired) return true;
+  if (!expiresAt) return false;
+
+  const expiresAtMs = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiresAtMs)) return Boolean(expired);
+
+  return expiresAtMs <= Date.now();
+};
+
 interface Props {
   message: MessagesType;
   isMe: boolean;
@@ -57,6 +67,9 @@ export const MessageItem = ({
   const dispatch = useAppDispatch();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [isExpired, setIsExpired] = useState(() =>
+    getIsExpired(message.expired, message.expiresAt),
+  );
 
   // Tương thích với cả cấu trúc cũ (file) và cấu trúc mới (files array)
   const files =
@@ -68,6 +81,35 @@ export const MessageItem = ({
     window.addEventListener("click", handleClickOutside);
     return () => window.removeEventListener("click", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (message.expired) {
+      setIsExpired(true);
+      return;
+    }
+
+    if (!message.expiresAt) {
+      setIsExpired(false);
+      return;
+    }
+
+    const expiresAtMs = new Date(message.expiresAt).getTime();
+    if (Number.isNaN(expiresAtMs)) {
+      setIsExpired(Boolean(message.expired));
+      return;
+    }
+
+    const remainingMs = expiresAtMs - Date.now();
+    if (remainingMs <= 0) {
+      setIsExpired(true);
+      return;
+    }
+
+    setIsExpired(false);
+    const timeoutId = window.setTimeout(() => setIsExpired(true), remainingMs + 50);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [message.expired, message.expiresAt]);
 
   const handleDownloadAll = async () => {
     try {
@@ -121,7 +163,7 @@ export const MessageItem = ({
           )}
 
           <MessageBubble
-            message={message}
+            message={{ ...message, expired: isExpired }}
             isMe={isMe}
             showTime={showTime}
             isSelected={isSelected}
@@ -130,7 +172,7 @@ export const MessageItem = ({
             onJumpToMessage={onJumpToMessage}
           />
 
-          {!message.recalled && (
+          {!message.recalled && !isExpired && (
             <>
               <ReactionPicker
                 messageId={message._id}
@@ -149,7 +191,7 @@ export const MessageItem = ({
         </div>
 
         {/* ACTIONS */}
-        {!message.recalled && (
+        {!message.recalled && !isExpired && (
           <div
             className="
             relative flex items-center gap-1

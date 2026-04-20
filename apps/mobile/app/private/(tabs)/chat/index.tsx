@@ -10,28 +10,33 @@ import { useEffect, useState } from "react";
 import { conversationService } from "@/services/conversation.service";
 
 import {
+  removeExpiredMessages,
   setConversations,
   updateConversation,
 } from "@/store/slices/conversationSlice";
 import { useSocket } from "@/contexts/SocketContext";
-import { router } from "expo-router";
 import { createSelector } from "@reduxjs/toolkit";
 import type { RootState } from "@/store/store";
 
 // Memoized selector — only recomputes when conversations array changes
 
+// Home.tsx
 const selectVisibleConversations = createSelector(
   (state: RootState) => state.conversation.conversations,
-  (conversations) =>
-    [...conversations]
+  (conversations) => {
+    console.log('🔄 Selector running, conversations count:', conversations.length);
+    console.log('📊 Unread counts:', conversations.map(c => ({
+      name: c.name,
+      unreadCount: c.unreadCount
+    })));
+
+    return [...conversations]
       .filter((c) => !c.hidden)
       .sort((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-        return (
-          new Date(b.lastMessageAt).getTime() -
-          new Date(a.lastMessageAt).getTime()
-        );
-      }),
+        return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
+      });
+  }
 );
 
 export default function Home() {
@@ -67,13 +72,10 @@ export default function Home() {
     loadConversations();
   }, [user?.userId]);
 
-  // ⚡ Realtime
   useEffect(() => {
     if (!socket || !user?.userId) return;
 
     const handleNewMessage = (newMessage: any) => {
-      // Chỉ update conversation tương ứng, KHÔNG ghi đè toàn bộ store
-      // để tránh mất trạng thái pin/mute đã thay đổi local
       if (newMessage?.conversation) {
         dispatch(updateConversation(newMessage.conversation));
       }
@@ -85,6 +87,50 @@ export default function Home() {
       socket.off("new_message", handleNewMessage);
     };
   }, [socket, user?.userId]);
+
+  useEffect(() => {
+    const expiringConversations = conversations.filter(
+      (conversation) =>
+        conversation.lastMessage &&
+        !conversation.lastMessage.expired &&
+        conversation.lastMessage.expiresAt,
+    );
+
+    if (!expiringConversations.length) return;
+
+    const nextExpiryAt = Math.min(
+      ...expiringConversations
+        .map((conversation) => new Date(conversation.lastMessage.expiresAt!).getTime())
+        .filter((time) => !Number.isNaN(time)),
+    );
+
+    if (!Number.isFinite(nextExpiryAt)) return;
+
+    const syncExpiredConversations = () => {
+      const expiredMessageIds = conversations
+        .filter((conversation) => {
+          const expiresAt = conversation.lastMessage?.expiresAt;
+          if (conversation.lastMessage?.expired || !expiresAt) return false;
+
+          const expiresAtMs = new Date(expiresAt).getTime();
+          return !Number.isNaN(expiresAtMs) && expiresAtMs <= Date.now();
+        })
+        .map((conversation) => conversation.lastMessage!._id);
+
+      if (expiredMessageIds.length) {
+        dispatch(removeExpiredMessages(expiredMessageIds));
+      }
+    };
+
+    const delay = nextExpiryAt - Date.now();
+    if (delay <= 0) {
+      syncExpiredConversations();
+      return;
+    }
+
+    const timeoutId = setTimeout(syncExpiredConversations, delay + 50);
+    return () => clearTimeout(timeoutId);
+  }, [conversations, dispatch]);
 
   return (
     <Container>
@@ -141,22 +187,10 @@ export default function Home() {
             data={conversations}
             keyExtractor={(item) => item.conversationId}
             renderItem={({ item }) => (
-              <Pressable
-                onPress={() =>
-                  router.push({
-                    pathname: "/private/chat/[id]",
-                    params: {
-                      id: item.conversationId,
-                      conversation: JSON.stringify(item),
-                    },
-                  })
-                }
-              >
-                <ConversationItem
-                  conversation={item}
-                  currentUserId={user?.userId || ""}
-                />
-              </Pressable>
+              <ConversationItem
+                conversation={item}
+                currentUserId={user?.userId || ""}
+              />
             )}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />

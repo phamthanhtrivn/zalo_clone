@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Body,
   Controller,
@@ -7,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UploadedFile,
   UseGuards,
@@ -20,11 +22,12 @@ import { RemoveMemberDto } from './dto/remove-member.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { JwtAuthGuard } from '../auth/passport/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { SearchConversationsDto } from './dto/search-conversations.dto';
 
 @Controller('conversations')
 @UseGuards(JwtAuthGuard)
 export class ConversationsController {
-  constructor(private readonly conversationsService: ConversationsService) {}
+  constructor(private readonly conversationsService: ConversationsService) { }
 
   @Get()
   async getMyConversations(@Req() req) {
@@ -200,5 +203,12 @@ export class ConversationsController {
       updateDto,
       file,
     );
+
   }
+  @Get('search')
+  async search(@Query() query: SearchConversationsDto) {
+    return this.conversationsService.search(query);
+
+  }
+
 }

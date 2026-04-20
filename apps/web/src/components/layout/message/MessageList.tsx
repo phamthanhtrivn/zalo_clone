@@ -104,7 +104,7 @@ const MessageList = ({
         const showDivider =
           !prev ||
           new Date(prev.createdAt).toDateString() !==
-            new Date(message.createdAt).toDateString();
+          new Date(message.createdAt).toDateString();
 
         return (
           <div
@@ -143,34 +143,41 @@ const MessageList = ({
               onJumpToMessage={onJumpToMessage}
             />
 
-            {/* Read Receipts logic */}
-            {isLastMessage &&
-              !message.recalled &&
-              message.readReceipts &&
-              message.readReceipts.length > 0 && (
-                <div
-                  className={`flex ${
-                    isMe ? "justify-end" : "justify-start ml-11"
-                  } mt-1 pr-1`}
-                >
-                  <div className="flex items-center">
-                    {message.readReceipts.slice(0, 3).map((user: any, idx) => (
+            {isLastMessage && !message.recalled && message.readReceipts && message.readReceipts.length > 0 && (
+              <div className={`flex ${isMe ? "justify-end" : "justify-start ml-11"} mt-1 pr-1`}>
+                <div className="flex items-center">
+                  {message.readReceipts.slice(0, 3).map((receipt: any, idx: number) => {
+                    const avatarUrl = receipt.userId?.profile?.avatarUrl;
+                    const userName = receipt.userId?.profile?.name || 'User';
+
+                    return (
                       <img
                         key={idx}
-                        src={user?.userId?.profile?.avatarUrl}
-                        className="w-4 h-4 rounded-full border border-white -ml-1 first:ml-0"
-                        title={user?.userId?.profile?.name}
-                        alt="avatar"
+                        src={avatarUrl}
+                        className="w-4 h-4 rounded-full border border-white"
+                        alt={userName}
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent) {
+                            const fallback = document.createElement('div');
+                            fallback.className = 'w-4 h-4 rounded-full bg-gray-400 border border-white flex items-center justify-center text-[8px] text-white';
+                            fallback.textContent = userName.charAt(0).toUpperCase();
+                            parent.insertBefore(fallback, target);
+                          }
+                        }}
                       />
-                    ))}
-                    {message.readReceipts.length > 3 && (
-                      <div className="w-4 h-4 rounded-full bg-gray-300 text-[8px] flex items-center justify-center border border-white -ml-1">
-                        +{message.readReceipts.length - 3}
-                      </div>
-                    )}
-                  </div>
+                    );
+                  })}
+                  {message.readReceipts.length > 3 && (
+                    <div className="w-4 h-4 rounded-full bg-gray-300 text-[10px] flex items-center justify-center border border-white">
+                      +{message.readReceipts.length - 3}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
+            )}
           </div>
         );
       })}

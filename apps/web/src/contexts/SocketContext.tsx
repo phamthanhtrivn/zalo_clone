@@ -61,15 +61,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const user = useAppSelector((state) => state.auth.user);
   const socketRef = useRef<Socket | null>(null);
 
-  // --- HELPERS ---
-  const navigateHome = () => {
-    try {
-      window.history.pushState({}, "", "/");
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    } catch {
-      window.location.href = "/";
-    }
-  };
   const handleMarkAsRead = useCallback(async (data: { userId: string; conversationId: string }) => {
     if (!socketRef.current) return;
 
@@ -97,6 +88,18 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       });
     });
   }, []);
+
+
+  // --- HELPERS ---
+  const navigateHome = () => {
+    try {
+      window.history.pushState({}, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    } catch {
+      window.location.href = "/";
+    }
+  };
+
   // --- INITIALIZE SOCKET ---
   useEffect(() => {
     if (!user?.userId) return;
@@ -168,8 +171,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     // 4. Tin nhắn hết hạn 
-    const handleMessagesExpired = (data: { conversationId: string, messageIds: string[] }) => {
+    const handleMessagesExpired = (data: {
+      conversationId: string;
+      messageIds: string[];
+    }) => {
       dispatch(removeExpiredMessages(data.messageIds));
+
     };
 
     // 5. Cập nhật Cài đặt hội thoại (Ghim, Ẩn, Tắt thông báo)
@@ -187,6 +194,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       if ("category" in data) patch.category = data.category;
       if ("expireDuration" in data) patch.expireDuration = data.expireDuration;
       if ("unreadCount" in data) {
+        console.log('📢 unreadCount from broadcast:', data.unreadCount);
         patch.unreadCount = data.unreadCount;
       }
       dispatch(updateConversationSetting(patch));
@@ -213,57 +221,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       type: "read" | "unread";
     }) => {
       dispatch(updateReadReceipt(data));
-    };
-
-    // 8. Group Events 
-    const handleGroupDisbanded = (payload: any) => {
-      const conversationId =
-        payload?.conversationId ||
-        payload?.id ||
-        (typeof payload === "string" ? payload : "");
-      if (!conversationId) return;
-
-      dispatch(removeConversation({ conversationId }));
-
-      const path = window.location?.pathname || "";
-      if (path.includes(conversationId)) {
-        setGroupDisbandedConversationId(conversationId);
-        setGroupDisbandedDialogOpen(true);
-      }
-    };
-
-    const handleRemovedFromConversation = (payload: any) => {
-      const { conversationId } = payload;
-      if (!conversationId) return;
-
-      dispatch(removeConversation({ conversationId }));
-
-      const path = window.location?.pathname || "";
-      if (path.includes(conversationId)) {
-        alert("Bạn đã bị mời ra khỏi nhóm này.");
-        navigateHome();
-      }
-    };
-
-    const handleGroupSettingsUpdate = (data: any) => {
-      dispatch(
-        updateConversationSetting({
-          conversationId: data.conversationId,
-          group: data.group,
-        }),
-      );
-    };
-
-    const handleGroupUpdated = (data: any) => {
-      console.log("Nhận sự kiện group_updated:", data);
-      dispatch(
-        updateConversationSetting({
-          conversationId: data.conversationId,
-          name: data.name,
-          avatar: data.avatar,
-          group: data.group,
-        }),
-      );
     };
     const handleMarkAsReadSuccess = (data: {
       conversationId: string;
@@ -322,12 +279,68 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       console.error('❌ mark_as_read:error', data);
     };
 
+
     const handleMarkAsUnreadError = (data: {
       conversationId: string;
       message: string;
     }) => {
       console.error('❌ mark_as_unread:error', data);
     };
+    socketInstance.on("message_read", handleMessageRead);
+
+    // socketInstance.on("messages_unread_updated", handleUnreadUpdate);
+
+    // 8. Group Events 
+    const handleGroupDisbanded = (payload: any) => {
+      const conversationId =
+        payload?.conversationId ||
+        payload?.id ||
+        (typeof payload === "string" ? payload : "");
+      if (!conversationId) return;
+
+      dispatch(removeConversation({ conversationId }));
+
+      const path = window.location?.pathname || "";
+      if (path.includes(conversationId)) {
+        setGroupDisbandedConversationId(conversationId);
+        setGroupDisbandedDialogOpen(true);
+      }
+    };
+
+    const handleRemovedFromConversation = (payload: any) => {
+      const { conversationId } = payload;
+      if (!conversationId) return;
+
+      dispatch(removeConversation({ conversationId }));
+
+      const path = window.location?.pathname || "";
+      if (path.includes(conversationId)) {
+        alert("Bạn đã bị mời ra khỏi nhóm này.");
+        navigateHome();
+      }
+    };
+
+    const handleGroupSettingsUpdate = (data: any) => {
+      dispatch(
+        updateConversationSetting({
+          conversationId: data.conversationId,
+          group: data.group,
+        }),
+      );
+    };
+
+    const handleGroupUpdated = (data: any) => {
+      console.log("Nhận sự kiện group_updated:", data);
+      dispatch(
+        updateConversationSetting({
+          conversationId: data.conversationId,
+          name: data.name,
+          avatar: data.avatar,
+          group: data.group,
+        }),
+      );
+    };
+
     const handleMemberUpdated = () => {
       dispatch(fetchConversations());
     };
@@ -373,6 +386,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.off('mark_as_unread:error', handleMarkAsUnreadError);
       socketInstance.off('mark_as_read:broadcast', handleMarkAsReadBroadcast);
       socketInstance.off('mark_as_unread:broadcast', handleMarkAsUnreadBroadcast);
+
       socketInstance.off("new_conversation", handleNewConversation);
       socketInstance.off("new_message_sidebar", handleNewMessageSidebar);
       socketInstance.off(
@@ -393,6 +407,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         handleConversationDelete,
       );
 
+      socketInstance.off('messages_expired', handleMessagesExpired);
+      socketInstance.off("message_read", handleMessageRead);
+      socketInstance.off("messages_unread_updated", handleUnreadUpdate);
+
+
       socketInstance.off("group_disbanded", handleGroupDisbanded);
       socketInstance.off(
         "removed_from_conversation",
@@ -406,7 +425,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [apiUrl, dispatch, user?.userId]);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected, markAsRead: handleMarkAsRead, markAsUnread: handleMarkAsUnread }}>      {children}
+    <SocketContext.Provider value={{ socket, isConnected, markAsRead: handleMarkAsRead, markAsUnread: handleMarkAsUnread }}>
+      {children}
 
       {/* Dialog thông báo giải tán nhóm */}
       <AlertDialog
