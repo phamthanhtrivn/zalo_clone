@@ -48,7 +48,7 @@ export class ConversationsService {
     private readonly messagesService: MessagesService,
     @InjectModel(JoinRequest.name)
     private readonly joinRequestModel: Model<JoinRequest>,
-  ) { }
+  ) {}
 
   private escapeRegex(value: string) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -859,351 +859,276 @@ export class ConversationsService {
 
   async getConversationsFromUser(userId: string) {
     const userObjectId = new Types.ObjectId(userId);
-    const conversations: ConversationItemDto[] =
-      await this.memberModel.aggregate([
-        {
-          $match: {
-            userId: userObjectId,
-            leftAt: null,
+    const conversations = await this.memberModel.aggregate([
+      { $match: { userId: userObjectId, leftAt: null } },
+      {
+        $lookup: {
+          from: 'conversations',
+          localField: 'conversationId',
+          foreignField: '_id',
+          as: 'conversation',
+        },
+      },
+      { $unwind: '$conversation' },
+
+      // Lấy last message
+      {
+        $lookup: {
+          from: 'messages',
+          let: {
+            convId: '$conversationId',
+            lastMsgId: '$conversation.lastMessageId',
           },
-        },
-
-        {
-          $lookup: {
-            from: 'conversations',
-            localField: 'conversationId',
-            foreignField: '_id',
-            as: 'conversation',
-          },
-        },
-
-        { $unwind: '$conversation' },
-
-        {
-          $lookup: {
-            from: 'messages',
-            let: {
-              conversationId: '$conversation._id',
-              lastMessageId: '$conversation.lastMessageId',
-              currentUser: '$userId',
-            },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $and: [
-                      { $eq: ['$conversationId', '$$conversationId'] },
-                      {
-                        $not: {
-                          $in: [
-                            '$$currentUser',
-                            { $ifNull: ['$deletedFor', []] },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              },
-              {
-                $addFields: {
-                  isLastMessage: {
-                    $eq: ['$_id', '$$lastMessageId'],
-                  },
-                },
-              },
-              {
-                $sort: {
-                  isLastMessage: -1,
-                  createdAt: -1,
-                },
-              },
-              { $limit: 1 },
-            ],
-            as: 'lastMessage',
-          },
-        },
-
-        {
-          $unwind: {
-            path: '$lastMessage',
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'lastMessage.senderId',
-            foreignField: '_id',
-            as: 'sender',
-          },
-        },
-
-        {
-          $unwind: {
-            path: '$sender',
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-        {
-          $lookup: {
-            from: 'members',
-            localField: 'conversationId',
-            foreignField: 'conversationId',
-            as: 'members',
-          },
-        },
-        {
-          $lookup: {
-            from: 'users',
-            let: {
-              members: '$members',
-              currentUser: '$userId',
-            },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $in: [
-                      '$_id',
-                      {
-                        $map: {
-                          input: {
-                            $filter: {
-                              input: '$$members',
-                              as: 'm',
-                              cond: {
-                                $and: [
-                                  { $ne: ['$$m.userId', '$$currentUser'] },
-                                  { $eq: ['$$m.leftAt', null] },
-                                ],
-                              },
-                            },
-                          },
-                          as: 'm',
-                          in: '$$m.userId',
-                        },
-                      },
-                    ],
-                  },
-                },
-              },
-            ],
-            as: 'otherUser',
-          },
-        },
-        {
-          $lookup: {
-            from: 'conversationsettings',
-            let: {
-              conversationId: '$conversation._id',
-              userId: '$userId',
-            },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $and: [
-                      { $eq: ['$conversationId', '$$conversationId'] },
-                      { $eq: ['$userId', '$$userId'] },
-                    ],
-                  },
-                },
-              },
-            ],
-            as: 'settings',
-          },
-        },
-        {
-          $lookup: {
-            from: 'messages',
-            let: {
-              conversationId: '$conversation._id',
-              lastReadMessageId: '$lastReadMessageId',
-              currentUser: '$userId',
-              clearAt: '$settings.clearAt',
-            },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $and: [
-                      { $eq: ['$conversationId', '$$conversationId'] },
-
-                      // unread
-                      {
-                        $gt: [
-                          '$_id',
-                          {
-                            $ifNull: [
-                              '$$lastReadMessageId',
-                              new Types.ObjectId("000000000000000000000000"),
-                            ],
-                          },
-                        ],
-                      },
-
-                      { $ne: ['$senderId', '$$currentUser'] },
-                      {
-                        $not: {
-                          $in: [
-                            '$$currentUser',
-                            { $ifNull: ['$deletedFor', []] },
-                          ],
-                        },
-                      },
-                      { $ne: ['$recalled', true] },
-
-                      { $ne: ['$expired', true] },
-
-                      {
-                        $or: [
-                          { $eq: ['$$clearAt', null] },
-                          { $gt: ['$createdAt', '$$clearAt'] }
-                        ]
-                      },
-
-                      {
-                        $or: [
-                          { $eq: ['$expiresAt', null] },
-                          { $gt: ['$expiresAt', '$$NOW'] }
-                        ]
-                      }
-                    ]
-                  }
-                },
-              },
-              {
-                $count: 'count',
-              },
-            ],
-            as: 'unreadData',
-          },
-        },
-
-        {
-          $unwind: {
-            path: '$otherUser',
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-        {
-
-          $lookup: {
-            from: 'conversationsettings',
-            let: {
-              conversationId: '$conversation._id',
-              userId: '$userId',
-            },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $and: [
-                      { $eq: ['$conversationId', '$$conversationId'] },
-                      { $eq: ['$userId', '$$userId'] },
-                    ],
-                  },
-                },
-              },
-            ],
-            as: 'settings',
-          },
-        },
-        {
-          $unwind: {
-            path: '$settings',
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-        {
-          $match: {
-            $or: [
-              { 'settings.deletedAt': null },
-              { settings: null }
-            ]
-          }
-        },
-
-        {
-          $project: {
-            _id: 0,
-            conversationId: '$conversation._id',
-            type: '$conversation.type',
-            pinned: { $ifNull: ['$settings.pinned', false] },
-            hidden: { $ifNull: ['$settings.hidden', false] },
-            category: { $ifNull: ['$settings.category', null] },
-            expireDuration: { $ifNull: ['$settings.expireDuration', 0] },
-            muted: {
-              $cond: [
-                {
+          pipeline: [
+            {
+              $match: {
+                $expr: {
                   $and: [
-                    { $ne: ['$settings.mutedUntil', null] },
-                    { $gt: ['$settings.mutedUntil', '$$NOW'] },
+                    { $eq: ['$conversationId', '$$convId'] },
+                    {
+                      $not: {
+                        $in: [userObjectId, { $ifNull: ['$deletedFor', []] }],
+                      },
+                    },
                   ],
                 },
-                true,
-                false,
-              ],
+              },
             },
-            name: {
-              $cond: [
-                { $eq: ['$conversation.type', 'GROUP'] },
-                '$conversation.group.name',
-                '$otherUser.profile.name',
-              ],
-            },
+            { $sort: { createdAt: -1 } },
+            { $limit: 1 },
+          ],
+          as: 'lastMessage',
+        },
+      },
+      { $unwind: { path: '$lastMessage', preserveNullAndEmptyArrays: true } },
 
-            avatar: {
-              $cond: [
-                { $eq: ['$conversation.type', 'GROUP'] },
-                '$conversation.group.avatarUrl',
-                '$otherUser.profile.avatarUrl',
-              ],
-            },
+      // Lấy thông tin người gửi tin nhắn cuối
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'lastMessage.senderId',
+          foreignField: '_id',
+          as: 'lastMessageSender',
+        },
+      },
+      {
+        $unwind: {
+          path: '$lastMessageSender',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
 
-            lastMessage: {
-              _id: '$lastMessage._id',
-              senderName: {
-                $cond: [
-                  { $eq: ['$lastMessage.senderId', '$userId'] },
-                  'Bạn',
-                  '$sender.profile.name',
+      // Lấy thông tin thành viên khác
+      {
+        $lookup: {
+          from: 'members',
+          let: { convId: '$conversationId' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$conversationId', '$$convId'] },
+                    { $ne: ['$userId', userObjectId] },
+                  ],
+                },
+              },
+            },
+            { $limit: 1 },
+            {
+              $lookup: {
+                from: 'users',
+                localField: 'userId',
+                foreignField: '_id',
+                as: 'userInfo',
+              },
+            },
+            { $unwind: '$userInfo' },
+          ],
+          as: 'otherMemberInfo',
+        },
+      },
+      {
+        $unwind: { path: '$otherMemberInfo', preserveNullAndEmptyArrays: true },
+      },
+
+      // Lấy settings
+      {
+        $lookup: {
+          from: 'conversationsettings',
+          let: { cid: '$conversation._id', uid: userObjectId },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$conversationId', '$$cid'] },
+                    { $eq: ['$userId', '$$uid'] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: 'settings',
+        },
+      },
+      { $unwind: { path: '$settings', preserveNullAndEmptyArrays: true } },
+
+      // Tính unreadCount
+      {
+        $lookup: {
+          from: 'messages',
+          let: {
+            conversationId: '$conversation._id',
+            lastReadMessageId: '$lastReadMessageId',
+            currentUser: userObjectId,
+            clearAt: '$settings.clearAt',
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$conversationId', '$$conversationId'] },
+                    // Tin nhắn sau lastReadMessageId
+                    {
+                      $gt: [
+                        '$_id',
+                        {
+                          $ifNull: [
+                            '$$lastReadMessageId',
+                            new Types.ObjectId('000000000000000000000000'),
+                          ],
+                        },
+                      ],
+                    },
+                    // Không phải tin nhắn của chính user
+                    { $ne: ['$senderId', '$$currentUser'] },
+                    // Chưa bị xóa cho user
+                    {
+                      $not: {
+                        $in: [
+                          '$$currentUser',
+                          { $ifNull: ['$deletedFor', []] },
+                        ],
+                      },
+                    },
+                    // Chưa bị thu hồi
+                    { $ne: ['$recalled', true] },
+                    // Chưa hết hạn
+                    { $ne: ['$expired', true] },
+                    // Sau thời điểm clear (nếu có)
+                    {
+                      $or: [
+                        { $eq: ['$$clearAt', null] },
+                        { $gt: ['$createdAt', '$$clearAt'] },
+                      ],
+                    },
+                    // Chưa expiresAt
+                    {
+                      $or: [
+                        { $eq: ['$expiresAt', null] },
+                        { $gt: ['$expiresAt', '$$NOW'] },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+            {
+              $count: 'count',
+            },
+          ],
+          as: 'unreadData',
+        },
+      },
+
+      // Filter conversation đã bị xóa
+      {
+        $match: {
+          $or: [
+            { settings: null },
+            { 'settings.deletedAt': null },
+            {
+              $expr: {
+                $gt: ['$conversation.lastMessageAt', '$settings.deletedAt'],
+              },
+            },
+          ],
+        },
+      },
+
+      {
+        $project: {
+          _id: 0,
+          conversationId: '$conversation._id',
+          type: '$conversation.type',
+          group: '$conversation.group',
+          unreadCount: {
+            $ifNull: [{ $arrayElemAt: ['$unreadData.count', 0] }, 0],
+          },
+          pinned: { $ifNull: ['$settings.pinned', false] },
+          hidden: { $ifNull: ['$settings.hidden', false] },
+          category: { $ifNull: ['$settings.category', null] },
+          expireDuration: { $ifNull: ['$settings.expireDuration', 0] },
+          muted: {
+            $cond: [
+              {
+                $and: [
+                  { $ne: ['$settings.mutedUntil', null] },
+                  { $gt: ['$settings.mutedUntil', '$$NOW'] },
                 ],
               },
-              content: '$lastMessage.content',
-              recalled: '$lastMessage.recalled',
-              expired: '$lastMessage.expired',
-              expiresAt: '$lastMessage.expiresAt',
+              true,
+              false,
+            ],
+          },
+          name: {
+            $cond: [
+              { $eq: ['$conversation.type', ConversationType.GROUP] },
+              '$conversation.group.name',
+              {
+                $ifNull: [
+                  '$otherMemberInfo.userInfo.profile.name',
+                  'Người dùng Zalo',
+                ],
+              },
+            ],
+          },
+          avatar: {
+            $cond: [
+              { $eq: ['$conversation.type', ConversationType.GROUP] },
+              '$conversation.group.avatarUrl',
+              '$otherMemberInfo.userInfo.profile.avatarUrl',
+            ],
+          },
+          otherMemberId: '$otherMemberInfo.userId',
+          lastMessage: {
+            _id: '$lastMessage._id',
+            senderName: {
+              $cond: [
+                { $eq: ['$lastMessage.senderId', userObjectId] },
+                'Bạn',
+                { $ifNull: ['$lastMessageSender.profile.name', ''] },
+              ],
             },
-            unreadCount: {
-              $ifNull: [{ $arrayElemAt: ['$unreadData.count', 0] }, 0],
-
-            },
-            lastMessageAt: '$conversation.lastMessageAt',
+            content: '$lastMessage.content',
+            recalled: { $ifNull: ['$lastMessage.recalled', false] },
+            type: '$lastMessage.type',
+            expired: '$lastMessage.expired',
+            expiresAt: '$lastMessage.expiresAt',
           },
+          lastMessageAt: '$conversation.lastMessageAt',
         },
-
-        {
-          $sort: {
-            unreadCount: -1,
-            lastMessageAt: -1,
-          },
-        },
-        {
-          $group: {
-            _id: '$conversationId',
-            data: { $first: '$$ROOT' },
-          },
-        },
-        {
-          $replaceRoot: { newRoot: '$data' },
-        },
-      ]);
+      },
+      { $sort: { unreadCount: -1, lastMessageAt: -1 } },
+      { $group: { _id: '$conversationId', data: { $first: '$$ROOT' } } },
+      { $replaceRoot: { newRoot: '$data' } },
+    ]);
 
     return conversations.map((c) => ({
       ...c,
+      otherMemberId: c?.otherMemberId?.toString?.() ?? c?.otherMemberId ?? null,
       avatar: c.avatar ? this.storageService.signFileUrl(c.avatar) : null,
     }));
   }
@@ -1483,7 +1408,7 @@ export class ConversationsService {
     if (
       dto.allowMembersSendMessages !== undefined &&
       conversation.group.allowMembersSendMessages !==
-      dto.allowMembersSendMessages
+        dto.allowMembersSendMessages
     ) {
       const actorName = await this.getUserName(userId);
       const actionText = dto.allowMembersSendMessages
@@ -1741,7 +1666,7 @@ export class ConversationsService {
         if (conversation.group.avatarUrl) {
           await this.storageService
             .deleteFile(conversation.group.avatarUrl)
-            .catch(() => { });
+            .catch(() => {});
         }
 
         const upload = await this.storageService.uploadFile(file);
@@ -1822,52 +1747,52 @@ export class ConversationsService {
     const contacts =
       scope === 'all' || scope === 'contacts'
         ? conversationItems
-          .filter(
-            (conversation) =>
-              conversation.type === ConversationType.DIRECT &&
-              regex.test(conversation.name ?? ''),
-          )
-          .slice(0, limit)
-          .map((conversation) => ({
-            conversationId: conversation.conversationId,
-            name: conversation.name,
-            avatar: conversation.avatar,
-            lastMessageAt: conversation.lastMessageAt,
-          }))
+            .filter(
+              (conversation) =>
+                conversation.type === ConversationType.DIRECT &&
+                regex.test(conversation.name ?? ''),
+            )
+            .slice(0, limit)
+            .map((conversation) => ({
+              conversationId: conversation.conversationId,
+              name: conversation.name,
+              avatar: conversation.avatar,
+              lastMessageAt: conversation.lastMessageAt,
+            }))
         : [];
 
     const groups =
       scope === 'all' || scope === 'groups'
         ? conversationItems
-          .filter(
-            (conversation) =>
-              conversation.type === ConversationType.GROUP &&
-              regex.test(conversation.name ?? ''),
-          )
-          .slice(0, limit)
-          .map((conversation) => ({
-            conversationId: conversation.conversationId,
-            name: conversation.name,
-            avatar: conversation.avatar,
-            lastMessageAt: conversation.lastMessageAt,
-            memberLabel: 'Nhom',
-          }))
+            .filter(
+              (conversation) =>
+                conversation.type === ConversationType.GROUP &&
+                regex.test(conversation.name ?? ''),
+            )
+            .slice(0, limit)
+            .map((conversation) => ({
+              conversationId: conversation.conversationId,
+              name: conversation.name,
+              avatar: conversation.avatar,
+              lastMessageAt: conversation.lastMessageAt,
+              memberLabel: 'Nhom',
+            }))
         : [];
 
     const rawMessages =
       scope === 'all' || scope === 'messages'
         ? await this.messageModel
-          .find({
-            conversationId: { $in: objectConversationIds },
-            deletedFor: { $ne: userObjectId },
-            recalled: { $ne: true },
-            expired: { $ne: true },
-            'content.text': regex,
-          })
-          .sort({ createdAt: -1 })
-          .limit(limit)
-          .populate('senderId', 'profile.name profile.avatarUrl')
-          .lean<any[]>()
+            .find({
+              conversationId: { $in: objectConversationIds },
+              deletedFor: { $ne: userObjectId },
+              recalled: { $ne: true },
+              expired: { $ne: true },
+              'content.text': regex,
+            })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .populate('senderId', 'profile.name profile.avatarUrl')
+            .lean<any[]>()
         : [];
 
     const messages = rawMessages.map((message) => {
@@ -1888,17 +1813,17 @@ export class ConversationsService {
     const rawFileMessages =
       scope === 'all' || scope === 'files'
         ? await this.messageModel
-          .find({
-            conversationId: { $in: objectConversationIds },
-            deletedFor: { $ne: userObjectId },
-            recalled: { $ne: true },
-            expired: { $ne: true },
-            'content.files.fileName': regex,
-          })
-          .sort({ createdAt: -1 })
-          .limit(limit)
-          .populate('senderId', 'profile.name profile.avatarUrl')
-          .lean<any[]>()
+            .find({
+              conversationId: { $in: objectConversationIds },
+              deletedFor: { $ne: userObjectId },
+              recalled: { $ne: true },
+              expired: { $ne: true },
+              'content.files.fileName': regex,
+            })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .populate('senderId', 'profile.name profile.avatarUrl')
+            .lean<any[]>()
         : [];
 
     const files = rawFileMessages

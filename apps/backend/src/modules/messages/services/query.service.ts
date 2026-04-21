@@ -13,6 +13,7 @@ import { GetMediasFileTypeDto } from '../dto/get-medias-file-type.dto';
 import { MessageResponse } from '../types/message-response.type';
 import { FileType } from 'src/common/types/enums/file-type';
 import { StorageService } from 'src/common/storage/storage.service';
+import { ConversationSetting } from 'src/modules/conversation-settings/schemas/conversation-setting.schema';
 
 @Injectable()
 export class MessagesQueryService {
@@ -25,7 +26,9 @@ export class MessagesQueryService {
     private readonly conversationModel: Model<Conversation>,
     private readonly transformService: MessagesTransformService,
     private readonly storageService: StorageService,
-  ) { }
+    @InjectModel(ConversationSetting.name)
+    private readonly conversationSettingModel: Model<ConversationSetting>,
+  ) {}
 
   async getMessagesFromConversation(
     conversationId: string,
@@ -47,13 +50,22 @@ export class MessagesQueryService {
         'User is not a participant in this conversation',
       );
     }
-
-    const query = {
+    const setting = await this.conversationSettingModel.findOne({
+      userId: userObjectId,
+      conversationId: conversationObjectId,
+    });
+    const query: Record<string, any> = {
       conversationId: conversationObjectId,
       deletedFor: { $ne: userObjectId },
-      ...(cursor && { _id: { $lt: new Types.ObjectId(cursor) } }),
     };
 
+    if (cursor) {
+      query._id = { $lt: new Types.ObjectId(cursor) };
+    }
+
+    if (setting?.clearAt) {
+      query.createdAt = { $gt: setting.clearAt };
+    }
     const messages = await this.messageModel
       .find(query)
       .sort({ _id: -1 })
@@ -272,7 +284,9 @@ export class MessagesQueryService {
       .populate('senderId', 'profile.name')
       .lean();
 
-    const transformedMessages = messages.map((message) => this.transformService.transformMessage(message));
+    const transformedMessages = messages.map((message) =>
+      this.transformService.transformMessage(message),
+    );
 
     const finalMessages = transformedMessages.reverse();
 
@@ -365,8 +379,9 @@ export class MessagesQueryService {
 
     const signMessageFile = (message: any) => {
       if (message.content?.file) {
-        message.content.file.fileKey =
-          this.storageService.signFileUrl(message.content.file.fileKey);
+        message.content.file.fileKey = this.storageService.signFileUrl(
+          message.content.file.fileKey,
+        );
       }
       return message;
     };
@@ -464,7 +479,8 @@ export class MessagesQueryService {
     });
 
     const paginatedResults = results.slice(0, Number(limit));
-    const nextCursor = results.length > Number(limit) ? results[results.length - 1]._id : null;
+    const nextCursor =
+      results.length > Number(limit) ? results[results.length - 1]._id : null;
 
     return {
       messages: paginatedResults,
@@ -492,8 +508,8 @@ export class MessagesQueryService {
       .populate('readReceipts.userId', '_id profile.name profile.avatarUrl')
       .sort({ _id: 1 })
       .lean();
-
-    return messages.map(msg => ({
+    // Format messages để trả về
+    return messages.map((msg) => ({
       _id: msg._id,
       readReceipts: msg.readReceipts,
     }));

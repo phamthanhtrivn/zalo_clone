@@ -58,6 +58,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
+  const fetchingRef = useRef<Set<string>>(new Set());
+  const conversations = useAppSelector(
+    (state: RootState) => state.conversation.conversations,
+  );
+
   // State phục vụ thông báo giải tán nhóm
   const [groupDisbandedDialogOpen, setGroupDisbandedDialogOpen] =
     useState(false);
@@ -145,7 +150,34 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     const handleNewMessageSidebar = (data: any) => {
       console.log("SOCKET UPDATE", data);
       if (!data?.conversationId) return;
+      const conversationId = data.conversationId;
+      const existsInStore = conversations.some(
+        (c) => c.conversationId === conversationId,
+      );
 
+      if (!existsInStore) {
+        console.log(
+          `🔄 Conversation ${conversationId} not in store, fetching...`,
+        );
+        if (!fetchingRef.current.has(conversationId)) {
+          fetchingRef.current.add(conversationId);
+
+          // Fetch lại toàn bộ danh sách hội thoại
+          dispatch(fetchConversations())
+            .then(() => {
+              // Xóa khỏi set sau khi fetch xong
+              fetchingRef.current.delete(conversationId);
+              console.log(
+                `✅ Fetched conversations, ${conversationId} should now be in store`,
+              );
+            })
+            .catch(() => {
+              fetchingRef.current.delete(conversationId);
+            });
+        }
+
+        return; // Không cần xử lý tiếp vì đã fetch lại toàn bộ
+      }
       const senderName =
         data?.lastMessage?.senderName ??
         (data?.senderId?._id === user?.userId

@@ -244,4 +244,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log("EMIT DELETE:", userId, payload);
     this.server.to(userId).emit("conversation_setting:delete", payload);
   }
+
+  handleKickUserFromRoom(targetUserId, convIdStr) {
+
+  }
+  handleUserJoinRoom(uid, convIdStr){}
 }
