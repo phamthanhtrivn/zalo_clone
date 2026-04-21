@@ -31,8 +31,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @Inject(forwardRef(() => MessagesService))
     private readonly messagesService: MessagesService,
     private readonly redisService: RedisService,
-    private readonly eventEmitter: EventEmitter2
-  ) { }
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   handleConnection(socket: Socket) {
     const userId = socket.handshake.auth?.userId;
@@ -99,7 +99,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log(`User ${socket.data.userId} joined room: ${conversationId}`);
   }
 
-
   // Conversation room
   @SubscribeMessage('leave_room')
   handleLeaveRoom(
@@ -164,7 +163,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       }
 
-      console.log(`✅ User ${data.userId} marked ${data.conversationId} as read`);
+      console.log(
+        `✅ User ${data.userId} marked ${data.conversationId} as read`,
+      );
       return { success: true, unreadCount: 0 };
     } catch (error) {
       console.error('Mark as read error:', error);
@@ -222,7 +223,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       }
 
-      console.log(`✅ User ${data.userId} marked ${data.conversationId} as unread`);
+      console.log(
+        `✅ User ${data.userId} marked ${data.conversationId} as unread`,
+      );
       return { success: true, unreadCount: result.unreadCount };
     } catch (error) {
       console.error('Mark as unread error:', error);
@@ -234,19 +237,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
   emitConversationUpdated(userId: string, conversation: any) {
-    this.server.to(userId).emit("conversation_setting:update", conversation);
+    this.server.to(userId).emit('conversation_setting:update', conversation);
   }
 
   emitConversationDeleted(
     userId: string,
-    payload: { conversationId: string; deletedAt: Date | null, clearAt: Date | null },
+    payload: {
+      conversationId: string;
+      deletedAt: Date | null;
+      clearAt: Date | null;
+    },
   ) {
-    console.log("EMIT DELETE:", userId, payload);
-    this.server.to(userId).emit("conversation_setting:delete", payload);
+    console.log('EMIT DELETE:', userId, payload);
+    this.server.to(userId).emit('conversation_setting:delete', payload);
   }
 
-  handleKickUserFromRoom(targetUserId, convIdStr) {
-
+  handleKickUserFromRoom(userId: string, conversationId: string) {
+    this.server.in(userId).socketsLeave(conversationId);
+    console.log(
+      `Socket: User ${userId} forced to leave room ${conversationId}`,
+    );
   }
-  handleUserJoinRoom(uid, convIdStr){}
+  handleUserJoinRoom(userId: string, conversationId: string) {
+    this.server.in(userId).socketsJoin(conversationId);
+    console.log(`Socket: User ${userId} forced to join room ${conversationId}`);
+  }
 }
