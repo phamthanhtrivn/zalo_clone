@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -21,6 +20,13 @@ import ReactionSummary from "./ReactionSummary";
 import { truncateFileName } from "@/utils/render-file";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+const formatDuration = (seconds: number | null) => {
+  if (!seconds || seconds <= 0) return "00:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+};
 
 type Props = {
   message: MessagesType;
@@ -112,6 +118,7 @@ export default function MessageBubble({
 }: Props) {
   const content = message.content;
   const files = content?.files || [];
+  const call = message.call;
 
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -123,6 +130,66 @@ export default function MessageBubble({
     (f: any) => f.type === "IMAGE" || f.type === "VIDEO",
   );
   const docFiles = files.filter((f: any) => f.type === "FILE");
+
+  const renderCallContent = () => {
+    if (!call) return null;
+    const isVideo = call.type === "VIDEO";
+    let statusText = "";
+    let iconName: any = isVideo ? "videocam" : "call";
+    let iconColor = isMe ? "#0068ff" : "#4b5563";
+
+    switch (call.status) {
+      case "ENDED":
+      case "ACCEPTED":
+        statusText = `Cuộc gọi ${isVideo ? "video" : "thoại"} (${formatDuration(call.duration)})`;
+        break;
+      case "MISSED":
+        statusText = isMe ? "Đối phương đã lỡ" : "Cuộc gọi nhỡ";
+        iconColor = "#ef4444";
+        iconName = "call-outline";
+        break;
+      case "REJECTED":
+        statusText = isMe ? "Cuộc gọi bị từ chối" : "Cuộc gọi nhỡ";
+        iconColor = "#ef4444";
+        break;
+      case "BUSY":
+        statusText = "Máy bận";
+        iconColor = "#f59e0b";
+        break;
+      default:
+        statusText = "Đang thiết lập...";
+    }
+
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          paddingVertical: 4,
+        }}
+      >
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: "rgba(255,255,255,0.8)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name={iconName} size={20} color={iconColor} />
+        </View>
+        <View>
+          <Text style={{ fontSize: 14, fontWeight: "600" }}>{statusText}</Text>
+          <Text style={{ fontSize: 11, color: "#666" }}>
+            {isMe ? "Cuộc gọi đi" : "Cuộc gọi đến"}
+          </Text>
+        </View>
+      </View>
+    );
+  };
 
   useEffect(() => {
     if (message.expired) {
@@ -204,8 +271,8 @@ export default function MessageBubble({
           marginBottom: 2,
         }}
       >
-        {!isMe && (
-          showAvatar ? (
+        {!isMe &&
+          (showAvatar ? (
             <View
               style={{
                 width: 32,
@@ -217,14 +284,13 @@ export default function MessageBubble({
               }}
             >
               <Image
-                source={{ uri: message.senderId?.profile.avatarUrl }}
+                source={{ uri: message.senderId?.profile?.avatarUrl || "" }}
                 style={{ width: 32, height: 32 }}
               />
             </View>
           ) : (
             <View style={{ width: 32, marginRight: 6 }} />
-          )
-        )}
+          ))}
         <View
           style={{
             flexDirection: "row",
@@ -237,7 +303,11 @@ export default function MessageBubble({
             maxWidth: "75%",
           }}
         >
-          <Ionicons name="information-circle-outline" size={14} color="#9ca3af" />
+          <Ionicons
+            name="information-circle-outline"
+            size={14}
+            color="#9ca3af"
+          />
           <Text style={{ fontSize: 13, color: "#9ca3af", fontStyle: "italic" }}>
             Tin nhắn đã hết hạn
           </Text>
@@ -292,7 +362,7 @@ export default function MessageBubble({
             Tin nhắn đã được thu hồi
           </Text>
 
-          {showTime && (
+          {/* {showTime && (
             <Text
               style={{
                 fontSize: 10,
@@ -303,7 +373,7 @@ export default function MessageBubble({
             >
               {formatTime(message.createdAt)}
             </Text>
-          )}
+          )} */}
         </View>
       </View>
     );
@@ -389,6 +459,104 @@ export default function MessageBubble({
             borderColor: "#e5e7eb",
           }}
         >
+          {/* NỘI DUNG CHÍNH */}
+          {call ? (
+            renderCallContent()
+          ) : (
+            <>
+              {/* MEDIA GRID (Images + Videos) */}
+              {mediaFiles.length > 0 && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 1,
+                    marginTop: 6,
+                  }}
+                >
+                  {mediaFiles.map((file: any, index: number) => {
+                    const cols =
+                      mediaFiles.length === 1
+                        ? 1
+                        : mediaFiles.length === 2
+                          ? 2
+                          : 3;
+                    const imgSize =
+                      mediaFiles.length === 1
+                        ? 200
+                        : (SCREEN_WIDTH * 0.75 - 40) / cols;
+
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        activeOpacity={0.85}
+                        onPress={() =>
+                          setPreviewIndex(mediaFiles.indexOf(file))
+                        }
+                        style={{
+                          width: imgSize,
+                          height: 110,
+                          borderRadius: 8,
+                          overflow: "hidden",
+                          backgroundColor: "#000",
+                        }}
+                      >
+                        {file.type === "IMAGE" ? (
+                          <Image
+                            source={{ uri: file.fileKey }}
+                            style={{ width: imgSize, height: 110 }}
+                            contentFit="cover"
+                          />
+                        ) : (
+                          <View
+                            style={{
+                              width: imgSize,
+                              height: 110,
+                              justifyContent: "center",
+                              alignItems: "center",
+                            }}
+                          >
+                            <Video
+                              source={{ uri: file.fileKey }}
+                              style={{ width: imgSize, height: 110 }}
+                              resizeMode={ResizeMode.COVER}
+                            />
+                            <View
+                              style={{
+                                position: "absolute",
+                                width: 36,
+                                height: 36,
+                                borderRadius: 18,
+                                backgroundColor: "rgba(0,0,0,0.5)",
+                                justifyContent: "center",
+                                alignItems: "center",
+                              }}
+                            >
+                              <Ionicons name="play" size={18} color="white" />
+                            </View>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </>
+          )}
+
+          {/* THỜI GIAN TRONG BUBBLE */}
+          {/* {showTime && (
+            <Text
+              style={{
+                fontSize: 10,
+                color: isMe ? "#0068ff" : "#9ca3af",
+                marginTop: 4,
+                textAlign: "right",
+              }}
+            >
+              {formatTime(message.createdAt)}
+            </Text>
+          )} */}
           {/* REPLY PREVIEW */}
           {message.repliedId && (
             <TouchableOpacity
@@ -433,78 +601,6 @@ export default function MessageBubble({
           {/* ICON */}
           {content?.icon && (
             <Text style={{ fontSize: 32 }}>{content.icon}</Text>
-          )}
-
-          {/* MEDIA GRID (Images + Videos) */}
-          {mediaFiles.length > 0 && (
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: 1,
-                marginTop: 6,
-              }}
-            >
-              {mediaFiles.map((file: any, index: number) => {
-                const cols =
-                  mediaFiles.length === 1 ? 1 : mediaFiles.length === 2 ? 2 : 3;
-                const imgSize =
-                  mediaFiles.length === 1
-                    ? 200
-                    : (SCREEN_WIDTH * 0.75 - 40) / cols;
-
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    activeOpacity={0.85}
-                    onPress={() => setPreviewIndex(mediaFiles.indexOf(file))}
-                    style={{
-                      width: imgSize,
-                      height: 110,
-                      borderRadius: 8,
-                      overflow: "hidden",
-                      backgroundColor: "#000",
-                    }}
-                  >
-                    {file.type === "IMAGE" ? (
-                      <Image
-                        source={{ uri: file.fileKey }}
-                        style={{ width: imgSize, height: 110 }}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View
-                        style={{
-                          width: imgSize,
-                          height: 110,
-                          justifyContent: "center",
-                          alignItems: "center",
-                        }}
-                      >
-                        <Video
-                          source={{ uri: file.fileKey }}
-                          style={{ width: imgSize, height: 110 }}
-                          resizeMode={ResizeMode.COVER}
-                        />
-                        <View
-                          style={{
-                            position: "absolute",
-                            width: 36,
-                            height: 36,
-                            borderRadius: 18,
-                            backgroundColor: "rgba(0,0,0,0.5)",
-                            justifyContent: "center",
-                            alignItems: "center",
-                          }}
-                        >
-                          <Ionicons name="play" size={18} color="white" />
-                        </View>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
           )}
 
           {/* DOCUMENT FILES */}
@@ -719,7 +815,7 @@ export default function MessageBubble({
             {message.readReceipts.slice(0, 3).map((rr) => (
               <Image
                 key={rr.userId._id}
-                source={{ uri: rr.userId.profile.avatarUrl }}
+                source={{ uri: rr.userId.profile?.avatarUrl || "" }}
                 style={{ width: 14, height: 14, borderRadius: 7 }}
               />
             ))}

@@ -859,7 +859,6 @@ export class ConversationsService {
 
   async getConversationsFromUser(userId: string) {
     const userObjectId = new Types.ObjectId(userId);
-
     const conversations = await this.memberModel.aggregate([
       { $match: { userId: userObjectId, leftAt: null } },
       {
@@ -871,6 +870,8 @@ export class ConversationsService {
         },
       },
       { $unwind: '$conversation' },
+
+      // Lấy last message
       {
         $lookup: {
           from: 'messages',
@@ -900,6 +901,8 @@ export class ConversationsService {
         },
       },
       { $unwind: { path: '$lastMessage', preserveNullAndEmptyArrays: true } },
+
+      // Lấy thông tin người gửi tin nhắn cuối
       {
         $lookup: {
           from: 'users',
@@ -914,6 +917,8 @@ export class ConversationsService {
           preserveNullAndEmptyArrays: true,
         },
       },
+
+      // Lấy thông tin thành viên khác
       {
         $lookup: {
           from: 'members',
@@ -946,6 +951,8 @@ export class ConversationsService {
       {
         $unwind: { path: '$otherMemberInfo', preserveNullAndEmptyArrays: true },
       },
+
+      // Lấy settings
       {
         $lookup: {
           from: 'conversationsettings',
@@ -966,14 +973,100 @@ export class ConversationsService {
         },
       },
       { $unwind: { path: '$settings', preserveNullAndEmptyArrays: true } },
+
+      // Tính unreadCount
+      {
+        $lookup: {
+          from: 'messages',
+          let: {
+            conversationId: '$conversation._id',
+            lastReadMessageId: '$lastReadMessageId',
+            currentUser: userObjectId,
+            clearAt: '$settings.clearAt',
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$conversationId', '$$conversationId'] },
+                    // Tin nhắn sau lastReadMessageId
+                    {
+                      $gt: [
+                        '$_id',
+                        {
+                          $ifNull: [
+                            '$$lastReadMessageId',
+                            new Types.ObjectId('000000000000000000000000'),
+                          ],
+                        },
+                      ],
+                    },
+                    // Không phải tin nhắn của chính user
+                    { $ne: ['$senderId', '$$currentUser'] },
+                    // Chưa bị xóa cho user
+                    {
+                      $not: {
+                        $in: [
+                          '$$currentUser',
+                          { $ifNull: ['$deletedFor', []] },
+                        ],
+                      },
+                    },
+                    // Chưa bị thu hồi
+                    { $ne: ['$recalled', true] },
+                    // Chưa hết hạn
+                    { $ne: ['$expired', true] },
+                    // Sau thời điểm clear (nếu có)
+                    {
+                      $or: [
+                        { $eq: ['$$clearAt', null] },
+                        { $gt: ['$createdAt', '$$clearAt'] },
+                      ],
+                    },
+                    // Chưa expiresAt
+                    {
+                      $or: [
+                        { $eq: ['$expiresAt', null] },
+                        { $gt: ['$expiresAt', '$$NOW'] },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+            {
+              $count: 'count',
+            },
+          ],
+          as: 'unreadData',
+        },
+      },
+
+      // Filter conversation đã bị xóa
+      {
+        $match: {
+          $or: [
+            { settings: null },
+            { 'settings.deletedAt': null },
+            {
+              $expr: {
+                $gt: ['$conversation.lastMessageAt', '$settings.deletedAt'],
+              },
+            },
+          ],
+        },
+      },
+
       {
         $project: {
           _id: 0,
           conversationId: '$conversation._id',
           type: '$conversation.type',
-
           group: '$conversation.group',
-          unreadCount: { $ifNull: ['$unreadCount', 0] },
+          unreadCount: {
+            $ifNull: [{ $arrayElemAt: ['$unreadData.count', 0] }, 0],
+          },
           pinned: { $ifNull: ['$settings.pinned', false] },
           hidden: { $ifNull: ['$settings.hidden', false] },
           category: { $ifNull: ['$settings.category', null] },
@@ -1022,11 +1115,13 @@ export class ConversationsService {
             content: '$lastMessage.content',
             recalled: { $ifNull: ['$lastMessage.recalled', false] },
             type: '$lastMessage.type',
+            expired: '$lastMessage.expired',
+            expiresAt: '$lastMessage.expiresAt',
           },
           lastMessageAt: '$conversation.lastMessageAt',
         },
       },
-      { $sort: { lastMessageAt: -1 } },
+      { $sort: { unreadCount: -1, lastMessageAt: -1 } },
       { $group: { _id: '$conversationId', data: { $first: '$$ROOT' } } },
       { $replaceRoot: { newRoot: '$data' } },
     ]);

@@ -41,10 +41,16 @@ import {
   setReplyingMessage,
   clearReplyingMessage,
 } from "@/store/slices/conversationSlice";
+import { useVideoCall } from "@/contexts/VideoCallContext";
 
 export default function ChatWindow() {
-  const conversations = useAppSelector((state) => state.conversation.conversations);
-  const { id, messageId } = useLocalSearchParams<{ id: string; messageId?: string }>();
+  const conversations = useAppSelector(
+    (state) => state.conversation.conversations,
+  );
+  const { id, messageId } = useLocalSearchParams<{
+    id: string;
+    messageId?: string;
+  }>();
   const { socket } = useSocket();
   const user = useAppSelector((state) => state.auth.user);
   const router = useRouter();
@@ -55,6 +61,8 @@ export default function ChatWindow() {
   const [contextMenuMsg, setContextMenuMsg] = useState<MessagesType | null>(
     null,
   );
+
+  const { startCall } = useVideoCall();
 
   // ===== STATE =====
   const [messages, setMessages] = useState<MessagesType[]>([]);
@@ -133,7 +141,7 @@ export default function ChatWindow() {
         const isOldestFirst =
           msgs.length >= 2 &&
           new Date(msgs[0].createdAt) <
-          new Date(msgs[msgs.length - 1].createdAt);
+            new Date(msgs[msgs.length - 1].createdAt);
         const sorted = isOldestFirst ? msgs : [...msgs].reverse();
 
         setMessages(sorted);
@@ -168,7 +176,7 @@ export default function ChatWindow() {
         const isOldestFirst =
           newMsgs.length >= 2 &&
           new Date(newMsgs[0].createdAt) <
-          new Date(newMsgs[newMsgs.length - 1].createdAt);
+            new Date(newMsgs[newMsgs.length - 1].createdAt);
         const sortedNew = isOldestFirst ? newMsgs : [...newMsgs].reverse();
 
         setMessages((prev) => {
@@ -212,7 +220,7 @@ export default function ChatWindow() {
         const isOldestFirst =
           newMsgs.length >= 2 &&
           new Date(newMsgs[0].createdAt) <
-          new Date(newMsgs[newMsgs.length - 1].createdAt);
+            new Date(newMsgs[newMsgs.length - 1].createdAt);
         const sortedNew = isOldestFirst ? newMsgs : [...newMsgs].reverse();
 
         setMessages((prev) => {
@@ -448,6 +456,36 @@ export default function ChatWindow() {
     }
   };
 
+  const handleVideoCall = () => {
+    // 1. Kiểm tra sự tồn tại của đối tượng conversation
+    if (!conversation) {
+      Alert.alert("Lỗi", "Không tìm thấy thông tin hội thoại.");
+      return;
+    }
+
+    // 2. Lấy partnerId trực tiếp từ trường otherMemberId (dựa trên log thực tế của bạn)
+    const partnerId = (conversation as any).otherMemberId;
+
+    console.log("DEBUG - Partner ID thực tế từ log:", partnerId);
+
+    // 3. Kiểm tra các điều kiện bắt buộc trước khi gọi
+    if (!id || !user?.userId || !partnerId) {
+      Alert.alert(
+        "Lỗi",
+        "Không thể xác định người nhận hoặc thông tin người gọi.",
+      );
+      return;
+    }
+
+    // 4. Kích hoạt cuộc gọi
+    startCall(
+      partnerId,
+      conversation.name || "Người dùng",
+      id, // conversationId
+      "VIDEO",
+    );
+  };
+
   // ================= EFFECTS =================
   useEffect(() => {
     if (id && user?.userId) {
@@ -515,8 +553,6 @@ export default function ChatWindow() {
     return () => clearTimeout(timeoutId);
   }, [messages]);
 
-
-
   // ===== SOCKET =====
   useEffect(() => {
     if (!socket || !id || !user?.userId) return;
@@ -566,16 +602,21 @@ export default function ChatWindow() {
       );
     };
 
-
-    const handleMessagesExpired = (data: { conversationId: string, messageIds: string[] }) => {
+    const handleMessagesExpired = (data: {
+      conversationId: string;
+      messageIds: string[];
+    }) => {
       if (data.conversationId !== id) return;
       setMessages((prev) =>
         prev.map((m) =>
-          data.messageIds.includes(m._id) ? { ...m, expired: true } : m
-        )
+          data.messageIds.includes(m._id) ? { ...m, expired: true } : m,
+        ),
       );
     };
-    const handleReadReceipt = (data: { conversationId: string; messages: MessagesType[] }) => {
+    const handleReadReceipt = (data: {
+      conversationId: string;
+      messages: MessagesType[];
+    }) => {
       if (data.conversationId === id) {
         setMessages((prev) => {
           const updatedMap = new Map(
@@ -596,7 +637,6 @@ export default function ChatWindow() {
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
 
-
     return () => {
       socket.off("new_message", handleNewMessage);
       socket.off("message_reacted", handleMessageReacted);
@@ -604,7 +644,6 @@ export default function ChatWindow() {
       socket.off("message_pinned", handleMessagePinned);
       socket.off("read_receipt", handleReadReceipt);
       socket.off("messages_expired", handleMessagesExpired);
-
 
       socket.emit("leave_room", id);
     };
@@ -633,7 +672,7 @@ export default function ChatWindow() {
     const showDivider =
       !older ||
       new Date(older.createdAt).toDateString() !==
-      new Date(item.createdAt).toDateString();
+        new Date(item.createdAt).toDateString();
 
     const isSelected = selectedMessages.includes(item._id);
 
@@ -743,7 +782,7 @@ export default function ChatWindow() {
         <TouchableOpacity>
           <Ionicons name="person-add-outline" size={22} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity style={{ padding: 4 }}>
+        <TouchableOpacity style={{ padding: 4 }} onPress={handleVideoCall}>
           <Ionicons name="videocam-outline" size={24} color="white" />
         </TouchableOpacity>
         <TouchableOpacity style={{ padding: 4 }}>
@@ -1030,23 +1069,23 @@ export default function ChatWindow() {
             {contextMenuMsg.reactions?.some(
               (r) => r.userId?._id === user?.userId,
             ) && (
-                <TouchableOpacity
-                  onPress={() => {
-                    handleRemoveReaction(contextMenuMsg._id);
-                    setContextMenuMsg(null);
-                  }}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    borderRadius: 18,
-                    backgroundColor: "#f3f4f6",
-                  }}
-                >
-                  <Ionicons name="close" size={18} color="#6b7280" />
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                onPress={() => {
+                  handleRemoveReaction(contextMenuMsg._id);
+                  setContextMenuMsg(null);
+                }}
+                style={{
+                  width: 36,
+                  height: 36,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  borderRadius: 18,
+                  backgroundColor: "#f3f4f6",
+                }}
+              >
+                <Ionicons name="close" size={18} color="#6b7280" />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* ===== MENU ===== */}
