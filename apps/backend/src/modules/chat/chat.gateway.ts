@@ -18,6 +18,7 @@ import { RedisService } from 'src/common/redis/redis.service';
 import { REDIS_CHANNEL_SOCKET_EVENTS } from 'src/common/constants/redis.constant';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Types } from 'mongoose';
+import { TokenService } from 'src/common/jwt-token/jwt.service';
 @WebSocketGateway({
   cors: {
     origin: '*',
@@ -25,35 +26,49 @@ import { Types } from 'mongoose';
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   constructor(
     @Inject(forwardRef(() => MessagesService))
     private readonly messagesService: MessagesService,
     private readonly redisService: RedisService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly tokenService: TokenService,
   ) {}
 
   handleConnection(socket: Socket) {
-    const userId = socket.handshake.auth?.userId;
+    const token = socket.handshake.auth?.token as string;
+    const deviceId = socket.handshake.auth?.deviceId as string;
 
-    if (!userId) {
-      console.log(`No userId -> disconnect ${socket.id}`);
+    if (!token || !deviceId) {
+      console.log(`No token -> disconnect ${socket.id}`);
       return socket.disconnect();
     }
 
-    socket.data.userId = userId;
+    try {
+      const payload = this.tokenService.verifyAccessToken(token);
 
-    socket.join(userId); // Join a room of userId update online event for sidebar
+      socket.data.userId = payload.userId;
+      socket.data.deviceId = deviceId;
 
-    console.log(`\nUser ${userId} connected with socket ${socket.id}`);
+      const userId = payload.userId;
 
-    console.log(`User ${userId} join room: ${userId}`);
+      socket.join(userId); // Join a room of userId update online event for sidebar
+      socket.join(deviceId); // Phòng dùng cho AuthService
+
+      console.log(`\nUser ${userId} connected with socket ${socket.id}`);
+      console.log(`User ${userId} join room: ${userId}`);
+    } catch (err: any) {
+      console.log(`Lỗi xác thực Socket (${socket.id}):`, err.message);
+
+      socket.disconnect();
+    }
   }
 
   handleDisconnect(socket: Socket) {
     console.log(`User ${socket.data?.userId} disconnected (${socket.id})`);
   }
+
   async afterInit() {
     const pubClient = this.redisService.getClient();
     const subClient = this.redisService.createDuplicateClient();
@@ -261,5 +276,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleUserJoinRoom(userId: string, conversationId: string) {
     this.server.in(userId).socketsJoin(conversationId);
     console.log(`Socket: User ${userId} forced to join room ${conversationId}`);
+  }
+
+  //gửi sự kiện kêu gọi đăng xuất ra một thiết bị cụ thể
+  forceLogoutDevice(deviceId: string) {
+    this.server.to(deviceId).emit('force_logout', {
+      message: 'Phiên đăng nhập đã hết hạn hoặc bạn bị đăng xuất từ nơi khác.',
+    });
   }
 }

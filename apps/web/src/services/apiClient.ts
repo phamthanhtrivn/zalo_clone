@@ -12,6 +12,7 @@ function normalizeApiBaseUrl(url: string | undefined): string {
 const API_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
 import { store } from "@/store";
 import { clearAuth, updateToken } from "@/store/auth/authSlice";
+import { getDeviceId } from "@/utils/device.util";
 
 export const apiClient = axios.create({
   baseURL: API_URL,
@@ -28,7 +29,14 @@ const refreshApi = axios.create({
   withCredentials: true,
 });
 
+refreshApi.interceptors.request.use((config) => {
+  config.headers["x-device-id"] = getDeviceId();
+  return config;
+});
+
 apiClient.interceptors.request.use((config) => {
+  //gắn device id vào headers
+  config.headers["x-device-id"] = getDeviceId();
   const state = store.getState();
   const token = state.auth.accessToken;
   if (token) {
@@ -44,8 +52,9 @@ apiClient.interceptors.response.use(
 
     // những api không cần check
     if (
-      originalRequest?.url?.includes("/auth/sign-in") ||
-      originalRequest?.url?.includes("/auth/sign-up")
+      originalRequest?.url?.includes("/api/auth/sign-in") ||
+      originalRequest?.url?.includes("/api/auth/sign-up") ||
+      originalRequest?.url?.includes("/api/api/auth/qr-login/exchange")
     ) {
       return Promise.reject(error);
     }

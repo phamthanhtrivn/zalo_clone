@@ -1,0 +1,25 @@
+export const formatBirthday = (dateObj: any) => {
+  if (!dateObj) return "Chưa cập nhật"; // Nếu không có dữ liệu (undefined)
+
+  const day = dateObj.getDate().toString().padStart(2, "0"); // Thêm số 0 nếu là ngày < 10
+  const month = (dateObj.getMonth() + 1).toString().padStart(2, "0"); // Tháng cộng 1 vì JS tính từ 0
+  const year = dateObj.getFullYear();
+
+  return `${day} tháng ${month}, ${year}`;
+};
+
+
+export const formatDateTime = (value: Date | string | number): string => {
+  const date = new Date(value);
+
+  const pad = (n: number) => n.toString().padStart(2, "0");
+
+  const day = pad(date.getDate());
+  const month = pad(date.getMonth() + 1);
+  const year = date.getFullYear();
+
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
+};

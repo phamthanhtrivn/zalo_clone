@@ -2,8 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Param,
-
   Patch,
   Post,
   Request,
@@ -15,11 +13,10 @@ import { RequestFriendDto } from './dto/request-friend.dto';
 import { SearchFriendDto } from './dto/search-friend.dto';
 import { InforUser } from './dto/infor-user.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AuthUser } from '../auth/types/auth.type';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
   @Get()
   async findByPhone(phone: string) {

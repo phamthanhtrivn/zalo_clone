@@ -4,7 +4,7 @@ import Header from "@/components/common/Header";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAppSelector } from "@/store/store";
-import formatBirthday from "@/helper/formatBirthday";
+import formatBirthday from "@/utils/formatBirthday";
 
 export default function ProfileScreen() {
   const router = useRouter();

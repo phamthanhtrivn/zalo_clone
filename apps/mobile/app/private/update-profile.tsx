@@ -13,7 +13,7 @@ import Header from "@/components/common/Header";
 import { MaterialCommunityIcons, Ionicons, Feather } from "@expo/vector-icons";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import formatBirthday from "@/helper/formatBirthday";
+import formatBirthday from "@/utils/formatBirthday";
 import { userService } from "@/services/user.service";
 import { updateUserProfile } from "../../store/auth/userInfoSlice";
 import { useRouter } from "expo-router";

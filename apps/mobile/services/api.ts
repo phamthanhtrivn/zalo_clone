@@ -1,6 +1,7 @@
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import { config } from "@/constants/config";
+import { getDeviceId } from "@/utils/device.util";
 
 console.log(config.apiUrl);
 
@@ -15,8 +16,8 @@ const refreshApi = axios.create({
 });
 
 api.interceptors.request.use(async (config) => {
+  config.headers["x-device-id"] = await getDeviceId();
   const token = await SecureStore.getItemAsync("access_token");
-  // ✅ Token đã là string, không cần xử lý
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -38,28 +39,13 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       const refreshToken = await SecureStore.getItemAsync("refresh_token");
-      // ✅ refreshToken đã là string
 
       try {
         const res = await refreshApi.post("/auth/token/refresh", {
           refreshToken,
         });
 
-        const newAccessToken = res.data?.data?.accessToken;
-        if (!newAccessToken) {
-          return Promise.reject(error);
-        }
-
-        // Nếu là object, chuyển thành string
-        if (typeof newAccessToken !== 'string') {
-          console.warn('AccessToken is not a string, converting...', newAccessToken);
-          newAccessToken = JSON.stringify(newAccessToken);
-        }
-
-        // Nếu là object có field token, lấy token ra
-        if (newAccessToken?.token) {
-          newAccessToken = newAccessToken.token;
-        }
+        const newAccessToken = res.data.accessToken;
 
         await SecureStore.setItemAsync("access_token", newAccessToken);
 
@@ -67,7 +53,6 @@ api.interceptors.response.use(
 
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh token failed, clear storage and redirect to login
         await SecureStore.deleteItemAsync("access_token");
         await SecureStore.deleteItemAsync("refresh_token");
         return Promise.reject(refreshError);

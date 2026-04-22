@@ -1,8 +1,8 @@
 import React, { useState, useRef } from "react";
 import { X, Camera, PenLine } from "lucide-react";
-import formatBirthday from "../../helper/formatBirthday";
 import UpdateProfileModal from "./UpdateProfileModal";
 import { userService } from "../../services/user.service";
+import { formatBirthday } from "@/utils/dateTimeFormat.util";
 
 type ModelProfileProps = {
   setUser: any;

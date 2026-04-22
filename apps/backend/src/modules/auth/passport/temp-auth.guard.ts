@@ -8,7 +8,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { Reflector } from '@nestjs/core';
-import { TMP_PURPOSE_KEY } from 'src/common/decorator/temp_purpose.decorator';
+import { RedisService } from 'src/common/redis/redis.service';
+import { TMP_PURPOSE_KEY } from '../decorator/temp_purpose.decorator';
 
 @Injectable()
 export class TempVerifyGuard implements CanActivate {
@@ -16,6 +17,7 @@ export class TempVerifyGuard implements CanActivate {
     private jwtService: JwtService,
     private configService: ConfigService,
     private reflector: Reflector,
+    private redisService: RedisService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -27,7 +29,9 @@ export class TempVerifyGuard implements CanActivate {
     const token = this.extractTokenFromHeader(request);
 
     if (!token) {
-      throw new UnauthorizedException();
+      throw new UnauthorizedException(
+        'Không có quyền hạn thực hiện hành động này',
+      );
     }
     const payload = await this.jwtService.verifyAsync<Record<string, unknown>>(
       token,
@@ -35,7 +39,12 @@ export class TempVerifyGuard implements CanActivate {
         secret: this.configService.get<string>('tmp_secret'),
       },
     );
-
+    const isTokenValid = await this.redisService.get(
+      `tmp_token_valid:${token}`,
+    );
+    if (!isTokenValid) {
+      throw new UnauthorizedException('Token đã hết hạn hoặc đã được sử dụng!');
+    }
     if (requiredPurpose && payload.purpose !== requiredPurpose) {
       throw new UnauthorizedException('Sai mục đích token');
     }
