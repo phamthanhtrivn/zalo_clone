@@ -9,7 +9,14 @@ import { useEffect, useRef, useState } from "react";
 import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
 import { RiShareForward2Fill } from "react-icons/ri";
 
+import { conversationService } from "@/services/conversation.service";
+
+import { useAppDispatch, useAppSelector } from "@/store";
+import { clearReplyingMessage } from "@/store/slices/conversationSlice";
+import { X, Quote } from "lucide-react";
+
 type Props = {
+  conversationId: string;
   chatName: string;
   onSendMessage: (text: string) => void;
   onSendFiles: (files: FileList) => void;
@@ -21,6 +28,7 @@ type Props = {
 };
 
 const ChatInput = ({
+  conversationId,
   chatName,
   onSendMessage,
   onSendFiles,
@@ -30,14 +38,54 @@ const ChatInput = ({
   setSelectedMessages,
   onOpenForwardModal,
 }: Props) => {
+  const dispatch = useAppDispatch();
+  const replyingMessage = useAppSelector(
+    (state) => state.conversation.replyingMessage,
+  );
+
   const [text, setText] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
+  const [myRole, setMyRole] = useState<string>("MEMBER");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
 
+  // Lấy thông tin hội thoại và user từ Redux
+  const currentConversation = useAppSelector((state) =>
+    state.conversation.conversations.find(
+      (c) => c.conversationId === conversationId,
+    ),
+  );
+  const currentUser = useAppSelector((state) => state.auth.user);
+
+  // Logic kiểm tra khóa chat
+  const isGroup = currentConversation?.type === "GROUP";
+  const allowSend =
+    currentConversation?.group?.allowMembersSendMessages !== false;
+
+  // Tự động lấy quyền (Role) của mình khi mở nhóm
+  useEffect(() => {
+    if (isGroup && conversationId && currentUser?.userId) {
+      conversationService
+        .getListMembers(conversationId)
+        .then((res) => {
+          if (res?.success) {
+            const me = res.data.find(
+              (m: any) => String(m.userId) === String(currentUser.userId),
+            );
+            if (me) setMyRole(me.role);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [isGroup, conversationId, currentUser?.userId]);
+
+  const isManager = myRole === "OWNER" || myRole === "ADMIN";
+  const isMutedByAdmin = isGroup && !allowSend && !isManager;
+
+  // --- CÁC HÀM XỬ LÝ SỰ KIỆN ---
   const handleSelectEmoji = (emojiData: EmojiClickData) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -48,27 +96,22 @@ const ChatInput = ({
     setText((prev) => {
       const newText =
         prev.substring(0, start) + emojiData.emoji + prev.substring(end);
-
       requestAnimationFrame(() => {
         textarea.focus();
         const pos = start + emojiData.emoji.length;
         textarea.setSelectionRange(pos, pos);
       });
-
       return newText;
     });
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
-
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
-
-      const maxHeight = 10 * 24; // ~10 dòng (24px mỗi dòng)
+      const maxHeight = 10 * 24;
       const newHeight = Math.min(el.scrollHeight, maxHeight);
-
       el.style.height = newHeight + "px";
     }
   };
@@ -77,6 +120,9 @@ const ChatInput = ({
     if (text.trim()) {
       onSendMessage(text);
       setText("");
+      if (replyingMessage) {
+        dispatch(clearReplyingMessage());
+      }
     }
   };
 
@@ -90,7 +136,7 @@ const ChatInput = ({
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.length) {
       onSendFiles(e.target.files);
-      e.target.value = ""; // Clear for next selection
+      e.target.value = "";
     }
   };
 
@@ -100,11 +146,20 @@ const ChatInput = ({
         setShowEmoji(false);
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // --- RENDER GIAO DIỆN ---
+  if (isMutedByAdmin) {
+    return (
+      <div className="w-full p-4 bg-gray-50 border-t flex items-center justify-center h-16">
+        <p className="text-[14px] font-medium text-gray-500">
+          Chỉ Trưởng/Phó nhóm mới được gửi tin nhắn.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="bg-white border-t">
       {isSelected && (
@@ -135,6 +190,30 @@ const ChatInput = ({
               Hủy
             </button>
           </div>
+        </div>
+      )}
+
+      {replyingMessage && (
+        <div className="px-4 py-2 border-b flex items-stretch gap-3 bg-gray-50/80 animate-in slide-in-from-bottom-2 duration-200">
+          <div className="w-1 bg-[#0068ff] rounded-full" />
+          <div className="flex-1 min-w-0 py-1">
+            <div className="text-[13px] font-semibold text-[#0068ff] mb-0.5 flex items-center gap-1.5">
+              <Quote size={12} className="fill-current" />
+              Trả lời {replyingMessage.senderId.profile?.name}
+            </div>
+            <p className="text-sm text-gray-500 truncate">
+              {replyingMessage.content?.text ||
+                (replyingMessage.content?.files
+                  ? replyingMessage.content.files[0].fileName
+                  : "")}
+            </p>
+          </div>
+          <button
+            onClick={() => dispatch(clearReplyingMessage())}
+            className="p-1 hover:bg-gray-200 rounded-full h-fit self-center transition-colors cursor-pointer"
+          >
+            <X size={18} className="text-gray-400" />
+          </button>
         </div>
       )}
 

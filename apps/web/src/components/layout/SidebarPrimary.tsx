@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { MessageSquare, Contact, Settings } from "lucide-react";
+import { MessageSquare, Contact } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
@@ -38,10 +38,8 @@ export const SidebarPrimary = () => {
     fetchUser();
   }, []);
 
-  console.log(user);
-
   return (
-    <aside className="w-16 bg-[#005AE0] flex flex-col items-center py-4 shrink-0 z-20">
+    <aside className="w-16 bg-[#005AE0] flex flex-col items-center py-4 shrink-0 z-[100]">
       {/* User Avatar */}
       <div className="relative mb-6">
         <Tooltip>
@@ -76,7 +74,8 @@ export const SidebarPrimary = () => {
           const isActive =
             item.path === "/"
               ? location.pathname === "/" ||
-                location.pathname.startsWith("/chat")
+                location.pathname.startsWith("/chat") ||
+                location.pathname.startsWith("/conversation")
               : location.pathname.startsWith(item.path);
 
           return (
@@ -106,8 +105,8 @@ export const SidebarPrimary = () => {
         })}
       </nav>
 
-      {/* Bottom Actions */}
-      <div className="mt-auto flex flex-col items-center">
+      {/* Bottom Actions - Sử dụng Dropdown mới từ nhánh KhongVanTam */}
+      <div className="mt-auto flex flex-col items-center z-[10000]">
         <SettingDropdownSidebar />
       </div>
     </aside>

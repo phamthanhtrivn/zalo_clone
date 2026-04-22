@@ -23,7 +23,6 @@ export const formatMessageTime = (dateString: string) => {
     const hours = Math.floor(diffMs / hour);
     return `${hours} giờ`;
   }
-
   const startOfToday = new Date(
     now.getFullYear(),
     now.getMonth(),
@@ -70,6 +69,13 @@ export const formatTime = (date: string) => {
     hour: "2-digit",
     minute: "2-digit",
   });
+};
+
+export const formatDuration = (seconds: number | null) => {
+  if (!seconds || seconds <= 0) return "00:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 };
 
 export const formatOldDate = (date: string) => {

@@ -1,10 +1,17 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL;
+function normalizeApiBaseUrl(url: string | undefined): string {
+  if (!url) return "";
+  const trimmed = url.replace(/\/$/, "");
+  if (trimmed.endsWith("/api")) {
+    return trimmed.slice(0, -4);
+  }
+  return trimmed;
+}
+
+const API_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
 import { store } from "@/store";
 import { clearAuth, updateToken } from "@/store/auth/authSlice";
-
-console.log(API_URL);
 
 export const apiClient = axios.create({
   baseURL: API_URL,
@@ -37,8 +44,8 @@ apiClient.interceptors.response.use(
 
     // những api không cần check
     if (
-      originalRequest.url.includes("/auth/sign-in") ||
-      originalRequest.url.includes("/auth/sign-up")
+      originalRequest?.url?.includes("/auth/sign-in") ||
+      originalRequest?.url?.includes("/auth/sign-up")
     ) {
       return Promise.reject(error);
     }
@@ -64,5 +71,7 @@ apiClient.interceptors.response.use(
         return Promise.reject(err);
       }
     }
+
+    return Promise.reject(error);
   },
 );

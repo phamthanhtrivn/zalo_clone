@@ -10,7 +10,7 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Text,
-  ToastAndroid,
+  // ToastAndroid,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -50,10 +50,11 @@ export default function Login() {
   const handleOnSignIn = async () => {
     try {
       await dispatch(signIn({ phone, password })).unwrap();
-      ToastAndroid.show("Đăng nhập thành công", ToastAndroid.SHORT);
+
+      // ToastAndroid.show("Đăng nhập thành công", ToastAndroid.SHORT);
     } catch (err: any) {
       console.log(err);
-      ToastAndroid.show("Đăng nhập thất bại", ToastAndroid.SHORT);
+      // ToastAndroid.show("Đăng nhập thất bại", ToastAndroid.SHORT);
     }
   };
 
@@ -83,6 +84,7 @@ export default function Login() {
           security={isHiddenPass}
           onChangeText={handleOnChangePassword}
         />
+
         <Text className="text-red-600">{error.message}</Text>
         <TouchableOpacity className="w-32" onPress={handleForgotPassword}>
           <Text className="text-primary/70 font-semibold">

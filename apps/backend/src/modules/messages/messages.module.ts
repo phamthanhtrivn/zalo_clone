@@ -1,4 +1,6 @@
-import { Module } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+
+import { forwardRef, Module } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { MessagesController } from './messages.controller';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -10,22 +12,40 @@ import {
   ConversationSchema,
 } from '../conversations/schemas/conversation.schema';
 import { StorageModule } from 'src/common/storage/storage.module';
+
+import { ChatGateway } from '../chat/chat.gateway';
+
 import { ChatModule } from '../chat/chat.module';
 import { ConversationsModule } from '../conversations/conversations.module';
+import { ConversationSettingSchema } from '../conversation-settings/schemas/conversation-setting.schema';
+import { ConversationSetting } from '../conversation-settings/schemas/conversation-setting.schema';
+import { MessagesQueryService } from './services/query.service';
+import { MessagesActionService } from './services/action.service';
+import { MessagesCallService } from './services/call.service';
+import { MessagesTransformService } from './services/transform.service';
 
 @Module({
   imports: [
+    forwardRef(() => ChatModule),
     MongooseModule.forFeature([
       { name: Message.name, schema: MessageSchema },
       { name: Member.name, schema: MemberSchema },
       { name: Conversation.name, schema: ConversationSchema },
+      { name: ConversationSetting.name, schema: ConversationSettingSchema },
     ]),
+    forwardRef(() => ChatModule),
+    forwardRef(() => ConversationsModule),
     MembersModule,
     StorageModule,
-    ChatModule,
-    ConversationsModule,
   ],
-  providers: [MessagesService],
+  providers: [
+    MessagesService,
+    MessagesQueryService,
+    MessagesActionService,
+    MessagesCallService,
+    MessagesTransformService,
+  ],
   controllers: [MessagesController],
+  exports: [MessagesService],
 })
 export class MessagesModule {}

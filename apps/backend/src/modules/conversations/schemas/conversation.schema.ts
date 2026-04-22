@@ -10,11 +10,17 @@ export class Group {
   @Prop()
   avatarUrl?: string;
 
-  @Prop({ default: false })
+  @Prop({ default: true })
   allowMembersInvite: boolean;
 
-  @Prop({ default: false })
+  @Prop({ default: true })
   allowMembersSendMessages: boolean;
+
+  @Prop({ default: false })
+  approvalRequired: boolean;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  ownerId: Types.ObjectId;
 }
 
 @Schema({ timestamps: true })
@@ -25,13 +31,43 @@ export class Conversation {
   @Prop({ type: Group })
   group?: Group;
 
-  @Prop({ type: Types.ObjectId, ref: 'Message', required: true })
-  lastMessageId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Message', required: false })
+  lastMessageId?: Types.ObjectId;
+
+  @Prop({ type: Object })
+  lastMessage?: {
+    _id: Types.ObjectId;
+    senderId: Types.ObjectId;
+    senderName: string;
+    text: string;
+    type: string;
+    createdAt: Date;
+  };
 
   @Prop({ required: true })
   lastMessageAt: Date;
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }] })
+  participants: Types.ObjectId[];
+}
+
+@Schema({ timestamps: true })
+export class JoinRequest {
+  @Prop({ type: Types.ObjectId, ref: 'Conversation', required: true })
+  conversationId: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  userId: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  invitedBy: Types.ObjectId;
+
+  @Prop({ default: 'PENDING', enum: ['PENDING', 'APPROVED', 'REJECTED'] })
+  status: string;
 }
 
 export const ConversationSchema = SchemaFactory.createForClass(Conversation);
+export const JoinRequestSchema = SchemaFactory.createForClass(JoinRequest);
 
+ConversationSchema.index({ participants: 1 });
 ConversationSchema.index({ lastMessageAt: -1 });

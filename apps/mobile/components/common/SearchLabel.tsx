@@ -1,12 +1,12 @@
-//Đây là label tìm kiếm nằm trên header ở mỗi màn hình,
-// khi ấn vào sẽ chuyển hướng sang màn hình tìm kiếm
-
 import { Text, TouchableOpacity } from "react-native";
+import { useRouter } from "expo-router";
 
 export default function SearchLabel() {
+  const router = useRouter();
+
   return (
-    <TouchableOpacity>
-      <Text className="text-white/65 text-sm">Tìm kiếm</Text>
+    <TouchableOpacity onPress={() => router.push("/private/search")}>
+      <Text className="text-white/65 text-sm">Tim kiem</Text>
     </TouchableOpacity>
   );
 }

@@ -6,11 +6,14 @@ import {
 } from "react-redux";
 import authReducer from "./auth/authSlice";
 import conversationReducer from "./slices/conversationSlice";
-
+import messageReducer from "./slices/messageSlice";
 export const store = configureStore({
   reducer: {
     auth: authReducer,
-    conversation: conversationReducer
+
+    message: messageReducer,
+
+    conversation: conversationReducer,
   },
 });
 

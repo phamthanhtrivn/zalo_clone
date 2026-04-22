@@ -1,4 +1,5 @@
-import type { EmojiType } from "@/constants/emoji.constant";
+import { EmojiType } from "@/constants/emoji.constant";
+import axios from "axios";
 import { apiClient } from "./apiClient";
 
 export const messageService = {
@@ -20,6 +21,7 @@ export const messageService = {
     );
     return response.data;
   },
+
   getNewerMessages: async (
     conversationId: string,
     userId: string,
@@ -38,6 +40,7 @@ export const messageService = {
     );
     return response.data;
   },
+
   getPinnedMessages: async (conversationId: string, userId: string) => {
     const response = await apiClient.get(
       `/api/messages/conversation/${conversationId}/pinned`,
@@ -47,6 +50,7 @@ export const messageService = {
     );
     return response.data;
   },
+
   getMessagesAroundPinnedMessage: async (
     conversationId: string,
     userId: string,
@@ -61,6 +65,7 @@ export const messageService = {
     );
     return response.data;
   },
+
   reactionMessage: async (
     conversationId: string,
     userId: string,
@@ -75,6 +80,7 @@ export const messageService = {
     });
     return response.data;
   },
+
   removeReaction: async (
     userId: string,
     messageId: string,
@@ -87,6 +93,7 @@ export const messageService = {
     });
     return response.data;
   },
+
   recalledMessage: async (
     userId: string,
     messageId: string,
@@ -99,6 +106,7 @@ export const messageService = {
     });
     return response.data;
   },
+
   pinnedMessage: async (
     userId: string,
     messageId: string,
@@ -111,39 +119,68 @@ export const messageService = {
     });
     return response.data;
   },
+
   sendMessage: async (
     conversationId: string,
     senderId: string,
+    repliedId?: string,
     content?: { text?: string; icon?: string },
-    file?: File | null,
+    files?: File[] | null,
   ) => {
-    if (file) {
-      const formData = new FormData();
-      formData.append("conversationId", conversationId);
-      formData.append("senderId", senderId);
-      if (content?.text) {
-        formData.append("content[text]", content.text);
-      }
-      if (content?.icon) {
-        formData.append("content[icon]", content.icon);
-      }
-      formData.append("file", file);
+    try {
+      // Trường hợp có đính kèm file (Sử dụng FormData)
+      if (files && files.length > 0) {
+        const formData = new FormData();
+        formData.append("conversationId", conversationId);
+        formData.append("senderId", senderId);
 
-      const response = await apiClient.post(`/api/messages`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        if (repliedId) {
+          formData.append("repliedId", repliedId);
+        }
+
+        if (content) {
+          // Gửi content dưới dạng stringified object để Backend parse
+          formData.append("content", JSON.stringify(content));
+        }
+
+        files.forEach((file) => {
+          formData.append("files", file); // Chấp nhận nhiều file
+        });
+
+        const response = await apiClient.post(`/api/messages`, formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+        return response?.data ?? null;
+      }
+
+      // Trường hợp chỉ gửi text/icon đơn thuần
+      const response = await apiClient.post(`/api/messages`, {
+        conversationId,
+        senderId,
+        repliedId,
+        content,
       });
-      return response.data;
+      return response?.data ?? null;
+    } catch (error) {
+      console.error("sendMessage Error:", error);
+      if (axios.isAxiosError(error)) {
+        const data = error.response?.data as
+          | { message?: string | string[] }
+          | undefined;
+        const msg = Array.isArray(data?.message)
+          ? data.message[0]
+          : data?.message;
+        return {
+          success: false,
+          message: msg || error.message || "Gửi tin nhắn thất bại",
+        };
+      }
+      return { success: false, message: "Gửi tin nhắn thất bại" };
     }
-
-    const response = await apiClient.post(`/api/messages`, {
-      conversationId,
-      senderId,
-      content,
-    });
-    return response.data;
   },
+
   deleteMessageForMe: async (
     userId: string,
     messageId: string,
@@ -156,6 +193,7 @@ export const messageService = {
     });
     return response.data;
   },
+
   readReceipt: async (userId: string, conversationId: string) => {
     const response = await apiClient.patch(`/api/messages/read-receipt`, {
       userId,
@@ -163,6 +201,7 @@ export const messageService = {
     });
     return response.data;
   },
+
   getMediasPreview: async (userId: string, conversationId: string) => {
     const response = await apiClient.get(
       `/api/messages/conversation/${conversationId}/medias/preview`,
@@ -172,6 +211,7 @@ export const messageService = {
     );
     return response.data;
   },
+
   getMediasFileType: async (
     conversationId: string,
     userId: string,
@@ -185,6 +225,7 @@ export const messageService = {
     );
     return response.data;
   },
+
   forwardMessagesToConversations: async (
     userId: string,
     messageIds: string[],
@@ -195,6 +236,24 @@ export const messageService = {
       messageIds,
       targetConversationIds,
     });
+    return response.data;
+  },
+
+  createCallMessage: async (data: {
+    conversationId: string;
+    senderId: string;
+    type: "VIDEO" | "VOICE";
+  }) => {
+    const response = await apiClient.post(`/api/messages/call`, data);
+    return response.data;
+  },
+
+  updateCallStatus: async (data: {
+    messageId: string;
+    conversationId: string;
+    status: string;
+  }) => {
+    const response = await apiClient.patch(`/api/messages/call`, data);
     return response.data;
   },
 };

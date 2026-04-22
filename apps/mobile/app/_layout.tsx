@@ -7,6 +7,7 @@ import { store, useAppDispatch, useAppSelector } from "@/store/store";
 import { useEffect } from "react";
 import { restoreSession } from "@/store/auth/authThunk";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { SocketProvider } from "@/contexts/SocketContext";
 
 export default function RootLayout() {
   return (
@@ -14,7 +15,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <GestureHandlerRootView>
           <BottomSheetModalProvider>
-            <AppNavigation />
+            <SocketProvider>
+              <AppNavigation />
+            </SocketProvider>
           </BottomSheetModalProvider>
         </GestureHandlerRootView>
       </SafeAreaProvider>

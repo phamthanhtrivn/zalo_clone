@@ -9,14 +9,26 @@ export class ConversationSetting {
   @Prop({ type: Types.ObjectId, ref: 'Conversation', required: true })
   conversationId: Types.ObjectId;
 
-  @Prop({ default: false })
-  muted: boolean;
+  @Prop({ type: Date, default: null })
+  mutedUntil: Date | null;
 
   @Prop({ default: false })
   pinned: boolean;
 
   @Prop({ default: false })
   hidden: boolean;
+  @Prop({
+    type: String,
+    enum: ['customer', 'family', 'work', 'friends', 'later', 'colleague'],
+    default: null,
+  })
+  category: string | null;
+  @Prop({ type: Date, default: null })
+  deletedAt: Date | null;
+  @Prop({ type: Date, default: null })
+  clearAt: Date | null;
+  @Prop({ default: 0 })
+  expireDuration: number;
 }
 
 export type ConversationSettingDocument = ConversationSetting & Document;

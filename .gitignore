@@ -1,0 +1,69 @@
+# ================== ENV / SECRETS ==================
+.env
+.env.*
+**/.env
+**/.env.*
+
+# ================== NODE ==================
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ================== BUILD / DIST ==================
+dist/
+build/
+**/dist/
+**/build/
+.next/
+.nuxt/
+.out/
+coverage/
+
+# ================== CACHE ==================
+.cache/
+.parcel-cache/
+.turbo/
+.eslintcache
+
+# ================== LOGS ==================
+logs/
+*.log
+
+# ================== OS ==================
+.DS_Store
+Thumbs.db
+
+# ================== IDE ==================
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ================== MOBILE (React Native / Expo / Android / iOS) ==================
+android/.gradle/
+android/app/build/
+ios/build/
+ios/Pods/
+.expo/
+.expo-shared/
+
+# ================== TYPESCRIPT ==================
+*.tsbuildinfo
+
+# ================== TEST ==================
+coverage/
+jest-cache/
+
+# ================== TEMP ==================
+tmp/
+temp/
+*.tmp
+
+secrets/
+**/secrets/
+# package-lock.json

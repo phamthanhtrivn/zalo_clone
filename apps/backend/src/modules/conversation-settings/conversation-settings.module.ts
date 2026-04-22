@@ -6,6 +6,7 @@ import {
   ConversationSetting,
   ConversationSettingSchema,
 } from './schemas/conversation-setting.schema';
+import { ConversationSettingGateway } from './conversation-setting.gateway';
 
 @Module({
   imports: [
@@ -13,7 +14,7 @@ import {
       { name: ConversationSetting.name, schema: ConversationSettingSchema },
     ]),
   ],
-  providers: [ConversationSettingsService],
+  providers: [ConversationSettingsService, ConversationSettingGateway],
   controllers: [ConversationSettingsController],
 })
-export class ConversationSettingsModule {}
+export class ConversationSettingsModule { }

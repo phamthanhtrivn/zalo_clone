@@ -6,6 +6,7 @@ import Input from "@/components/common/TextInput";
 import { resetPassword } from "@/store/auth/authThunk";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { useState } from "react";
+
 import { ActivityIndicator, Text, ToastAndroid, View } from "react-native";
 
 export default function ResetPassword() {
@@ -40,6 +41,7 @@ export default function ResetPassword() {
 
         setFieldErrors(errorsObj);
       }
+
       ToastAndroid.show(
         err.message || "Đặt lại mật khẩu thất bại !",
         ToastAndroid.SHORT,

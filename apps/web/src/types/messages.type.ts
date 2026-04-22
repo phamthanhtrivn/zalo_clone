@@ -13,16 +13,26 @@ export interface MessagesType {
   content: {
     text: string | null;
     icon: string | null;
-    file: File;
+    files: File[];
   };
   pinned: boolean;
   recalled: boolean;
   reactions: ReactionType[];
   readReceipts: ReadReceiptType[];
+
   repliedId: string | null;
-  call: string | null;
+  call?: {
+    type: "VIDEO" | "VOICE";
+    status: string;
+    duration: number | null;
+  };
   createdAt: string;
   updatedAt: string;
+
+  type: string;
+
+  expired?: boolean;
+  expiredAt: string | null;
 }
 
 export interface ReactionType {
@@ -51,4 +61,5 @@ export interface ReadReceiptType {
   };
   createdAt: string;
   updatedAt: string;
+
 }

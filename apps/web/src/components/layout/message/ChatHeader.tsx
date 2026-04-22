@@ -6,6 +6,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import type { MessagesType } from "@/types/messages.type";
 import PinnedMessagesBar from "./PinnedMessagesBar";
+import { useCall } from "@/contexts/VideoCallContext";
+import { useAppSelector } from "@/store";
+import { messageService } from "@/services/message.service";
+import { CallType } from "@/constants/types";
 
 type ChatHeaderProps = {
   conversation: ConversationItemType;
@@ -24,6 +28,52 @@ const ChatHeader = ({
   handlePinnedMessage,
   handleJumpToMessage,
 }: ChatHeaderProps) => {
+  const { callUser } = useCall();
+  const currentUserId = useAppSelector((state) => state.auth.user?.userId);
+
+  const otherMemberId =
+    conversation?.participants?.find((id: string) => id !== currentUserId) ||
+    (conversation as any)?.otherMemberId;
+
+  console.log("CHECK: conversationId =", conversation.conversationId);
+  console.log("CHECK: otherMemberId =", otherMemberId);
+
+  const handleVideoCall = async () => {
+    if (!conversation.conversationId || !otherMemberId || !currentUserId) {
+      console.log("Không đủ thông tin để thực hiện cuộc gọi");
+      return;
+    }
+    try {
+      console.log("1. Đang tạo bản ghi cuộc gọi trong DB");
+
+      const response = await messageService.createCallMessage({
+        conversationId: conversation.conversationId,
+        senderId: currentUserId,
+        type: CallType.VIDEO,
+      });
+
+      const messageId =
+        response.data?._id || response.data?.id || response?._id;
+
+      if (!messageId) {
+        throw new Error("Không nhận được messageId từ server");
+      }
+
+      console.log("2. Đã có messageId:", messageId, "Bắt đầu kết nối WebRTC");
+
+      callUser(
+        otherMemberId,
+        conversation.conversationId,
+        CallType.VIDEO,
+        messageId,
+        conversation.name,
+        conversation.avatar,
+      );
+    } catch (error) {
+      console.log("Lỗi khi khởi tạo cuộc gọi:", error);
+    }
+  };
+
   return (
     <>
       <header className="h-16 bg-white border-b flex items-center justify-between px-4 shrink-0">
@@ -44,7 +94,7 @@ const ChatHeader = ({
             <MdGroupAdd />
           </Button>
 
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" onClick={handleVideoCall}>
             <Video />
           </Button>
 

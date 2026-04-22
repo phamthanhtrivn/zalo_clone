@@ -1,4 +1,9 @@
-import { Gender } from "../../../../packages/shared-types/src/enums/gender";
+export enum Gender {
+  MALE = "male",
+  FEMALE = "female",
+  OTHER = "other",
+}
+
 export interface UserLogin {
   phone: string;
   password: string;
@@ -38,4 +43,19 @@ export interface ChangePassword {
   oldPassword: string;
   newPassword: string;
   confirmPassword: string;
+}
+
+export enum CallStatus {
+  INITIATED = "INITIATED",
+  RINGING = "RINGING",
+  ACCEPTED = "ACCEPTED",
+  MISSED = "MISSED",
+  REJECTED = "REJECTED",
+  BUSY = "BUSY",
+  ENDED = "ENDED",
+}
+
+export enum CallType {
+  VOICE = "VOICE",
+  VIDEO = "VIDEO",
 }

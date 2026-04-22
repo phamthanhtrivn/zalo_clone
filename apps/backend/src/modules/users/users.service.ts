@@ -267,7 +267,6 @@ export class UsersService {
   async suggestFriend(userId: string) {
     // id ung cu vien co the kb
     const candidatesIds = await generateSuggestFriends(this.userModel, userId);
-    console.log('candidatesIds : ', candidatesIds);
     const friendsUser = await this.userModel
       .findOne({ _id: userId })
       .select({ friends: 1 })

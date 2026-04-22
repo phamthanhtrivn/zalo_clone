@@ -1,12 +1,12 @@
-//Đây là icon tìm kiếm nằm trên header ở mỗi màn hình,
-// khi ấn vào sẽ chuyển hướng sang màn hình tìm kiếm
-
 import { TouchableOpacity } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useRouter } from "expo-router";
 
 export default function SearchIcon() {
+  const router = useRouter();
+
   return (
-    <TouchableOpacity>
+    <TouchableOpacity onPress={() => router.push("/private/search")}>
       <Ionicons name="search-outline" size={24} color="white" />
     </TouchableOpacity>
   );

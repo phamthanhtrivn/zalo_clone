@@ -2,10 +2,28 @@ import { MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { userService } from "@/services/user.service";
 import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import { conversationService } from "@/services/conversation.service";
 
 export const FriendItem = ({ item, setFriends }: any) => {
   const [openId, setOpenId] = useState<string>("");
+  const navigate = useNavigate();
   const userId = useSelector((item : any) => item.auth.user.userId);
+
+  const handleStartConversation = async (targetUserId: string) => {
+    try {
+      const response = await conversationService.getOrCreateDirect(targetUserId);
+      const conversationId =
+        response?.data?._id || response?.data?.conversationId || response?._id;
+
+      if (!conversationId) return;
+
+      setOpenId("");
+      navigate(`/conversations/${conversationId}`);
+    } catch (error) {
+      console.log(error);
+    }
+  };
 
   const handelBock = (id: string) => {
     const blockFriend = async () => {
@@ -83,6 +101,11 @@ export const FriendItem = ({ item, setFriends }: any) => {
               <div className="absolute right-0 -mt-0.5 w-48 bg-white border rounded-xl shadow-lg">
                 <div className="p-3 hover:bg-gray-50 cursor-pointer">
                   <button>Xem thông tin</button>
+                </div>
+                <div className="p-3 hover:bg-gray-50 cursor-pointer">
+                  <button onClick={() => handleStartConversation(f.friendId)}>
+                    Nhắn tin
+                  </button>
                 </div>
                 <div className="p-3 hover:bg-gray-50 cursor-pointer">
                   <button>Phân loại</button>

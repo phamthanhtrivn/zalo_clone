@@ -13,6 +13,7 @@ import { RiUnpinLine } from "react-icons/ri";
 import { FaRegTrashAlt } from "react-icons/fa";
 import ViewDetailMessageModal from "./ViewDetailMessageModal";
 import { FaListCheck } from "react-icons/fa6";
+import { useAppSelector } from "@/store";
 
 interface Props {
   message: MessagesType;
@@ -33,6 +34,7 @@ interface Props {
     messageIds: string[],
     targetConversationIds: string[],
   ) => void;
+
 }
 
 export const MessageItem = ({
@@ -51,10 +53,17 @@ export const MessageItem = ({
   selectedMessages,
   toggleSelectMessage,
   onForwardMessages,
+
 }: Props) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
+
+  const liveMessage = useAppSelector((state) =>
+    state.message.messagesByConversation[message.conversationId]?.find(
+      (m) => m._id === message._id
+    )
+  );
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
     window.addEventListener("click", handleClickOutside);
@@ -62,7 +71,7 @@ export const MessageItem = ({
   }, []);
 
   return (
-    <div className={`flex items-end gap-2 ${isMe ? "justify-end" : ""}`}>
+    <div className={`flex items-end gap-2 ${isMe || message.expired ? "justify-end" : ""}`}>
       {!isMe &&
         (showAvatar ? (
           <Avatar className="w-8 h-8">
@@ -77,9 +86,8 @@ export const MessageItem = ({
 
       {/* BUBBLE WRAPPER */}
       <div
-        className={`flex group items-center gap-2 ${
-          isMe ? "flex-row-reverse" : "flex-row"
-        }`}
+        className={`flex group items-center gap-2 ${isMe ? "flex-row-reverse" : "flex-row"
+          }`}
       >
         <div className="relative flex group/bubble">
           <MessageBubble
@@ -225,9 +233,12 @@ export const MessageItem = ({
           </div>
         )}
       </div>
+
+
+
       {showDetailModal && (
         <ViewDetailMessageModal
-          selectedMessage={message}
+          selectedMessage={liveMessage || message}
           setShowDetailModal={() => setShowDetailModal(false)}
         />
       )}

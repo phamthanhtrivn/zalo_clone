@@ -1,8 +1,16 @@
 export interface ConversationItemType {
   conversationId: string;
-  type: string;
+  type: string; // "DIRECT" | "GROUP"
   name: string;
   avatar: string;
+  otherMemberId?: string | null;
+  muted: boolean;
+  mutedUntil?: string | null;
+  pinned: boolean;
+  hidden: boolean;
+  category?: ConversationCategory;
+  deletedAt: string | Date | null;
+  expireDuration: number;
   lastMessage: {
     _id: string;
     senderName: string;
@@ -12,7 +20,11 @@ export interface ConversationItemType {
       file: File;
     };
     recalled: boolean;
+    type?: string;
+    expired?: boolean;
+    expiresAt?: string | null;
   };
+  unreadCount: number;
   lastMessageAt: string;
 }
 
@@ -22,3 +34,12 @@ export interface File {
   fileSize: number;
   type: "IMAGE" | "VIDEO" | "FILE";
 }
+
+export type ConversationCategory =
+  | "customer"
+  | "family"
+  | "work"
+  | "friends"
+  | "later"
+  | "colleague"
+  | null;
