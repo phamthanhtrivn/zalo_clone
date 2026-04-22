@@ -40,11 +40,7 @@ export default function Register() {
         pathname: "/(auth)/verify-otp",
       });
     } catch (err: any) {
-<<<<<<< HEAD
-      ToastAndroid.show(err, ToastAndroid.LONG);
-=======
       ToastAndroid.show(err.message, ToastAndroid.LONG);
->>>>>>> 30cf414fe9680fb67fe94f458295ad0a4eacf8dd
     }
   };
 

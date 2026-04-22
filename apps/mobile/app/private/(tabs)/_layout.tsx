@@ -10,6 +10,7 @@ export default function TabLayout() {
   const { user } = useAppSelector((state) => state.auth);
   
   useEffect(() => {
+    console.log('user?.userId: ', user?.userId)
     dispatch(fetchUserById(user?.userId ? user?.userId : ""));
   }, [dispatch, user]);
 

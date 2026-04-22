@@ -7,8 +7,6 @@ export const userService = {
   },
 
   searchFriend: async (key: string, userId : string) => {
-    console.log("key : ", key);
-    console.log("userId : ", userId);
     const response = await apiClient.post("/api/users/search-friend", {
       userId: userId,
       key,

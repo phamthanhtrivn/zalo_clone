@@ -8,7 +8,7 @@ import formatBirthday from "@/helper/formatBirthday";
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { userInfo } = useAppSelector((state) => state.userInfo);
+  const  {userInfo}  = useAppSelector((state) => state.userInfo);
 
   const editEditProfile = () => {
     router.push("/private/update-profile");
@@ -20,7 +20,7 @@ export default function ProfileScreen() {
         gradient
         centerChild={
           <Text className="text-white font-semibold text-sm">
-            Thông tin cái nhân
+              Thông tin cá nhân
           </Text>
         }
         back

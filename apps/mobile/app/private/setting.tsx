@@ -17,37 +17,15 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { scale } from "@/utils/responsive";
 import { useRouter } from "expo-router";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { use, useEffect, useState } from "react";
-import { userService } from "@/services/user.service";
+import { useEffect } from "react";
 
 export default function SettingScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, loading, error } = useAppSelector((state) => state.auth);
+  const { loading } = useAppSelector((state) => state.auth);
   const { userInfo } = useAppSelector((state) => state.userInfo);
 
-  console.log("userInfo : ", userInfo);
-
-<<<<<<< HEAD
-  // useEffect(() => {
-  //   if (!user?.userId) return;
-
-  //   const getUserInfo = async () => {
-  //     try {
-  //       const data = await userService.getProfile(user.userId);
-  //       console.log(data);
-
-  //       setUserInfo(data);
-  //     } catch (err) {
-  //       console.log(err);
-  //     }
-  //   };
-
-  //   getUserInfo();
-  // }, [user]);
-=======
->>>>>>> 30cf414fe9680fb67fe94f458295ad0a4eacf8dd
-
+  
   const handleOnLogout = async () => {
     try {
       await dispatch(logOut()).unwrap();
@@ -74,6 +52,7 @@ export default function SettingScreen() {
         }
         back
       />
+      
       <ScrollView className="px-screen-edge">
         <View className="flex-1 pb-10">
           {/* Tiêu đề */}
@@ -130,9 +109,7 @@ export default function SettingScreen() {
                 <Text className="text-sm text-black">Email</Text>
 
                 <Text className="text-gray-500 text-xs mt-1">
-                  {
-                    userInfo?.email ? userInfo?.email : "Chưa liên kết"
-                  }
+                  {userInfo?.email ? userInfo?.email : "Chưa liên kết"}
                 </Text>
               </View>
             </OptionItem>

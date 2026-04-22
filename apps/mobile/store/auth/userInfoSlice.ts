@@ -17,14 +17,10 @@ export const fetchUserById = createAsyncThunk(
   "user/fetchUserById",
   async (userId: string, thunkAPI) => {
     try {
-<<<<<<< HEAD
       const res = await userService.getProfile(userId);
-      console.log("res :", res);
-=======
-      const res = await userService.getProfile();
->>>>>>> 30cf414fe9680fb67fe94f458295ad0a4eacf8dd
       return res;
     } catch (err: any) {
+      console.error("Error fetching user by ID: ", err);
       return thunkAPI.rejectWithValue(err.response?.data || err.message);
     }
   },
@@ -55,6 +51,7 @@ const userSlice = createSlice({
       .addCase(fetchUserById.fulfilled, (state, action) => {
         state.loading = false;
         state.userInfo = action.payload;
+        console.log('action.payload ',action.payload);
       })
       .addCase(fetchUserById.rejected, (state, action) => {
         state.loading = false;

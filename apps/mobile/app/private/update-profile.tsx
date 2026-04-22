@@ -24,11 +24,7 @@ export default function ProfileUpdateScreen() {
   const { userInfo } = useAppSelector((state) => state.userInfo);
   const [name, setName] = useState(userInfo?.profile?.name || "");
   const [gender, setGender] = useState(userInfo?.profile?.gender);
-
-  // const [avatarUri, setAvatarUri] = useState(
-  //   userInfo?.profile?.avatarUrl ||
-  //     "https://wp-cms-media.s3.ap-east-1.amazonaws.com/lay_anh_dai_dien_facebook_dep_4_aefd38b259.jpg",
-  // );
+  
 
   const [date, setDate] = useState(
     userInfo?.profile?.birthday
