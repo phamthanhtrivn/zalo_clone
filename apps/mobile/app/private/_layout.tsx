@@ -13,6 +13,8 @@ export default function PrivateLayout() {
         <Stack.Screen name="search" />
         <Stack.Screen name="change-password" />
         <Stack.Screen name="update-profile" />
+        <Stack.Screen name="qr-scanner" />
+        <Stack.Screen name="confirm-qr-login" />
       </Stack>
     </SocketProvider>
   );

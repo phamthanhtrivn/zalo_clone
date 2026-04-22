@@ -6,6 +6,7 @@ import {
   UserLogin,
 } from "@/constants/types";
 import { api } from "./api";
+import { getDeviceId } from "@/utils/device.util";
 
 export const authService = {
   signIn: async (payload: UserLogin) => {
@@ -46,6 +47,18 @@ export const authService = {
   },
   changePassword: async (payload: ChangePassword) => {
     const res = await api.post("/auth/change-password", payload);
+    return res.data;
+  },
+  scanQrLogin: async (qrToken: string) => {
+    const res = await api.post("/auth/qr-login/scan", {
+      qrToken,
+    });
+    return res.data;
+  },
+  confirmQrLogin: async (qrToken: string) => {
+    const res = await api.post("/auth/qr-login/confirm", {
+      qrToken,
+    });
     return res.data;
   },
 };

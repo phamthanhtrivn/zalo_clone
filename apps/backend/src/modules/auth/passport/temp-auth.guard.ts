@@ -8,7 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { Reflector } from '@nestjs/core';
-import { TMP_PURPOSE_KEY } from 'src/common/decorator/temp_purpose.decorator';
+import { TMP_PURPOSE_KEY } from 'src/modules/auth/decorators/temp_purpose.decorator';
 import { RedisService } from 'src/common/redis/redis.service';
 
 @Injectable()

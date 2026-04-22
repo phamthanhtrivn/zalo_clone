@@ -11,6 +11,7 @@ import { conversationService } from "@/services/conversation.service";
 import { setConversations } from "@/store/slices/conversationSlice";
 import { useSocket } from "@/contexts/SocketContext";
 import { router } from "expo-router";
+import QRIcon from "@/components/common/QRIcon";
 
 export default function Home() {
   const dispatch = useAppDispatch();
@@ -79,6 +80,7 @@ export default function Home() {
         gradient
         centerChild={<SearchLabel />}
         leftChild={<SearchIcon />}
+        rightChild={<QRIcon />}
       />
 
       <View className="flex-1 bg-white">

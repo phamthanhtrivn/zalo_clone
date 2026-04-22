@@ -12,6 +12,9 @@ import {
   updateConversation,
   updateRecallMessageInConversation,
 } from "@/store/slices/conversationSlice";
+import { ToastAndroid } from "react-native";
+import { logout2 } from "@/store/auth/authThunk";
+import { getDeviceId } from "@/utils/device.util";
 
 interface SocketContextType {
   socket: Socket | null;
@@ -46,6 +49,20 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     dispatch(updateRecallMessageInConversation(data));
   };
 
+  // Tự động đăng xuất khi bị cưỡng ép
+  const handleForceLogout = (data: { message: string }) => {
+    dispatch(logout2());
+    ToastAndroid.show(
+      data.message ||
+        "Phiên đăng nhập đã hết hạn hoặc bạn bị đăng xuất từ nơi khác.",
+      ToastAndroid.LONG,
+    );
+
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+  };
+
   useEffect(() => {
     if (!user?.userId || !apiUrl) return;
 
@@ -53,6 +70,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketRef.current = io(apiUrl, {
         auth: {
           userId: user.userId,
+          deviceId: getDeviceId(),
         },
       });
     }
@@ -72,6 +90,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
     socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
     socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
+    socketInstance.on("force_logout", handleForceLogout);
 
     return () => {
       socketInstance.off("new_message_sidebar", handleNewMessageSidebar);
@@ -79,6 +98,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         "message_recalled_sidebar",
         handleRecallMessageSidebar,
       );
+      socketInstance.off("force_logout", handleForceLogout);
     };
   }, [apiUrl, dispatch, user?.userId]);
 

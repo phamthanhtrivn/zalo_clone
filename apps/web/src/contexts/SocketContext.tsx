@@ -13,6 +13,7 @@ import {
 } from "@/store/slices/conversationSlice";
 import { getDeviceId } from "@/utils/device.util";
 import { clearAuth } from "@/store/auth/authSlice";
+import { toast } from "react-toastify";
 
 interface SocketContextType {
   socket: Socket | null;
@@ -50,7 +51,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Tự động đăng xuất khi bị cưỡng ép
   const handleForceLogout = (data: { message: string }) => {
-    alert(
+    toast.info(
       data.message ||
         "Phiên đăng nhập đã hết hạn hoặc bạn bị đăng xuất từ nơi khác.",
     );

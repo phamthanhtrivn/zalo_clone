@@ -3,6 +3,7 @@ import type { PayloadAction } from "@reduxjs/toolkit";
 import {
   changePassword,
   completeSignUp,
+  exchangeToken,
   getSessions,
   logOut,
   logOutDevice,
@@ -40,6 +41,10 @@ const authSlice = createSlice({
     updateToken(state, action: PayloadAction<string>) {
       state.accessToken = action.payload;
     },
+    setAuth(state, action) {
+      state.accessToken = action.payload.accessToken;
+      state.user = action.payload.user;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -51,7 +56,7 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.accessToken = action.payload.accessToken;
       })
-      .addCase(signIn.rejected, (state, action) => {
+      .addCase(signIn.rejected, (state) => {
         state.loading = false;
       })
       .addCase(restoreSession.pending, (state) => {
@@ -73,69 +78,80 @@ const authSlice = createSlice({
         state.accessToken = "";
         state.user = null;
       })
-      .addCase(logOut.rejected, (state, action) => {
+      .addCase(logOut.rejected, (state) => {
         state.loading = false;
       })
-      .addCase(completeSignUp.pending, (state, action) => {
+      .addCase(completeSignUp.pending, (state) => {
         state.loading = true;
       })
       .addCase(completeSignUp.fulfilled, (state, action) => {
         state.loading = false;
         state.user = action.payload;
       })
-      .addCase(completeSignUp.rejected, (state, action) => {
+      .addCase(completeSignUp.rejected, (state) => {
         state.loading = false;
       })
-      .addCase(verifyOtp.pending, (state, action) => {
+      .addCase(verifyOtp.pending, (state) => {
         state.loading = true;
       })
       .addCase(verifyOtp.fulfilled, (state, action) => {
         state.tmp_token = action.payload.tmp_token;
         state.loading = false;
       })
-      .addCase(verifyOtp.rejected, (state, action) => {
+      .addCase(verifyOtp.rejected, (state) => {
         state.loading = false;
       })
-      .addCase(resetPassword.pending, (state, action) => {
+      .addCase(resetPassword.pending, (state) => {
         state.loading = true;
       })
       .addCase(resetPassword.fulfilled, (state, action) => {
         state.user = action.payload;
         state.loading = false;
       })
-      .addCase(resetPassword.rejected, (state, action) => {
+      .addCase(resetPassword.rejected, (state) => {
         state.loading = false;
       })
-      .addCase(changePassword.pending, (state, action) => {
+      .addCase(changePassword.pending, (state) => {
         state.loading = true;
       })
-      .addCase(changePassword.fulfilled, (state, action) => {
+      .addCase(changePassword.fulfilled, (state) => {
         state.loading = false;
       })
-      .addCase(changePassword.rejected, (state, action) => {
+      .addCase(changePassword.rejected, (state) => {
         state.loading = false;
       })
-      .addCase(getSessions.pending, (state, action) => {
+      .addCase(getSessions.pending, (state) => {
         state.loading = true;
       })
-      .addCase(getSessions.fulfilled, (state, action) => {
+      .addCase(getSessions.fulfilled, (state) => {
         state.loading = false;
       })
-      .addCase(getSessions.rejected, (state, action) => {
+      .addCase(getSessions.rejected, (state) => {
         state.loading = false;
       })
-      .addCase(logOutDevice.pending, (state, action) => {
+      .addCase(logOutDevice.pending, (state) => {
         state.loading = true;
       })
-      .addCase(logOutDevice.fulfilled, (state, action) => {
+      .addCase(logOutDevice.fulfilled, (state) => {
         state.loading = false;
       })
-      .addCase(logOutDevice.rejected, (state, action) => {
+      .addCase(logOutDevice.rejected, (state) => {
+        state.loading = false;
+      })
+      .addCase(exchangeToken.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(exchangeToken.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = action.payload.user;
+        state.accessToken = action.payload.accessToken;
+      })
+      .addCase(exchangeToken.rejected, (state) => {
         state.loading = false;
       });
   },
 });
 
-export const { updateToken, clearAuth } = authSlice.actions;
+export const { updateToken, clearAuth, setAuth } = authSlice.actions;
 const { reducer } = authSlice;
 export default reducer;

@@ -47,7 +47,8 @@ apiClient.interceptors.response.use(
 
     if (
       url.includes("/api/auth/sign-in") ||
-      url.includes("/api/auth/complete-sign-up")
+      url.includes("/api/auth/complete-sign-up") ||
+      url.includes("/api/auth/qr-login/exchange")
     ) {
       return Promise.reject(error);
     }

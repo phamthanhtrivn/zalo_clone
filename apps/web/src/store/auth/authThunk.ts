@@ -182,3 +182,16 @@ export const logOutOther = createAsyncThunk(
     }
   },
 );
+
+export const exchangeToken = createAsyncThunk(
+  "auth/exchange-token",
+  async (ticket: string, thunkApi) => {
+    try {
+      const res = await authService.exchangeToken(ticket);
+      console.log(res);
+      return res;
+    } catch (err: any) {
+      return thunkApi.rejectWithValue(err.response?.data);
+    }
+  },
+);

@@ -14,9 +14,11 @@ import { TokenService } from '../../../common/jwt-token/jwt.service';
 import { SessionService } from './session.service';
 import { Purpose } from '../dto/verify-otp.dto';
 import { Gender } from 'src/common/types/enums/gender';
-import { IClientInfo } from 'src/common/decorator/client-info.decorator';
+import { IClientInfo } from 'src/modules/auth/decorators/client-info.decorator';
 import crypto from 'crypto';
 import { ChatGateway } from 'src/modules/chat/chat.gateway';
+import { AuthGateway } from '../auth.gateway';
+import { StorageService } from 'src/common/storage/storage.service';
 @Injectable()
 export class AuthService {
   constructor(
@@ -25,6 +27,8 @@ export class AuthService {
     private tokenService: TokenService,
     private sessionService: SessionService,
     private chatGateway: ChatGateway,
+    private authGateway: AuthGateway,
+    private readonly storageService: StorageService,
   ) {}
 
   //tạo key để lưu otp trong redis
@@ -162,10 +166,19 @@ export class AuthService {
     };
   }
 
-  async validateUser(phone: string, pass: string): Promise<any> {
+  async validateUser(phone: string, pass: string): Promise<AuthUser | null> {
     const user = await this.userService.findByPhone(phone);
+
     if (user && (await bcrypt.compare(pass, user.password))) {
-      return { userId: user._id, phone: user.phone, name: user.profile?.name };
+      const avatar = this.storageService.signFileUrl(
+        user.profile?.avatarUrl as string,
+      );
+      return {
+        userId: String(user._id),
+        avatarUrl: avatar as string,
+        phone: user.phone,
+        name: user.profile?.name,
+      };
     }
     return null;
   }
@@ -279,5 +292,52 @@ export class AuthService {
     }
     this.chatGateway.forceLogoutDevice(targetDeviceId);
     return { message: 'Đã đăng xuất thiết bị thành công.' };
+  }
+
+  async scanLoginQRCode(user: AuthUser, qrToken: string) {
+    const rs = await this.authGateway.notifyQrScanned(qrToken, user);
+    return rs;
+  }
+
+  async confirmLoginQr(user: AuthUser, qrToken: string) {
+    const sessionDataStr = await this.redisService.get(`qr:${qrToken}`);
+    if (!sessionDataStr) throw new BadRequestException('Mã QR đã hết hạn');
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const sessionData = JSON.parse(sessionDataStr);
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unused-vars
+    const { iat, exp, ...cleanUser } = user as any;
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    sessionData.user = cleanUser;
+    await this.redisService.set(
+      `qr:${qrToken}`,
+      JSON.stringify(sessionData),
+      'EX',
+      30,
+    );
+    this.authGateway.confirmLoginForDevice(qrToken);
+  }
+
+  // đăng nhập dùm web khi xác nhận xong
+  async exchangeTicket(ticket: string) {
+    try {
+      const data = await this.redisService.get(`qr:${ticket}`);
+      if (!data)
+        throw new BadRequestException('Vé đổi không hợp lệ hoặc đã hết hạn');
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const { clientInfo, user } = JSON.parse(data);
+      if (!user) throw new BadRequestException('Vé chưa được xác nhận');
+
+      const rs = await this.signIn(user, clientInfo);
+
+      await this.redisService.del(`qr:${ticket}`);
+      return rs;
+    } catch (err) {
+      console.log(err);
+      throw err;
+    }
   }
 }

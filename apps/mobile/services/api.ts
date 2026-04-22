@@ -1,6 +1,7 @@
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import { config } from "@/constants/config";
+import { getDeviceId } from "@/utils/device.util";
 
 console.log(config.apiUrl);
 
@@ -15,6 +16,7 @@ const refreshApi = axios.create({
 });
 
 api.interceptors.request.use(async (config) => {
+  config.headers["x-device-id"] = await getDeviceId();
   const token = await SecureStore.getItemAsync("access_token");
 
   if (token) {

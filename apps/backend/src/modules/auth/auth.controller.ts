@@ -19,14 +19,14 @@ import { RequestOtpDTO } from './dto/request-otp.dto';
 import { AuthUser } from './types/auth.type';
 import { JwtAuthGuard } from './passport/jwt-auth.guard';
 import { LocalAuthGuard } from './passport/local-auth.guard';
-import { RequireTempPurpose } from 'src/common/decorator/temp_purpose.decorator';
+import { RequireTempPurpose } from 'src/modules/auth/decorators/temp_purpose.decorator';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDTO } from './dto/change-password.dto';
 import type { Response } from 'express';
 import { RedisService } from 'src/common/redis/redis.service';
 import { SessionService } from './services/session.service';
-import { ClientContext } from 'src/common/decorator/client-info.decorator';
-import type { IClientInfo } from 'src/common/decorator/client-info.decorator';
+import { ClientContext } from 'src/modules/auth/decorators/client-info.decorator';
+import type { IClientInfo } from 'src/modules/auth/decorators/client-info.decorator';
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -242,5 +242,65 @@ export class AuthController {
       req.user.userId,
       targetDeviceId,
     );
+  }
+
+  //khi người dùng mobile quét qr sẽ kích hoạt api này
+  @Post('qr-login/scan')
+  async scanQrCode(
+    @Request() req: { user: AuthUser },
+    @Body() body: { qrToken: string },
+  ) {
+    const clientInfo = await this.authService.scanLoginQRCode(
+      req.user,
+      body.qrToken,
+    );
+
+    if (!clientInfo)
+      throw new BadRequestException('Mã QR hết hạn hoặc không hợp lệ');
+
+    return {
+      message: 'Quét mã thành công',
+      device: clientInfo, // Chứa deviceName, ip, location, deviceType...
+    };
+  }
+
+  @Post('qr-login/confirm')
+  async confirmQrLogin(
+    @Request() req: { user: AuthUser },
+    @Body() body: { qrToken: string },
+  ) {
+    const { qrToken } = body;
+
+    if (!qrToken) {
+      throw new BadRequestException('Thiếu thông tin xác nhận');
+    }
+    await this.authService.confirmLoginQr(req.user, qrToken);
+
+    return { message: 'Xác nhận đăng nhập thành công' };
+  }
+
+  @Post('qr-login/exchange')
+  @Public()
+  async exchangeTicket(
+    @Body() body: { ticket: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    try {
+      console.log('do');
+      console.log(body.ticket);
+      const rs = await this.authService.exchangeTicket(body.ticket);
+
+      res.cookie('refreshToken', rs.refreshToken, {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'strict',
+        path: '/',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      });
+
+      return rs;
+    } catch (err) {
+      console.log(err);
+    }
   }
 }
