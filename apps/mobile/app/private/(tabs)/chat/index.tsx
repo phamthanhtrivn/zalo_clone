@@ -17,6 +17,7 @@ import {
 import { useSocket } from "@/contexts/SocketContext";
 import { createSelector } from "@reduxjs/toolkit";
 import type { RootState } from "@/store/store";
+import QRIcon from "@/components/common/QRIcon";
 
 // Memoized selector — only recomputes when conversations array changes
 
@@ -24,19 +25,28 @@ import type { RootState } from "@/store/store";
 const selectVisibleConversations = createSelector(
   (state: RootState) => state.conversation.conversations,
   (conversations) => {
-    console.log('🔄 Selector running, conversations count:', conversations.length);
-    console.log('📊 Unread counts:', conversations.map(c => ({
-      name: c.name,
-      unreadCount: c.unreadCount
-    })));
+    console.log(
+      "🔄 Selector running, conversations count:",
+      conversations.length,
+    );
+    console.log(
+      "📊 Unread counts:",
+      conversations.map((c) => ({
+        name: c.name,
+        unreadCount: c.unreadCount,
+      })),
+    );
 
     return [...conversations]
       .filter((c) => !c.hidden)
       .sort((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-        return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
+        return (
+          new Date(b.lastMessageAt).getTime() -
+          new Date(a.lastMessageAt).getTime()
+        );
       });
-  }
+  },
 );
 
 export default function Home() {
@@ -100,7 +110,9 @@ export default function Home() {
 
     const nextExpiryAt = Math.min(
       ...expiringConversations
-        .map((conversation) => new Date(conversation.lastMessage.expiresAt!).getTime())
+        .map((conversation) =>
+          new Date(conversation.lastMessage.expiresAt!).getTime(),
+        )
         .filter((time) => !Number.isNaN(time)),
     );
 
@@ -138,6 +150,7 @@ export default function Home() {
         gradient
         centerChild={<SearchLabel />}
         leftChild={<SearchIcon />}
+        rightChild={<QRIcon />}
       />
       <View className="flex-1 bg-white">
         {/* Tabs */}
