@@ -40,11 +40,11 @@ export const SidebarSecondary = () => {
     setIsSearching(false);
 
     let conversationIdToNavigate = id;
-    let finalOtherUserId = otherUserIdFromSearch; // This will be the userId of the person we are chatting with
+    let finalOtherUserId = otherUserIdFromSearch;
 
     if (isNewContact) {
       try {
-        const response = await conversationService.getOrCreateDirect(id); // id here is userId
+        const response = await conversationService.getOrCreateDirect(id);
         conversationIdToNavigate = response?.data?._id || response?.data?.conversationId || response?._id;
         if (!conversationIdToNavigate) {
           console.error("Failed to get or create direct conversation for new contact.");

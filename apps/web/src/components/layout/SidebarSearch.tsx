@@ -27,8 +27,6 @@ export const SidebarSearch = ({
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const user = useAppSelector((state) => state.auth.user);
-
-  // Logic debounce tìm kiếm
   useEffect(() => {
     const isSearching = keyword.trim().length > 0;
     onSearchStateChange(isSearching);
@@ -37,9 +35,6 @@ export const SidebarSearch = ({
       onResultsChange(null);
       return;
     }
-
-    // Validate userId before making the API call
-    // MongoDB ObjectId is a 24-character hexadecimal string
     if (!user?.userId || !/^[0-9a-fA-F]{24}$/.test(user.userId)) {
       console.error("Invalid or missing user ID, cannot perform search:", user?.userId);
       onResultsChange(null); // Clear results if user ID becomes invalid
@@ -55,7 +50,6 @@ export const SidebarSearch = ({
           scope: scope as any,
         });
 
-        // Đảm bảo lấy đúng dữ liệu từ cấu trúc { success, data }
         if (res && res.success) {
           onResultsChange(res.data);
         } else {
