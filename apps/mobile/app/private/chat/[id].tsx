@@ -35,21 +35,18 @@ import {
 } from "@/utils/format-message-time..util";
 import { Image } from "expo-image";
 import MenuItem from "@/components/chat/MenuItem";
-import { conversationService } from "@/services/conversation.service";
-import {
-  setConversations,
-  setReplyingMessage,
-  clearReplyingMessage,
-} from "@/store/slices/conversationSlice";
+import { clearReplyingMessage, setConversations, setReplyingMessage } from "@/store/slices/conversationSlice";
 import { useVideoCall } from "@/contexts/VideoCallContext";
+import { userService } from "@/services/user.service";
 
 export default function ChatWindow() {
   const conversations = useAppSelector(
     (state) => state.conversation.conversations,
   );
-  const { id, messageId } = useLocalSearchParams<{
+  const { id, messageId, otherUserId: paramOtherUserId } = useLocalSearchParams<{
     id: string;
     messageId?: string;
+    otherUserId?: string;
   }>();
   const { socket } = useSocket();
   const user = useAppSelector((state) => state.auth.user);
@@ -61,6 +58,9 @@ export default function ChatWindow() {
   const [contextMenuMsg, setContextMenuMsg] = useState<MessagesType | null>(
     null,
   );
+  const [isFriend, setIsFriend] = useState<boolean | null>(null);
+  const [friendStatus, setFriendStatus] = useState<string | null>(null);
+  const effectiveOtherMemberId = (conversation as any)?.otherMemberId || paramOtherUserId;
 
   const { startCall } = useVideoCall();
 
@@ -368,13 +368,34 @@ export default function ChatWindow() {
     }
   };
 
+  const handleAddFriend = async () => {
+    if (!effectiveOtherMemberId || !user?.userId) return;
+    try {
+      await userService.addFriend(effectiveOtherMemberId, user.userId);
+      setFriendStatus("PENDING");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAcceptFriend = async () => {
+    if (!effectiveOtherMemberId || !user?.userId) return;
+    try {
+      await userService.acceptFriend(effectiveOtherMemberId, user.userId);
+      setIsFriend(true);
+      setFriendStatus("ACCEPTED");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleDeleteForMe = async (messageId: string) => {
     if (!id || !user?.userId) return;
     try {
       await messageService.deleteMessageForMe(user.userId, messageId, id);
       setMessages((prev) => prev.filter((m) => m._id !== messageId));
 
-      const res: any = await conversationService.getConversationsFromUserId(
+      const res: any = await (messageService as any).getConversationsFromUserId(
         user?.userId || "",
       );
 
@@ -515,7 +536,7 @@ export default function ChatWindow() {
 
   useEffect(() => {
     const expiringMessages = messages.filter(
-      (message) => !message.expired && message.expiresAt,
+      (message) => !(message as any).expired && message.expiresAt,
     );
 
     if (!expiringMessages.length) return;
@@ -531,7 +552,7 @@ export default function ChatWindow() {
     const syncExpiredMessages = () => {
       setMessages((prev) =>
         prev.map((message) => {
-          if (message.expired || !message.expiresAt) return message;
+          if ((message as any).expired || !message.expiresAt) return message;
 
           const expiresAtMs = new Date(message.expiresAt).getTime();
           if (Number.isNaN(expiresAtMs) || expiresAtMs > Date.now()) {
@@ -552,6 +573,34 @@ export default function ChatWindow() {
     const timeoutId = setTimeout(syncExpiredMessages, delay + 50);
     return () => clearTimeout(timeoutId);
   }, [messages]);
+
+  // --- FRIEND STATUS CHECK ---
+  useEffect(() => {
+    if (isGroup || !effectiveOtherMemberId || !user?.userId) {
+      setIsFriend(null);
+      setFriendStatus(null);
+      return;
+    }
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await userService.checkFriendStatus(effectiveOtherMemberId);
+        // Handle double nested response if necessary, similar to web
+        const friendData = res?.data?.data ?? res?.data;
+        if (!cancelled && friendData) {
+          setIsFriend(!!friendData.isFriend);
+          setFriendStatus(friendData.status ?? null);
+        }
+      } catch (err) {
+        console.error("Check friend status failed:", err);
+        if (!cancelled) setIsFriend(false);
+      }
+    };
+    check();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, effectiveOtherMemberId, isGroup, user?.userId]);
 
   // ===== SOCKET =====
   useEffect(() => {
@@ -768,7 +817,7 @@ export default function ChatWindow() {
           />
         </View>
 
-        {/* Name */}
+        {/* Name and Badge */}
         <View style={{ flex: 1 }}>
           <Text
             style={{ color: "white", fontSize: 16, fontWeight: "700" }}
@@ -776,6 +825,22 @@ export default function ChatWindow() {
           >
             {conversation?.name}
           </Text>
+          {isFriend === false && (
+            <View style={{ flexDirection: "row", marginTop: 2 }}>
+              <View
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.2)",
+                  paddingHorizontal: 6,
+                  paddingVertical: 1,
+                  borderRadius: 10,
+                }}
+              >
+                <Text style={{ color: "white", fontSize: 10, fontWeight: "600" }}>
+                  Người lạ
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Actions */}
@@ -806,6 +871,38 @@ export default function ChatWindow() {
           onUnpin={handleTogglePin}
           onJumpToMessage={handleJumpToMessage}
         />
+
+        {/* Friend Request Banner (Screenshot 2) */}
+        {isFriend === false && (
+          <View
+            style={{
+              backgroundColor: "white",
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              borderBottomWidth: 1,
+              borderBottomColor: "#f3f4f6",
+            }}
+          >
+            <TouchableOpacity 
+              onPress={friendStatus === "PENDING" ? undefined : (friendStatus === "REQUESTED" ? handleAcceptFriend : handleAddFriend)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <Ionicons 
+                name={friendStatus === "PENDING" ? "time-outline" : "person-add-outline"} 
+                size={20} 
+                color="#0068ff" 
+              />
+              <Text style={{ color: "#0068ff", fontWeight: "600", fontSize: 14 }}>
+                {friendStatus === "PENDING" 
+                  ? "Đã gửi lời mời" 
+                  : (friendStatus === "REQUESTED" ? "Chấp nhận lời mời" : "Kết bạn")}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={{ flex: 1, backgroundColor: "#F1F2F4" }}>
           {isLoading ? (
@@ -874,10 +971,65 @@ export default function ChatWindow() {
                 paddingBottom: 90, // space for input
               }}
               ListEmptyComponent={() => (
-                <View style={{ alignItems: "center", paddingVertical: 40 }}>
-                  <Text style={{ color: "#9ca3af", fontSize: 13 }}>
-                    Chưa có tin nhắn nào
-                  </Text>
+                <View style={{ alignItems: "center", paddingVertical: 10 }}>
+                  {isFriend === false && (
+                    <View
+                      style={{
+                        backgroundColor: "white",
+                        borderRadius: 12,
+                        marginHorizontal: 16,
+                        marginTop: 10,
+                        overflow: "hidden",
+                        width: "90%",
+                        elevation: 2,
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 2,
+                      }}
+                    >
+                      {/* Cover Photo Placeholder */}
+                      <View style={{ height: 120, backgroundColor: "#e5e7eb" }}>
+                         <Image
+                           source={{ uri: "https://picsum.photos/seed/zalo/800/400" }}
+                           style={{ width: "100%", height: 120 }}
+                         />
+                      </View>
+                      
+                      <View style={{ padding: 16, alignItems: "center", position: "relative" }}>
+                        {/* Avatar */}
+                        <View 
+                          style={{ 
+                            position: "absolute", 
+                            top: -40, 
+                            borderWidth: 3, 
+                            borderColor: "white", 
+                            borderRadius: 40,
+                            overflow: "hidden" 
+                          }}
+                        >
+                          <Image
+                            source={{ uri: conversation?.avatar }}
+                            style={{ width: 80, height: 80 }}
+                          />
+                        </View>
+                        
+                        <View style={{ marginTop: 45, alignItems: "center" }}>
+                          <Text style={{ fontSize: 18, fontWeight: "700", color: "#111827" }}>
+                            {conversation?.name}
+                          </Text>
+                          <Text style={{ marginTop: 8, fontSize: 13, color: "#6b7280", textAlign: "center", paddingHorizontal: 20 }}>
+                            Người này chưa được thêm vào danh sách bạn bè. Hãy lưu ý khi gửi tin nhắn.
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                  {messages.length === 0 && !isFriend && (
+                    <Text style={{ color: "#9ca3af", fontSize: 13, marginTop: 20 }}>
+                      Chưa có tin nhắn nào
+                    </Text>
+                  )}
                 </View>
               )}
             />

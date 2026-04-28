@@ -108,17 +108,19 @@ export const conversationService = {
     return response;
   },
   search: async (
-    userId: string,
-    keyword: string,
-    scope: "all" | "contacts" | "messages" | "files" | "groups" = "all",
-    limit = 8,
+    params: {
+      userId: string;
+      keyword: string;
+      scope?: "all" | "contacts" | "messages" | "files" | "groups";
+      limit?: number;
+    }
   ) => {
     const response = await api.get("/conversations/search", {
       params: {
-        userId,
-        keyword,
-        scope,
-        limit,
+        userId: params.userId,
+        keyword: params.keyword,
+        scope: params.scope || "all",
+        limit: params.limit || 8,
       },
     });
     return response;

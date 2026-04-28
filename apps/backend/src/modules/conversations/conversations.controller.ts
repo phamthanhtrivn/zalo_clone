@@ -203,12 +203,10 @@ export class ConversationsController {
       updateDto,
       file,
     );
-
   }
   @Get('search')
-  async search(@Query() query: SearchConversationsDto) {
+  async search(@Req() req, @Query() query: SearchConversationsDto) {
+    query.userId = req.user.userId;
     return this.conversationsService.search(query);
-
   }
-
 }

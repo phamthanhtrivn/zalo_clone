@@ -16,10 +16,11 @@ import { getDeviceId } from "@/utils/device.util";
 
 export const apiClient = axios.create({
   baseURL: API_URL,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
-  withCredentials: true,
+
 });
 
 // Dùng riêng cho refresh token

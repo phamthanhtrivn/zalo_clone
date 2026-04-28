@@ -30,6 +30,7 @@ import { CallStatus } from 'src/common/types/enums/call-status';
 import { MessagesService } from '../messages/messages.service';
 import { UpdateGroupDto } from './dto/udate-group.dto';
 import { SearchConversationsDto } from './dto/search-conversations.dto';
+import { FriendStatus } from 'src/common/types/enums/friend-status';
 
 @Injectable()
 export class ConversationsService {
@@ -48,7 +49,7 @@ export class ConversationsService {
     private readonly messagesService: MessagesService,
     @InjectModel(JoinRequest.name)
     private readonly joinRequestModel: Model<JoinRequest>,
-  ) {}
+  ) { }
 
   private escapeRegex(value: string) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1408,7 +1409,7 @@ export class ConversationsService {
     if (
       dto.allowMembersSendMessages !== undefined &&
       conversation.group.allowMembersSendMessages !==
-        dto.allowMembersSendMessages
+      dto.allowMembersSendMessages
     ) {
       const actorName = await this.getUserName(userId);
       const actionText = dto.allowMembersSendMessages
@@ -1666,7 +1667,7 @@ export class ConversationsService {
         if (conversation.group.avatarUrl) {
           await this.storageService
             .deleteFile(conversation.group.avatarUrl)
-            .catch(() => {});
+            .catch(() => { });
         }
 
         const upload = await this.storageService.uploadFile(file);
@@ -1714,6 +1715,10 @@ export class ConversationsService {
   }
 
   async search(query: SearchConversationsDto) {
+    if (!query.userId || !Types.ObjectId.isValid(query.userId)) {
+      throw new BadRequestException('ID người dùng không hợp lệ');
+    }
+
     const userObjectId = new Types.ObjectId(query.userId);
     const keyword = query.keyword.trim();
     const scope = query.scope ?? 'all';
@@ -1731,68 +1736,111 @@ export class ConversationsService {
       ]),
     );
 
-    if (!conversationIds.length) {
-      return {
-        contacts: [],
-        groups: [],
-        messages: [],
-        files: [],
-      };
-    }
-
     const objectConversationIds = conversationIds.map(
       (id) => new Types.ObjectId(id),
     );
 
-    const contacts =
-      scope === 'all' || scope === 'contacts'
-        ? conversationItems
-            .filter(
-              (conversation) =>
-                conversation.type === ConversationType.DIRECT &&
-                regex.test(conversation.name ?? ''),
-            )
-            .slice(0, limit)
-            .map((conversation) => ({
-              conversationId: conversation.conversationId,
-              name: conversation.name,
-              avatar: conversation.avatar,
-              lastMessageAt: conversation.lastMessageAt,
-            }))
-        : [];
+    let contacts: any[] = [];
+    if (scope === 'all' || scope === 'contacts') {
+      // Phát hiện loại tìm kiếm: SĐT (chỉ chứa số và ký tự SĐT) hay tên
+      const isPhoneSearch = /^[0-9+\s\-()]{7,15}$/.test(keyword.trim());
+
+      // Lấy danh sách bạn bè ACCEPTED của user hiện tại
+      const currentUser = await this.userModel
+        .findById(userObjectId)
+        .select({ friends: 1 })
+        .lean();
+
+      const acceptedFriendIds = new Set(
+        (currentUser?.friends ?? [])
+          .filter((f) => f.status === FriendStatus.ACCEPTED)
+          .map((f) => f.friendId.toString()),
+      );
+
+      let matchedUsers: any[] = [];
+
+      if (isPhoneSearch) {
+        // Tìm tất cả user theo SĐT (khớp chính xác)
+        matchedUsers = await this.userModel
+          .find({
+            _id: { $ne: userObjectId },
+            phone: keyword.trim(),
+          })
+          .limit(limit)
+          .lean();
+      } else {
+        // Tìm theo tên, chỉ trong danh sách bạn bè ACCEPTED
+        const friendObjectIds = Array.from(acceptedFriendIds).map(
+          (id) => new Types.ObjectId(id),
+        );
+        if (friendObjectIds.length > 0) {
+          matchedUsers = await this.userModel
+            .find({
+              _id: { $in: friendObjectIds },
+              'profile.name': regex,
+            })
+            .limit(limit)
+            .lean();
+        }
+      }
+
+      contacts = matchedUsers.map((u) => {
+        const isFriend = acceptedFriendIds.has(u._id.toString());
+        const existingConv = conversationItems.find(
+          (c) =>
+            c.type === ConversationType.DIRECT &&
+            c.otherMemberId?.toString() === u._id.toString(),
+        );
+
+        return {
+          conversationId: existingConv?.conversationId || null,
+          userId: u._id.toString(),
+          name: u.profile?.name || u.phone,
+          avatar:
+            existingConv?.avatar ||
+            (u.profile?.avatarUrl
+              ? this.storageService.signFileUrl(u.profile.avatarUrl)
+              : null),
+          phone: u.phone,
+          isFriend,
+          isExistingConversation: !!existingConv,
+          lastMessageAt: existingConv?.lastMessageAt || null,
+        };
+      });
+    }
 
     const groups =
       scope === 'all' || scope === 'groups'
         ? conversationItems
-            .filter(
-              (conversation) =>
-                conversation.type === ConversationType.GROUP &&
-                regex.test(conversation.name ?? ''),
-            )
-            .slice(0, limit)
-            .map((conversation) => ({
-              conversationId: conversation.conversationId,
-              name: conversation.name,
-              avatar: conversation.avatar,
-              lastMessageAt: conversation.lastMessageAt,
-              memberLabel: 'Nhom',
-            }))
+          .filter(
+            (conversation) =>
+              conversation.type === ConversationType.GROUP &&
+              regex.test(conversation.name ?? ''),
+          )
+          .slice(0, limit)
+          .map((conversation) => ({
+            conversationId: conversation.conversationId,
+            name: conversation.name,
+            avatar: conversation.avatar,
+            lastMessageAt: conversation.lastMessageAt,
+            memberLabel: 'Nhom',
+          }))
         : [];
 
     const rawMessages =
       scope === 'all' || scope === 'messages'
         ? await this.messageModel
-            .find({
-              conversationId: { $in: objectConversationIds },
-              deletedFor: { $ne: userObjectId },
-              recalled: { $ne: true },
-              expired: { $ne: true },
-              'content.text': regex,
-            })
-            .sort({ createdAt: -1 })
-            .limit(limit)
-            .populate('senderId', 'profile.name profile.avatarUrl')
-            .lean<any[]>()
+          .find({
+            conversationId: { $in: objectConversationIds },
+            deletedFor: { $ne: userObjectId },
+            recalled: { $ne: true },
+            expired: { $ne: true },
+            'content.text': regex,
+          })
+          .sort({ createdAt: -1 })
+          .limit(limit)
+          .populate('senderId', 'profile.name profile.avatarUrl')
+          .lean<any[]>()
         : [];
 
     const messages = rawMessages.map((message) => {
@@ -1813,17 +1861,17 @@ export class ConversationsService {
     const rawFileMessages =
       scope === 'all' || scope === 'files'
         ? await this.messageModel
-            .find({
-              conversationId: { $in: objectConversationIds },
-              deletedFor: { $ne: userObjectId },
-              recalled: { $ne: true },
-              expired: { $ne: true },
-              'content.files.fileName': regex,
-            })
-            .sort({ createdAt: -1 })
-            .limit(limit)
-            .populate('senderId', 'profile.name profile.avatarUrl')
-            .lean<any[]>()
+          .find({
+            conversationId: { $in: objectConversationIds },
+            deletedFor: { $ne: userObjectId },
+            recalled: { $ne: true },
+            expired: { $ne: true },
+            'content.files.fileName': regex,
+          })
+          .sort({ createdAt: -1 })
+          .limit(limit)
+          .populate('senderId', 'profile.name profile.avatarUrl')
+          .lean<any[]>()
         : [];
 
     const files = rawFileMessages
