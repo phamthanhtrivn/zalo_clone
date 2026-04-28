@@ -5,6 +5,7 @@ import MessageList from "@/components/layout/message/MessageList";
 import ChatInput from "@/components/layout/message/ChatInput";
 import ConversationInfoPanel from "@/components/layout/message/ConversationInfoPanel";
 import { messageService } from "@/services/message.service";
+import { userService } from "@/services/user.service";
 import type { MessagesType } from "@/types/messages.type";
 import type { EmojiType } from "@/constants/emoji.constant";
 import { toast, Zoom } from "react-toastify";
@@ -20,7 +21,7 @@ import ForwardModal from "@/components/layout/message/ForwardModal";
 const ConversationPage = () => {
   const { id } = useParams();
   const location = useLocation();
-  const { conversation: stateConversation } = location.state || {};
+  const { conversation: stateConversation, otherUserId: locationOtherUserId } = location.state || {};
   const dispatch = useAppDispatch();
 
   const currentUser = useAppSelector((state) => state.auth.user);
@@ -37,6 +38,12 @@ const ConversationPage = () => {
   const conversation =
     stateConversation || conversations.find((c) => c.conversationId === id);
   const isGroup = conversation?.type === "GROUP";
+
+  // ID của người đối diện: lấy từ conversation store, hoặc fallback từ location.state
+  // (cần thiết khi conversation vừa được tạo và chưa có otherMemberId)
+  const effectiveOtherMemberId = !isGroup
+    ? (conversation?.otherMemberId || locationOtherUserId || null)
+    : null;
 
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
@@ -63,6 +70,10 @@ const ConversationPage = () => {
   const lastProcessedMessageIdRef = useRef<string | null>(null);
   const pendingJumpMessageIdRef = useRef<string | null>(null);
 
+  // --- FRIEND STATUS ---
+  const [isFriend, setIsFriend] = useState<boolean | null>(null);
+  const [friendStatus, setFriendStatus] = useState<string | null>(null);
+
   const lastMessageId = messages[messages.length - 1]?._id;
   const { socket } = useSocket();
   const selectedMessageId = new URLSearchParams(location.search).get("messageId");
@@ -83,6 +94,62 @@ const ConversationPage = () => {
       transition: Zoom,
     });
   }, []);
+
+  // --- FRIEND STATUS CHECK ---
+  useEffect(() => {
+    if (isGroup || !effectiveOtherMemberId || !currentUserId) {
+      setIsFriend(null);
+      setFriendStatus(null);
+      return;
+    }
+    let cancelled = false;
+    const check = async () => {
+      try {
+        console.log('[FriendStatus] Checking:', effectiveOtherMemberId);
+        const res = await userService.checkFriendStatus(effectiveOtherMemberId);
+        console.log('[FriendStatus] Result:', res);
+        // Response cấu trúc: { success, statusCode, data: { success, data: { isFriend, status } } }
+        const friendData = res?.data?.data ?? res?.data;
+        if (!cancelled && friendData) {
+          setIsFriend(!!friendData.isFriend);
+          setFriendStatus(friendData.status ?? null);
+        } else if (!cancelled) {
+          setIsFriend(false);
+          setFriendStatus(null);
+        }
+      } catch (err) {
+        console.error('[FriendStatus] API error:', err);
+        // Nếu API lỗi, mặc định coi là chưa kết bạn để hiện banner
+        if (!cancelled) {
+          setIsFriend(false);
+          setFriendStatus(null);
+        }
+      }
+    };
+    check();
+    return () => { cancelled = true; };
+  }, [id, effectiveOtherMemberId, isGroup, currentUserId]);
+
+  const handleSendFriendRequest = async () => {
+    if (!effectiveOtherMemberId || !currentUserId) return;
+    try {
+      await userService.addFriend(effectiveOtherMemberId, currentUserId);
+      setFriendStatus("PENDING");
+    } catch (err) {
+      console.error("Gửi lời mời kết bạn thất bại:", err);
+    }
+  };
+
+  const handleAcceptFriendRequest = async () => {
+    if (!effectiveOtherMemberId || !currentUserId) return;
+    try {
+      await userService.acceptFriend(effectiveOtherMemberId, currentUserId);
+      setIsFriend(true);
+      setFriendStatus("ACCEPTED");
+    } catch (err) {
+      console.error("Chấp nhận kết bạn thất bại:", err);
+    }
+  };
 
   // --- LOGIC CUỘN & NHẢY TIN NHẮN ---
   const scrollToMessage = (messageId: string, retry = 0) => {
@@ -594,6 +661,51 @@ const ConversationPage = () => {
           handlePinnedMessage={handlePinnedMessage}
           handleJumpToMessage={handleJumpToMessage}
         />
+
+        {/* Thanh gửi yêu cầu kết bạn */}
+        {!isGroup && isFriend === false && (
+          <div className="px-4 py-2.5 bg-white border-b border-gray-100 flex items-center gap-3 text-sm">
+            {/* Icon */}
+            <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-[#0091ff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <line x1="19" y1="8" x2="19" y2="14" />
+                <line x1="22" y1="11" x2="16" y2="11" />
+              </svg>
+            </div>
+
+            {/* Text */}
+            <span className="flex-1 text-gray-600 text-[13px]">
+              {friendStatus === "REQUESTED"
+                ? "Người này đã gửi lời mời kết bạn cho bạn"
+                : friendStatus === "PENDING"
+                  ? "Đã gửi lời mời kết bạn"
+                  : "Gửi yêu cầu kết bạn tới người này"}
+            </span>
+
+            {/* Action button */}
+            {friendStatus === "REQUESTED" ? (
+              <button
+                onClick={handleAcceptFriendRequest}
+                className="shrink-0 px-4 py-1.5 bg-[#0091ff] text-white text-[13px] font-medium rounded-md hover:bg-[#0075dd] transition-colors"
+              >
+                Chấp nhận
+              </button>
+            ) : friendStatus === "PENDING" ? (
+              <span className="shrink-0 px-4 py-1.5 text-gray-400 text-[13px] border border-gray-200 rounded-md">
+                Đã gửi
+              </span>
+            ) : (
+              <button
+                onClick={handleSendFriendRequest}
+                className="shrink-0 px-4 py-1.5 bg-[#0091ff] text-white text-[13px] font-medium rounded-md hover:bg-[#0075dd] transition-colors"
+              >
+                Gửi kết bạn
+              </button>
+            )}
+          </div>
+        )}
 
         <MessageList
           messages={messages}

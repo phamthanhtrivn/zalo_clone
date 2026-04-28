@@ -26,7 +26,7 @@ export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     private readonly storageService: StorageService,
-  ) {}
+  ) { }
 
   async findByPhone(phone: string) {
     return this.userModel.findOne({ phone: phone }).exec();
@@ -420,5 +420,22 @@ export class UsersService {
     };
 
     return data;
+  }
+
+  async getFriendStatus(userId: string, friendId: string) {
+    const user = await this.userModel.findOne(
+      { _id: userId, 'friends.friendId': friendId },
+      { 'friends.$': 1 }
+    ).lean();
+
+    const friendship = user?.friends?.[0];
+
+    return {
+      success: true,
+      data: {
+        isFriend: friendship?.status === FriendStatus.ACCEPTED,
+        status: friendship?.status || null // PENDING, REQUESTED, etc.
+      }
+    };
   }
 }

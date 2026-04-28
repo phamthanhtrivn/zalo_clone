@@ -155,19 +155,23 @@ export const conversationService = {
     );
   },
   search: async (
-    userId: string,
-    keyword: string,
-    scope: "all" | "contacts" | "messages" | "files" | "groups" = "all",
-    limit = 8,
+    query: {
+      keyword: string;
+      userId: string;
+      scope?: "all" | "contacts" | "messages" | "files" | "groups";
+      limit?: number;
+    }
   ) => {
     const response = await apiClient.get("/api/conversations/search", {
-      params: {
-        userId,
-        keyword,
-        scope,
-        limit,
-      },
+      params: query,
     });
     return response.data;
-  }
+  },
+  sendFriendRequest: async (fromUserId: string, targetUserId: string) => {
+    const response = await apiClient.post("/api/users/add-friend", {
+      userId: fromUserId,
+      friendId: targetUserId,
+    });
+    return response.data;
+  },
 };
