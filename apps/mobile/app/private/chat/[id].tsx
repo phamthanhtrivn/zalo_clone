@@ -850,7 +850,15 @@ export default function ChatWindow() {
         <TouchableOpacity style={{ padding: 4 }} onPress={handleVideoCall}>
           <Ionicons name="videocam-outline" size={24} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity style={{ padding: 4 }}>
+        <TouchableOpacity
+          style={{ padding: 4 }}
+          onPress={() =>
+            router.push({
+              pathname: "/private/search",
+              params: { conversationId: id },
+            })
+          }
+        >
           <Ionicons name="search-outline" size={24} color="white" />
         </TouchableOpacity>
         <TouchableOpacity

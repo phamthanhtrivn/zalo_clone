@@ -27,6 +27,7 @@ import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
 import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
 import { DeleteMessageForMeDto } from './dto/delete-message-for-me.dto';
 import { ForwardMessageDto } from './dto/forward-message.dto';
+import { SearchMessagesDto } from './dto/search-messages.dto';
 
 import { MessagesQueryService } from './services/query.service';
 import { MessagesActionService } from './services/action.service';
@@ -113,6 +114,10 @@ export class MessagesService {
       conversationId,
       getMediasFileTypeDto,
     );
+  }
+
+  async searchMessages(conversationId: string, searchDto: SearchMessagesDto) {
+    return this.queryService.searchMessages(conversationId, searchDto);
   }
 
   // --- Action Methods ---

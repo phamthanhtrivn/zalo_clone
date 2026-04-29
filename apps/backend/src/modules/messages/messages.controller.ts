@@ -26,6 +26,7 @@ import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
 import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
 import { DeleteMessageForMeDto } from './dto/delete-message-for-me.dto';
 import { ForwardMessageDto } from './dto/forward-message.dto';
+import { SearchMessagesDto } from './dto/search-messages.dto';
 
 @Controller('messages')
 export class MessagesController {
@@ -40,6 +41,14 @@ export class MessagesController {
       conversationId,
       getMessagesDto,
     );
+  }
+
+  @Get('conversation/:conversationId/search')
+  async searchMessages(
+    @Param('conversationId') conversationId: string,
+    @Query() searchDto: SearchMessagesDto,
+  ) {
+    return this.messagesService.searchMessages(conversationId, searchDto);
   }
 
   @Get('conversation/:conversationId/newer')

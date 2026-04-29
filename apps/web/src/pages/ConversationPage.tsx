@@ -4,6 +4,7 @@ import ChatHeader from "@/components/layout/message/ChatHeader";
 import MessageList from "@/components/layout/message/MessageList";
 import ChatInput from "@/components/layout/message/ChatInput";
 import ConversationInfoPanel from "@/components/layout/message/ConversationInfoPanel";
+import MessageSearchPanel from "@/components/layout/message/MessageSearchPanel";
 import { messageService } from "@/services/message.service";
 import { userService } from "@/services/user.service";
 import type { MessagesType } from "@/types/messages.type";
@@ -46,6 +47,7 @@ const ConversationPage = () => {
     : null;
 
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
   const [messages, setMessages] = useState<MessagesType[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -656,10 +658,12 @@ const ConversationPage = () => {
         <ChatHeader
           conversation={conversation}
           isInfoOpen={isInfoOpen}
-          toggleInfo={() => setIsInfoOpen(!isInfoOpen)}
+          toggleInfo={() => { setIsInfoOpen(!isInfoOpen); setIsSearchOpen(false); }}
           pinnedMessages={pinnedMessages}
           handlePinnedMessage={handlePinnedMessage}
           handleJumpToMessage={handleJumpToMessage}
+          isSearchOpen={isSearchOpen}
+          toggleSearch={() => { setIsSearchOpen(!isSearchOpen); setIsInfoOpen(false); }}
         />
 
         {/* Thanh gửi yêu cầu kết bạn */}
@@ -761,6 +765,13 @@ const ConversationPage = () => {
         isOpen={isInfoOpen}
         conversation={conversation}
         onClose={() => setIsInfoOpen(false)}
+      />
+
+      <MessageSearchPanel
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        conversation={conversation}
+        onJumpToMessage={handleJumpToMessage}
       />
     </div>
   );

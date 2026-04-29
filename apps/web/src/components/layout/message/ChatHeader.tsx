@@ -18,6 +18,8 @@ type ChatHeaderProps = {
   pinnedMessages: MessagesType[];
   handlePinnedMessage: (messageId: string) => void;
   handleJumpToMessage: (messageId: string) => void;
+  isSearchOpen: boolean;
+  toggleSearch: () => void;
 };
 
 const ChatHeader = ({
@@ -27,6 +29,8 @@ const ChatHeader = ({
   pinnedMessages,
   handlePinnedMessage,
   handleJumpToMessage,
+  isSearchOpen,
+  toggleSearch,
 }: ChatHeaderProps) => {
   const { callUser } = useCall();
   const currentUserId = useAppSelector((state) => state.auth.user?.userId);
@@ -98,8 +102,12 @@ const ChatHeader = ({
             <Video />
           </Button>
 
-          <Button variant="ghost" size="icon">
-            <Search />
+          <Button 
+            variant={isSearchOpen ? "default" : "ghost"} 
+            size="icon" 
+            onClick={toggleSearch}
+          >
+            <Search color={isSearchOpen ? "white" : "currentColor"} />
           </Button>
 
           <Button

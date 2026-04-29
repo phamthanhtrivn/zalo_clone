@@ -14,6 +14,7 @@ import { MessageResponse } from '../types/message-response.type';
 import { FileType } from 'src/common/types/enums/file-type';
 import { StorageService } from 'src/common/storage/storage.service';
 import { ConversationSetting } from 'src/modules/conversation-settings/schemas/conversation-setting.schema';
+import { SearchMessagesDto } from '../dto/search-messages.dto';
 
 @Injectable()
 export class MessagesQueryService {
@@ -513,5 +514,81 @@ export class MessagesQueryService {
       _id: msg._id,
       readReceipts: msg.readReceipts,
     }));
+  }
+
+  async searchMessages(
+    conversationId: string,
+    searchDto: SearchMessagesDto,
+  ) {
+    const { userId, keyword, senderId, startDate, endDate, cursor, limit = '20' } = searchDto;
+
+    const conversationObjectId = new Types.ObjectId(conversationId);
+    const userObjectId = new Types.ObjectId(userId);
+
+    const member = await this.memberModel.findOne({
+      userId: userObjectId,
+      conversationId: conversationObjectId,
+      leftAt: null,
+    });
+
+    if (!member) {
+      throw new NotFoundException('User is not a participant in this conversation');
+    }
+
+    const query: Record<string, any> = {
+      conversationId: conversationObjectId,
+      deletedFor: { $ne: userObjectId },
+      recalled: false, // Don't search recalled messages usually
+    };
+
+    if (keyword) {
+      query['content.text'] = { $regex: keyword, $options: 'i' };
+    }
+
+    if (senderId) {
+      query.senderId = new Types.ObjectId(senderId);
+    }
+
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        // Assume endDate is the end of that day if it's just YYYY-MM-DD
+        const end = new Date(endDate);
+        query.createdAt.$lte = end;
+      }
+    }
+
+    if (cursor) {
+      query._id = { $lt: new Types.ObjectId(cursor) };
+    }
+
+    const messages = await this.messageModel
+      .find(query)
+      .sort({ _id: -1 })
+      .limit(Number(limit))
+      .populate('senderId', 'profile.name profile.avatarUrl')
+      .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
+      .populate('reactions.userId', 'profile.name profile.avatarUrl')
+      .populate({
+        path: 'repliedId',
+        populate: {
+          path: 'senderId',
+          select: 'profile.name profile.avatarUrl',
+        },
+      })
+      .lean<MessageResponse[]>();
+
+    const transformedMessages = messages.map((message) =>
+      this.transformService.transformMessage(message),
+    );
+
+    // Depending on what frontend expects, typically return without reverse so it acts like infinite scroll downwards from newest
+    // Wait, the regular getMessagesFromConversation reverses it. Let's not reverse it here, or reverse it since it's a search list?
+    // Actually, search results often show from newest to oldest in a list. We will just return it as is.
+    return {
+      messages: transformedMessages,
+      nextCursor: transformedMessages.length > 0 ? transformedMessages[transformedMessages.length - 1]._id : null,
+    };
   }
 }
