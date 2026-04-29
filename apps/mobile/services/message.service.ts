@@ -44,6 +44,31 @@ export const messageService = {
     });
   },
 
+  searchMessages: async (
+    conversationId: string,
+    params: {
+      userId: string;
+      keyword?: string;
+      senderId?: string;
+      startDate?: string;
+      endDate?: string;
+      cursor?: string;
+      limit?: number;
+    },
+  ) => {
+    return await api.get(`/messages/conversation/${conversationId}/search`, {
+      params: {
+        userId: params.userId,
+        keyword: params.keyword,
+        senderId: params.senderId,
+        startDate: params.startDate,
+        endDate: params.endDate,
+        cursor: params.cursor,
+        limit: params.limit ?? 30,
+      },
+    });
+  },
+
   // 4. Reaction & Interaction
   reactionMessage: async (
     conversationId: string,
