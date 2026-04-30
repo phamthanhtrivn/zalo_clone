@@ -41,6 +41,8 @@ import { formatFileSize } from "@/utils/format-file.util";
 import { conversationService } from "@/services/conversation.service";
 import CreateGroupModal from "./CreateGroupModal";
 import { useRouter } from "expo-router";
+import MemberActionSheet from "../ui/MemberActionSheet";
+import GroupAvatar from "../ui/GroupAvatar";
 
 const { width } = Dimensions.get("window");
 
@@ -215,6 +217,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
   const myMemberInfo = members.find((m) => m.userId === currentUserId);
   const isOwner = myMemberInfo?.role === "OWNER";
   const isAdmin = myMemberInfo?.role === "ADMIN";
+  const currentUserRole = myMemberInfo?.role || (isGroup ? "MEMBER" : "OWNER");
 
   const handlePin = () => {
     const newPinned = !conversation.pinned;
@@ -396,45 +399,49 @@ const ConversationInfoSheet: React.FC<Props> = ({
     };
   }, [socket, currentConversation?.conversationId]);
 
+  const [selectedMemberForAction, setSelectedMemberForAction] = useState<any | null>(
+    null,
+  );
+
   const handleMemberAction = (target: any) => {
     if (target.userId === currentUserId) return;
-    const options: any[] = [
-      {
-        text: "Xem trang cá nhân",
-        onPress: () => router.push(`/user/${target.userId}`),
-      },
-      {
-        text: "Nhắn tin riêng",
-        onPress: async () => {
-          const res: any = await conversationService.getOrCreateDirect(
-            target.userId,
-          );
-          const cid = res?.data?._id || res?._id;
-          if (cid) {
-            onClose();
-            router.push(`/private/chat/${cid}`);
-          }
+    setSelectedMemberForAction(target);
+  };
+
+
+
+  const confirmTransferOwner = (target: any) => {
+    Alert.alert(
+      "Xác nhận",
+      `Bạn chắc chắn muốn chuyển quyền Trưởng nhóm cho ${target.name}? Sau khi chuyển, bạn sẽ trở thành thành viên thường.`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xác nhận",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const res: any = await conversationService.transferOwner(
+                conversation.conversationId,
+                target.userId,
+              );
+              if (res.success) {
+                Alert.alert("Thành công", "Đã chuyển quyền Trưởng nhóm");
+                fetchMembers();
+              }
+            } catch (err: any) {
+              Alert.alert(
+                "Lỗi",
+                err.response?.data?.message || "Không thể chuyển quyền lúc này",
+              );
+            } finally {
+              setLoading(false);
+            }
+          },
         },
-      },
-    ];
-    if (isOwner) {
-      options.push({
-        text: target.role === "ADMIN" ? "Gỡ phó nhóm" : "Bổ nhiệm phó nhóm",
-        onPress: () =>
-          updateRole(target, target.role === "ADMIN" ? "MEMBER" : "ADMIN"),
-      });
-    }
-    if (isOwner || (isAdmin && target.role === "MEMBER")) {
-      options.push({
-        text: "Mời ra khỏi nhóm",
-        style: "destructive",
-        onPress: () => confirmRemoveMember(target),
-      });
-    }
-    Alert.alert("Tùy chọn", target.name, [
-      ...options,
-      { text: "Hủy", style: "cancel" },
-    ]);
+      ],
+    );
   };
 
   const updateRole = async (t: any, r: string) => {
@@ -743,9 +750,10 @@ const ConversationInfoSheet: React.FC<Props> = ({
                   marginBottom: 10,
                 }}
               >
-                <Image
-                  source={{ uri: conversation?.avatar }}
-                  style={{ width: 70, height: 70 }}
+                <GroupAvatar
+                  uri={conversation?.avatar}
+                  name={conversation?.name || "Group"}
+                  size={70}
                 />
                 {isGroup && (isOwner || isAdmin) && (
                   <TouchableOpacity
@@ -1265,12 +1273,10 @@ const ConversationInfoSheet: React.FC<Props> = ({
                         style={styles.memberRow}
                         onPress={() => handleMemberAction(m)}
                       >
-                        <Image
-                          source={{
-                            uri:
-                              m.avatarUrl || "https://via.placeholder.com/150",
-                          }}
-                          style={styles.memberAvatar}
+                        <GroupAvatar
+                          uri={m.avatarUrl}
+                          name={m.name || "User"}
+                          size={44}
                         />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.memberName}>
@@ -1506,6 +1512,33 @@ const ConversationInfoSheet: React.FC<Props> = ({
         conversationId={conversation.conversationId}
         excludedIds={members.map((m) => m.userId)}
         onSuccess={fetchMembers}
+      />
+      <MemberActionSheet
+        visible={!!selectedMemberForAction}
+        onClose={() => setSelectedMemberForAction(null)}
+        member={selectedMemberForAction}
+        userRole={currentUserRole}
+        onViewProfile={(uid) => router.push(`/user/${uid}`)}
+        onChat={async (uid) => {
+          const res: any = await conversationService.getOrCreateDirect(uid);
+          const cid = res?.data?._id || res?._id;
+          if (cid) {
+            onClose();
+            router.push(`/private/chat/${cid}`);
+          }
+        }}
+        onPromoteAdmin={(uid, isPromote) => {
+          const target = members.find((m) => m.userId === uid);
+          if (target) updateRole(target, isPromote ? "ADMIN" : "MEMBER");
+        }}
+        onTransferOwner={(uid) => {
+          const target = members.find((m) => m.userId === uid);
+          if (target) confirmTransferOwner(target);
+        }}
+        onRemove={(uid) => {
+          const target = members.find((m) => m.userId === uid);
+          if (target) confirmRemoveMember(target);
+        }}
       />
     </Modal>
   );

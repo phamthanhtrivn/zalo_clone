@@ -39,6 +39,8 @@ import { LuSticker } from "react-icons/lu";
 import { HiMiniLink } from "react-icons/hi2";
 import { GoFileSymlinkFile } from "react-icons/go";
 import { useSocket } from "@/contexts/SocketContext";
+import { getAvatarData, getColorByName } from "@/utils/avatar-utils";
+import { Users } from "lucide-react";
 import type {
   ConversationCategory,
   ConversationItemType,
@@ -466,7 +468,15 @@ const ConversationListItem = ({
     >
       <Avatar className="w-12 h-12 shrink-0">
         <AvatarImage src={conversation.avatar} alt={conversation.name} />
-        <AvatarFallback>{conversation.name.charAt(0)}</AvatarFallback>
+        <AvatarFallback 
+          className="text-white font-bold"
+          style={{ backgroundColor: getColorByName(conversation.name) }}
+        >
+          {(() => {
+            const { initials, isGroupIcon } = getAvatarData(conversation.name);
+            return isGroupIcon ? <Users className="w-6 h-6" /> : initials;
+          })()}
+        </AvatarFallback>
       </Avatar>
 
       <div className="flex-1 min-w-0">
@@ -483,7 +493,9 @@ const ConversationListItem = ({
             {conversation.type === "GROUP" && (
               <MdGroups size={18} color="gray" />
             )}
-            <span className="flex items-center gap-2">{conversation.name}</span>
+            <span className="flex items-center gap-2 truncate">
+              {conversation.name}
+            </span>
             {conversation.pinned && (
               <PiPushPinFill className="text-blue-500 w-3 h-3 ml-1" />
             )}

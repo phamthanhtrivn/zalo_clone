@@ -8,6 +8,7 @@ import type { RefObject } from "react";
 import type { EmojiType } from "@/constants/emoji.constant";
 import { ReactionModal } from "./ReactionModal";
 import { MessageItem } from "./MessageItem";
+import { SystemMessage } from "./SystemMessage";
 
 type Props = {
   messages: MessagesType[];
@@ -122,26 +123,30 @@ const MessageList = ({
               </div>
             )}
 
-            <MessageItem
-              message={message}
-              isMe={isMe}
-              showAvatar={showAvatar}
-              showTime={showTime}
-              reactionMessage={reactionMessage}
-              onOpenReactionModal={(reactions) =>
-                setSelectedMessageReactions(reactions)
-              }
-              removeReaction={removeReaction}
-              handleRecalledMessage={handleRecalledMessage}
-              handlePinnedMessage={handlePinnedMessage}
-              handleDeleteMessageForMe={handleDeleteMessageForMe}
-              isSelected={isSelected}
-              setIsSelected={setIsSelected}
-              selectedMessages={selectedMessages}
-              toggleSelectMessage={toggleSelectMessage}
-              isGroup={isGroup}
-              onJumpToMessage={onJumpToMessage}
-            />
+            {isSystem ? (
+              <SystemMessage message={message} />
+            ) : (
+              <MessageItem
+                message={message}
+                isMe={isMe}
+                showAvatar={showAvatar}
+                showTime={showTime}
+                reactionMessage={reactionMessage}
+                onOpenReactionModal={(reactions) =>
+                  setSelectedMessageReactions(reactions)
+                }
+                removeReaction={removeReaction}
+                handleRecalledMessage={handleRecalledMessage}
+                handlePinnedMessage={handlePinnedMessage}
+                handleDeleteMessageForMe={handleDeleteMessageForMe}
+                isSelected={isSelected}
+                setIsSelected={setIsSelected}
+                selectedMessages={selectedMessages}
+                toggleSelectMessage={toggleSelectMessage}
+                isGroup={isGroup}
+                onJumpToMessage={onJumpToMessage}
+              />
+            )}
 
             {isLastMessage && !message.recalled && message.readReceipts && message.readReceipts.length > 0 && (
               <div className={`flex ${isMe ? "justify-end" : "justify-start ml-11"} mt-1 pr-1`}>

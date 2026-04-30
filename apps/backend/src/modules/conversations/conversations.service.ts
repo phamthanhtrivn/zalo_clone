@@ -107,6 +107,7 @@ export class ConversationsService {
           avatarUrl: avatarUrl,
           allowMembersInvite: true,
           allowMembersSendMessages: true,
+          ownerId: new Types.ObjectId(creatorId), // BUG-3 fix: keep ownerId in sync
         },
         lastMessageAt: new Date(),
       });
@@ -427,6 +428,14 @@ export class ConversationsService {
         .updateOne(
           { _id: currentOwnerMember._id },
           { $set: { role: MemberRole.MEMBER } },
+        )
+        .session(session);
+
+      // BUG-3 fix: sync group.ownerId to stay consistent with Member.role
+      await this.conversationModel
+        .updateOne(
+          { _id: convObjectId },
+          { $set: { 'group.ownerId': targetObjectId } },
         )
         .session(session);
 
@@ -795,13 +804,22 @@ export class ConversationsService {
       });
 
       // Thông báo cho từng người mới (Hội thoại mới hiện lên sidebar)
-      for (const uid of finalIdsToProcess) {
-        const formattedConv = await this.getFormattedConversationForUser(
-          convIdStr,
-          uid,
+      // PERF-1 fix: batch parallel emit thay vì sequential loop gây N+1 aggregation
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < finalIdsToProcess.length; i += BATCH_SIZE) {
+        const batch = finalIdsToProcess.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          batch.map(async (uid) => {
+            const formattedConv = await this.getFormattedConversationForUser(
+              convIdStr,
+              uid,
+            );
+            this.chatGateway.server
+              .to(uid)
+              .emit('new_conversation', formattedConv);
+            this.chatGateway.handleUserJoinRoom(uid, convIdStr);
+          }),
         );
-        this.chatGateway.server.to(uid).emit('new_conversation', formattedConv);
-        this.chatGateway.handleUserJoinRoom(uid, convIdStr);
       }
       this.chatGateway.server.to(convIdStr).emit('member_updated', {
         conversationId: convIdStr,
@@ -1384,10 +1402,10 @@ export class ConversationsService {
     const convObjectId = new Types.ObjectId(conversationId.trim());
     const userObjectId = new Types.ObjectId(userId.trim());
 
+    // --- Kiểm tra quyền (ngoài transaction để fail-fast) ---
     const conversation = await this.conversationModel.findById(convObjectId);
     if (!conversation) throw new NotFoundException('Không tìm thấy nhóm');
 
-    // 1. Kiểm tra quyền (giữ nguyên)
     const member = await this.memberModel.findOne({
       conversationId: convObjectId,
       userId: userObjectId,
@@ -1404,57 +1422,73 @@ export class ConversationsService {
     if (!conversation.group) {
       throw new BadRequestException('Hội thoại này không có dữ liệu nhóm');
     }
-    let systemMsgObj: any = null;
 
+    // Xác định nội dung tin nhắn hệ thống (nếu cần) trước khi vào transaction
+    let systemMsgContent: string | null = null;
     if (
       dto.allowMembersSendMessages !== undefined &&
-      conversation.group.allowMembersSendMessages !==
-      dto.allowMembersSendMessages
+      conversation.group.allowMembersSendMessages !== dto.allowMembersSendMessages
     ) {
       const actorName = await this.getUserName(userId);
       const actionText = dto.allowMembersSendMessages
         ? 'mở quyền gửi tin nhắn cho thành viên'
         : 'tắt quyền gửi tin nhắn của thành viên';
+      systemMsgContent = `${actorName} đã ${actionText}`;
+    }
 
-      systemMsgObj = await this.createSystemMessage(
+    // BUG-1 fix: Bọc trong transaction để tránh orphan system messages
+    const session = await this.connection.startSession();
+    session.startTransaction();
+
+    try {
+      if (dto.allowMembersInvite !== undefined) {
+        conversation.group!.allowMembersInvite = dto.allowMembersInvite;
+      }
+      if (dto.approvalRequired !== undefined) {
+        conversation.group!.approvalRequired = dto.approvalRequired;
+      }
+      if (dto.allowMembersSendMessages !== undefined) {
+        conversation.group!.allowMembersSendMessages = dto.allowMembersSendMessages;
+      }
+
+      conversation.markModified('group');
+      const savedConversation = await conversation.save({ session });
+
+      let systemMsgObj: any = null;
+      if (systemMsgContent) {
+        systemMsgObj = await this.createSystemMessage(
+          conversationId,
+          systemMsgContent,
+          session,
+        );
+      }
+
+      await session.commitTransaction();
+
+      // Emit sau khi commit để đảm bảo data đã được persist
+      this.chatGateway.server.to(conversationId).emit('group_settings_updated', {
         conversationId,
-        `${actorName} đã ${actionText}`,
-      );
-    }
-    // ----------------------------------------
+        group: savedConversation.group,
+      });
 
-    if (dto.allowMembersInvite !== undefined) {
-      conversation.group!.allowMembersInvite = dto.allowMembersInvite;
-    }
-    if (dto.approvalRequired !== undefined) {
-      conversation.group!.approvalRequired = dto.approvalRequired;
-    }
-    if (dto.allowMembersSendMessages !== undefined) {
-      conversation.group!.allowMembersSendMessages =
-        dto.allowMembersSendMessages;
-    }
+      if (systemMsgObj) {
+        this.chatGateway.server
+          .to(conversationId)
+          .emit('new_message', systemMsgObj);
+      }
 
-    conversation.markModified('group');
-    const savedConversation = await conversation.save();
-
-    // Emit cập nhật settings
-    this.chatGateway.server.to(conversationId).emit('group_settings_updated', {
-      conversationId,
-      group: savedConversation.group,
-    });
-
-    // Bắn emit tin nhắn hệ thống ra room nếu có
-    if (systemMsgObj) {
-      this.chatGateway.server
-        .to(conversationId)
-        .emit('new_message', systemMsgObj);
+      return {
+        success: true,
+        message: 'Cập nhật cài đặt thành công',
+        data: savedConversation.group,
+      };
+    } catch (error) {
+      await session.abortTransaction();
+      console.error('Lỗi updateGroupSettings:', error);
+      throw error;
+    } finally {
+      await session.endSession();
     }
-
-    return {
-      success: true,
-      message: 'Cập nhật cài đặt thành công',
-      data: savedConversation.group,
-    };
   }
 
   async getJoinRequests(conversationId: string, userId: string) {
@@ -1622,78 +1656,96 @@ export class ConversationsService {
     updateDto: any,
     file?: Express.Multer.File,
   ) {
+    const convObjectId = new Types.ObjectId(conversationId.trim());
+    const userObjectId = new Types.ObjectId(userId.trim());
+
+    // --- Kiểm tra sự tồn tại và quyền (ngoài transaction để fail-fast) ---
+    const conversation = await this.conversationModel.findById(convObjectId);
+    if (
+      !conversation ||
+      conversation.type !== ConversationType.GROUP ||
+      !conversation.group
+    ) {
+      throw new NotFoundException(
+        'Không tìm thấy nhóm hoặc hội thoại không phải là nhóm',
+      );
+    }
+
+    const member = await this.memberModel.findOne({
+      conversationId: convObjectId,
+      userId: userObjectId,
+      leftAt: null,
+    });
+
+    if (
+      !member ||
+      ![MemberRole.OWNER, MemberRole.ADMIN].includes(member.role as any)
+    ) {
+      throw new ForbiddenException(
+        'Bạn không có quyền chỉnh sửa thông tin nhóm',
+      );
+    }
+
+    const updateData: any = {};
+    const notifications: string[] = [];
+    const actorName = await this.getUserName(userId);
+
+    if (updateDto.name && updateDto.name !== conversation.group.name) {
+      updateData['group.name'] = updateDto.name;
+      notifications.push(
+        `${actorName} đã đổi tên nhóm thành "${updateDto.name}"`,
+      );
+    }
+
+    // BUG-2 fix: Upload S3 TRƯỚC transaction (S3 không hỗ trợ rollback).
+    // Lưu fileKey mới để có thể cleanup nếu DB fail.
+    let newUploadedFileKey: string | null = null;
+    const oldAvatarKey = conversation.group.avatarUrl ?? null;
+
+    if (file) {
+      const upload = await this.storageService.uploadFile(file);
+      newUploadedFileKey = upload.fileKey;
+      updateData['group.avatarUrl'] = newUploadedFileKey;
+      notifications.push(`${actorName} đã thay đổi ảnh đại diện nhóm`);
+    }
+
+    if (Object.keys(updateData).length === 0) return conversation;
+
+    // --- Bọc DB operations trong transaction ---
+    const session = await this.connection.startSession();
+    session.startTransaction();
+
     try {
-      const convObjectId = new Types.ObjectId(conversationId.trim());
-      const userObjectId = new Types.ObjectId(userId.trim());
-
-      const conversation = await this.conversationModel.findById(convObjectId);
-      if (
-        !conversation ||
-        conversation.type !== ConversationType.GROUP ||
-        !conversation.group
-      ) {
-        throw new NotFoundException(
-          'Không tìm thấy nhóm hoặc hội thoại không phải là nhóm',
-        );
-      }
-
-      const member = await this.memberModel.findOne({
-        conversationId: convObjectId,
-        userId: userObjectId,
-        leftAt: null,
-      });
-
-      if (
-        !member ||
-        ![MemberRole.OWNER, MemberRole.ADMIN].includes(member.role as any)
-      ) {
-        throw new ForbiddenException(
-          'Bạn không có quyền chỉnh sửa thông tin nhóm',
-        );
-      }
-
-      const updateData: any = {};
-      const notifications: string[] = [];
-      const actorName = await this.getUserName(userId);
-
-      if (updateDto.name && updateDto.name !== conversation.group.name) {
-        updateData['group.name'] = updateDto.name;
-        notifications.push(
-          `${actorName} đã đổi tên nhóm thành "${updateDto.name}"`,
-        );
-      }
-
-      if (file) {
-        if (conversation.group.avatarUrl) {
-          await this.storageService
-            .deleteFile(conversation.group.avatarUrl)
-            .catch(() => { });
-        }
-
-        const upload = await this.storageService.uploadFile(file);
-        updateData['group.avatarUrl'] = upload.fileKey;
-        notifications.push(`${actorName} đã thay đổi ảnh đại diện nhóm`);
-      }
-      if (Object.keys(updateData).length === 0) return conversation;
-
       const updatedDoc = await this.conversationModel.findByIdAndUpdate(
         convObjectId,
         { $set: updateData },
-        { new: true },
+        { new: true, session },
       );
 
       if (!updatedDoc) throw new Error('Cập nhật thất bại');
 
+      const savedSystemMsgs: any[] = [];
       for (const text of notifications) {
-        const sysMsg = await this.createSystemMessage(conversationId, text);
-        this.chatGateway.server.to(conversationId).emit('new_message', sysMsg);
+        const sysMsg = await this.createSystemMessage(conversationId, text, session);
+        savedSystemMsgs.push(sysMsg);
       }
 
-      const result = updatedDoc.toObject();
+      await session.commitTransaction();
 
+      // --- Sau khi commit: xóa avatar cũ (best-effort, không critical) ---
+      if (newUploadedFileKey && oldAvatarKey) {
+        await this.storageService.deleteFile(oldAvatarKey).catch(() => { });
+      }
+
+      // --- Emit socket sau khi commit (dùng savedSystemMsgs, không tạo thêm message) ---
+      const result = updatedDoc.toObject();
       if (result.group?.avatarUrl) {
         result.group.avatarUrl =
           this.storageService.signFileUrl(result.group.avatarUrl) ?? undefined;
+      }
+
+      for (const sysMsg of savedSystemMsgs) {
+        this.chatGateway.server.to(conversationId).emit('new_message', sysMsg);
       }
 
       this.chatGateway.server.to(conversationId).emit('group_updated', {
@@ -1709,8 +1761,15 @@ export class ConversationsService {
         data: result,
       };
     } catch (error) {
+      await session.abortTransaction();
+      // BUG-2 fix: Nếu DB fail, xóa file S3 vừa upload để tránh orphan
+      if (newUploadedFileKey) {
+        await this.storageService.deleteFile(newUploadedFileKey).catch(() => { });
+      }
       console.error('--- LỖI TẠI updateGroupInfo ---', error);
       throw error;
+    } finally {
+      await session.endSession();
     }
   }
 
