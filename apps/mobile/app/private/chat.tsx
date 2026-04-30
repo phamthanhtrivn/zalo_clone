@@ -30,7 +30,10 @@ export default function ChatScreen() {
   const currentUser = useAppSelector((state) => state.auth.user);
   const currentUserId = currentUser?.userId || "";
 
-  const conversations = useAppSelector((state) => state.conversation.items);
+  const conversations = useAppSelector(
+    // BUG-7 fix: state.conversation.items không tồn tại → gây crash khi gọi .find()
+    (state) => state.conversation.conversations,
+  );
   const conversation = useMemo(
     () => conversations.find((c) => c.conversationId === conversationId),
     [conversations, conversationId],

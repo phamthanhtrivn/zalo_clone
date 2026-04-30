@@ -12,6 +12,7 @@ import {
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
+import GroupAvatar from "../ui/GroupAvatar";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { formatTime } from "@/utils/format-message-time..util";
@@ -391,19 +392,11 @@ export default function MessageBubble({
       {/* AVATAR */}
       {!isMe &&
         (showAvatar ? (
-          <View
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              overflow: "hidden",
-              backgroundColor: "#e5e7eb",
-              marginRight: 6,
-            }}
-          >
-            <Image
-              source={{ uri: message.senderId?.profile.avatarUrl }}
-              style={{ width: 32, height: 32 }}
+          <View style={{ marginRight: 6 }}>
+            <GroupAvatar
+              uri={message.senderId?.profile?.avatarUrl}
+              name={message.senderId?.name || "User"}
+              size={32}
             />
           </View>
         ) : (

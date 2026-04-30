@@ -8,8 +8,9 @@ import {
   Alert,
   Text,
   TouchableOpacity,
+  StyleSheet
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSocket } from "@/contexts/SocketContext";
 import { messageService } from "@/services/message.service";
@@ -22,6 +23,7 @@ import {
 } from "@/constants/emoji.constant";
 import Container from "@/components/common/Container";
 import MessageBubble from "@/components/chat/MessageBubble";
+import SystemMessage from "@/components/chat/SystemMessage";
 import ChatInput from "@/components/chat/ChatInput";
 import PinnedMessagesBar from "@/components/chat/PinnedMessagesBar";
 import ReactionPicker from "@/components/chat/ReactionPicker";
@@ -38,6 +40,7 @@ import MenuItem from "@/components/chat/MenuItem";
 import { clearReplyingMessage, setConversations, setReplyingMessage } from "@/store/slices/conversationSlice";
 import { useVideoCall } from "@/contexts/VideoCallContext";
 import { userService } from "@/services/user.service";
+import GroupAvatar from "@/components/ui/GroupAvatar";
 
 export default function ChatWindow() {
   const conversations = useAppSelector(
@@ -51,9 +54,32 @@ export default function ChatWindow() {
   const { socket } = useSocket();
   const user = useAppSelector((state) => state.auth.user);
   const router = useRouter();
+  const navigation = useNavigation();
   const dispatch = useAppDispatch();
 
   const conversation = conversations.find((c) => c.conversationId === id);
+  const lastSetTitle = useRef<string | null>(null);
+
+  useEffect(() => {
+    const title = conversation?.name || "Chat";
+    if (title !== lastSetTitle.current) {
+      navigation.setOptions({
+        headerTitle: () => (
+          <View style={styles.headerContainer}>
+            <GroupAvatar
+              uri={conversation?.avatar}
+              name={conversation?.name || "Chat"}
+              size={36}
+            />
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {title}
+            </Text>
+          </View>
+        ),
+      });
+      lastSetTitle.current = title;
+    }
+  }, [conversation?.name, conversation?.avatar, navigation]);
   const isGroup = conversation?.type === "GROUP";
   const [contextMenuMsg, setContextMenuMsg] = useState<MessagesType | null>(
     null,
@@ -111,6 +137,19 @@ export default function ChatWindow() {
 
   const isPinned =
     contextMenuMsg && pinnedMessages.some((m) => m._id === contextMenuMsg._id);
+
+  const userMember = isGroup
+    ? conversation?.group?.members?.find((m: any) => m.userId === user?.userId)
+    : null;
+  const userRole = userMember?.role || (isGroup ? "MEMBER" : "OWNER");
+  const isOwner = userRole === "OWNER";
+  const isAdmin = userRole === "ADMIN";
+
+  const canChat =
+    !isGroup ||
+    conversation?.group?.allowMembersSendMessages ||
+    isOwner ||
+    isAdmin;
 
   const scrollToBottom = (animated = true) => {
     flatListRef.current?.scrollToEnd({ animated });
@@ -704,7 +743,12 @@ export default function ChatWindow() {
     const older = messages[index - 1];
     const newer = messages[index + 1];
 
-    const isMe = item.senderId?._id === user?.userId;
+    const isSystem = item.type === "SYSTEM";
+    const isMe =
+      !isSystem &&
+      (typeof item.senderId === "string" ? item.senderId : item.senderId?._id) ===
+        user?.userId;
+
     const sameSenderOlder = older && older.senderId?._id === item.senderId?._id;
     const sameMinuteOlder =
       older && isSameHourAndMinute(older.createdAt, item.createdAt);
@@ -715,25 +759,23 @@ export default function ChatWindow() {
       newer && isSameHourAndMinute(newer.createdAt, item.createdAt);
     const isLastInCluster = !(sameSenderNewer && sameMinuteNewer);
 
-    const showAvatar = !isMe && isFirstInCluster;
-    const showName = !isMe && isFirstInCluster;
-    const showTime = isLastInCluster;
+    const showAvatar = !isMe && !isSystem && isFirstInCluster;
+    const showName = !isMe && !isSystem && isFirstInCluster;
+    const showTime = !isSystem && isLastInCluster;
     const showDivider =
       !older ||
       new Date(older.createdAt).toDateString() !==
         new Date(item.createdAt).toDateString();
 
     const isSelected = selectedMessages.includes(item._id);
-
     const isLastReadMessage = index === messages.length - 1;
-
-    const addSpacing = isFirstInCluster && !showDivider;
+    const addSpacing = isFirstInCluster && !showDivider && !isSystem;
 
     return (
       <View
         style={{
-          marginTop: addSpacing ? 12 : 2, // 2px within cluster, 12px between clusters
-          marginBottom: item.reactions?.length > 0 ? 14 : 0, // Space for reaction bar
+          marginTop: addSpacing ? 12 : 2,
+          marginBottom: item.reactions?.length > 0 ? 14 : 0,
         }}
       >
         {showDivider && (
@@ -758,28 +800,28 @@ export default function ChatWindow() {
             </View>
           </View>
         )}
-        <MessageBubble
-          message={item}
-          isMe={
-            (typeof item.senderId === "string"
-              ? item.senderId
-              : item.senderId?._id) === user?.userId
-          }
-          showAvatar={showAvatar}
-          showName={showName}
-          showTime={showTime}
-          isSelected={isSelected}
-          isSelectMode={isSelectMode}
-          isHighlighted={highlightedMessageId === item._id}
-          onLongPress={() => setContextMenuMsg(item)}
-          onPress={() => {
-            if (isSelectMode) toggleSelectMessage(item._id);
-          }}
-          onOpenReactionModal={(reactions) => setReactionModalData(reactions)}
-          renderReadReceipts={isLastReadMessage}
-          onReplyPress={handleJumpToMessage}
-          isGroup={isGroup}
-        />
+        {isSystem ? (
+          <SystemMessage message={item} />
+        ) : (
+          <MessageBubble
+            message={item}
+            isMe={isMe}
+            showAvatar={showAvatar}
+            showName={showName}
+            showTime={showTime}
+            isSelected={isSelected}
+            isSelectMode={isSelectMode}
+            isHighlighted={highlightedMessageId === item._id}
+            onLongPress={() => setContextMenuMsg(item)}
+            onPress={() => {
+              if (isSelectMode) toggleSelectMessage(item._id);
+            }}
+            onOpenReactionModal={(reactions) => setReactionModalData(reactions)}
+            renderReadReceipts={isLastReadMessage}
+            onReplyPress={handleJumpToMessage}
+            isGroup={isGroup}
+          />
+        )}
       </View>
     );
   };
@@ -1007,18 +1049,12 @@ export default function ChatWindow() {
                       <View style={{ padding: 16, alignItems: "center", position: "relative" }}>
                         {/* Avatar */}
                         <View 
-                          style={{ 
-                            position: "absolute", 
-                            top: -40, 
-                            borderWidth: 3, 
-                            borderColor: "white", 
-                            borderRadius: 40,
-                            overflow: "hidden" 
-                          }}
+                          style={styles.avatarContainer}
                         >
-                          <Image
-                            source={{ uri: conversation?.avatar }}
-                            style={{ width: 80, height: 80 }}
+                          <GroupAvatar
+                            uri={conversation?.avatar}
+                            name={conversation?.name || "Group"}
+                            size={80}
                           />
                         </View>
                         
@@ -1091,18 +1127,36 @@ export default function ChatWindow() {
             </View>
           )}
 
-          <ChatInput
-            chatName={conversation?.name}
-            onSendMessage={handleSendMessage}
-            onSendFiles={handleSendFile}
-            isSelectMode={isSelectMode}
-            selectedMessages={selectedMessages}
-            onOpenForwardModal={() => setShowForwardModal(true)}
-            onCancelSelect={() => {
-              setIsSelectMode(false);
-              setSelectedMessages([]);
-            }}
-          />
+          {!canChat && !isSelectMode ? (
+            <View
+              style={{
+                padding: 16,
+                backgroundColor: "#f9fafb",
+                borderTopWidth: 1,
+                borderTopColor: "#e5e7eb",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{ color: "#6b7280", fontSize: 13, fontStyle: "italic" }}
+              >
+                Chỉ Trưởng/Phó nhóm mới được gửi tin nhắn
+              </Text>
+            </View>
+          ) : (
+            <ChatInput
+              chatName={conversation?.name}
+              onSendMessage={handleSendMessage}
+              onSendFiles={handleSendFile}
+              isSelectMode={isSelectMode}
+              selectedMessages={selectedMessages}
+              onOpenForwardModal={() => setShowForwardModal(true)}
+              onCancelSelect={() => {
+                setIsSelectMode(false);
+                setSelectedMessages([]);
+              }}
+            />
+          )}
 
           {/* Floating Jump to Newest Button */}
           {showScrollToBottom && (
@@ -1320,3 +1374,25 @@ export default function ChatWindow() {
     </Container>
   );
 }
+
+const styles = StyleSheet.create({
+  headerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#000",
+    maxWidth: 200,
+  },
+  avatarContainer: {
+    position: "absolute",
+    top: -40,
+    borderWidth: 3,
+    borderColor: "white",
+    borderRadius: 43,
+    overflow: "hidden",
+  },
+});

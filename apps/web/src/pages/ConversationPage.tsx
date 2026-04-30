@@ -40,11 +40,22 @@ const ConversationPage = () => {
     stateConversation || conversations.find((c) => c.conversationId === id);
   const isGroup = conversation?.type === "GROUP";
 
-  // ID của người đối diện: lấy từ conversation store, hoặc fallback từ location.state
-  // (cần thiết khi conversation vừa được tạo và chưa có otherMemberId)
   const effectiveOtherMemberId = !isGroup
     ? (conversation?.otherMemberId || locationOtherUserId || null)
     : null;
+
+  const userMember = isGroup
+    ? conversation?.group?.members?.find((m: any) => String(m.userId) === String(currentUserId))
+    : null;
+  const userRole = userMember?.role || (isGroup ? "MEMBER" : "OWNER");
+  const isOwner = userRole === "OWNER";
+  const isAdmin = userRole === "ADMIN";
+
+  const canChat =
+    !isGroup ||
+    conversation?.group?.allowMembersSendMessages ||
+    isOwner ||
+    isAdmin;
 
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -739,17 +750,23 @@ const ConversationPage = () => {
           onJumpToMessage={handleJumpToMessage}
         />
 
-        <ChatInput
-          chatName={conversation.name}
-          onSendMessage={onSendMessage}
-          onSendFiles={onSendFiles}
-          isSelected={isSelected}
-          setIsSelected={setIsSelected}
-          selectedMessages={selectedMessages}
-          setSelectedMessages={setSelectedMessages}
-          onOpenForwardModal={() => setShowForwardModal(true)}
-          conversationId={conversation.conversationId}
-        />
+        {canChat ? (
+          <ChatInput
+            chatName={conversation.name}
+            onSendMessage={onSendMessage}
+            onSendFiles={onSendFiles}
+            isSelected={isSelected}
+            setIsSelected={setIsSelected}
+            selectedMessages={selectedMessages}
+            setSelectedMessages={setSelectedMessages}
+            onOpenForwardModal={() => setShowForwardModal(true)}
+            conversationId={conversation.conversationId}
+          />
+        ) : (
+          <div className="bg-white border-t p-4 text-center text-sm text-gray-500 italic shadow-inner">
+            Chỉ Trưởng/Phó nhóm mới có quyền gửi tin nhắn trong nhóm này.
+          </div>
+        )}
       </div>
 
       <ForwardModal
