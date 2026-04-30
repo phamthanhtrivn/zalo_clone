@@ -322,6 +322,42 @@ export default function ChatWindow() {
     }
   };
 
+  const handleSendVoiceAudio = async (voice: {
+    uri: string;
+    name: string;
+    type: string;
+    durationMs: number;
+  }) => {
+    if (!id || !user?.userId) return;
+
+    try {
+      const formData = new FormData();
+      formData.append("conversationId", id);
+      formData.append("senderId", user.userId);
+      if (replyingMessage?._id) {
+        formData.append("repliedId", replyingMessage._id);
+      }
+      formData.append(
+        "content",
+        JSON.stringify({
+          voiceDuration: Math.max(1, Math.floor(voice.durationMs / 1000)),
+        }),
+      );
+      formData.append("files", {
+        uri: voice.uri,
+        name: voice.name,
+        type: voice.type,
+      } as any);
+
+      await messageService.sendVoiceMessage(formData);
+      if (replyingMessage) dispatch(clearReplyingMessage());
+      scrollToBottom();
+    } catch (err) {
+      console.error("Send voice error:", err);
+      Alert.alert("Lỗi", "Không thể gửi bản ghi âm.");
+    }
+  };
+
   // ================= PIN =================
   const handleTogglePin = async (messageId: string) => {
     if (!id || !user?.userId) return;
@@ -1087,6 +1123,7 @@ export default function ChatWindow() {
             chatName={conversation?.name}
             onSendMessage={handleSendMessage}
             onSendFiles={handleSendFile}
+            onSendVoiceAudio={handleSendVoiceAudio}
             isSelectMode={isSelectMode}
             selectedMessages={selectedMessages}
             onOpenForwardModal={() => setShowForwardModal(true)}

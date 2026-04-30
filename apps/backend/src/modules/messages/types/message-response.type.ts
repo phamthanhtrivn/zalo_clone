@@ -1,6 +1,6 @@
 import { Types } from 'mongoose';
 
-export type FileType = 'IMAGE' | 'VIDEO' | 'FILE';
+export type FileType = 'IMAGE' | 'VIDEO' | 'FILE' | 'VOICE';
 
 export interface MessageFile {
   fileKey: string;
@@ -13,6 +13,8 @@ export interface MessageContent {
   text?: string;
   icon?: string;
   file?: MessageFile;
+  files?: MessageFile[];
+  voiceDuration?: number | null;
 }
 
 export interface UserProfile {

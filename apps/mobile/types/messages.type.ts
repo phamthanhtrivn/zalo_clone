@@ -14,6 +14,7 @@ export interface MessagesType {
     text: string | null;
     icon: string | null;
     files: File[];
+    voiceDuration?: number | null;
   };
   pinned: boolean;
   recalled: boolean;
@@ -22,6 +23,7 @@ export interface MessagesType {
   repliedId: MessagesType | null;
   call: string | null;
   expiresAt: string | null;
+  expired?: boolean;
   createdAt: string;
   updatedAt: string;
 }

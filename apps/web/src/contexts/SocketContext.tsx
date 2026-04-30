@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "react-toastify";
 import { clearAuth } from "@/store/auth/authSlice";
+import { getDeviceId } from "@/utils/device.util";
 
 interface SocketContextType {
   socket: Socket | null;
@@ -72,6 +73,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
+  const accessToken = useAppSelector((state) => state.auth.accessToken);
   const socketRef = useRef<Socket | null>(null);
 
   const handleMarkAsRead = useCallback(
@@ -133,16 +135,31 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // --- INITIALIZE SOCKET ---
   useEffect(() => {
-    if (!user?.userId) return;
+    if (!user?.userId || !accessToken || !apiUrl) {
+      socketRef.current?.disconnect();
+      setSocket(null);
+      setIsConnected(false);
+      return;
+    }
+
+    const authPayload = {
+      token: accessToken,
+      deviceId: getDeviceId(),
+    };
 
     // create socket 1 lần
     if (!socketRef.current) {
       socketRef.current = io(apiUrl, {
-        auth: { userId: user.userId },
+        autoConnect: false,
+        auth: authPayload,
       });
     }
 
     const socketInstance = socketRef.current;
+    socketInstance.auth = authPayload;
+    if (!socketInstance.connected) {
+      socketInstance.connect();
+    }
     setSocket(socketInstance);
 
     // --- SOCKET HANDLERS ---
@@ -474,7 +491,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.off("role_updated", handleMemberUpdated);
       socketInstance.off("force_logout", handleForceLogout);
     };
-  }, [apiUrl, dispatch, user?.userId]);
+  }, [accessToken, apiUrl, dispatch, user?.userId]);
 
   return (
     <SocketContext.Provider

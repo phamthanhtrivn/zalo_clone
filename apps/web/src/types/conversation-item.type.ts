@@ -18,6 +18,8 @@ export interface ConversationItemType {
       text: string;
       icon: string;
       file: File;
+      files?: File[];
+      voiceDuration?: number | null;
     };
     recalled: boolean;
     type?: string;
@@ -32,7 +34,7 @@ export interface File {
   fileKey: string;
   fileName: string;
   fileSize: number;
-  type: "IMAGE" | "VIDEO" | "FILE";
+  type: "IMAGE" | "VIDEO" | "FILE" | "VOICE";
 }
 
 export type ConversationCategory =

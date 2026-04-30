@@ -38,6 +38,7 @@ import { RiVideoLine } from "react-icons/ri";
 import { LuSticker } from "react-icons/lu";
 import { HiMiniLink } from "react-icons/hi2";
 import { GoFileSymlinkFile } from "react-icons/go";
+import { IoMicOutline } from "react-icons/io5";
 import { useSocket } from "@/contexts/SocketContext";
 import type {
   ConversationCategory,
@@ -243,6 +244,10 @@ const ConversationListItem = ({
         case "FILE":
           icon = <GoFileSymlinkFile />;
           text = content.files[0].fileName;
+          break;
+        case "VOICE":
+          icon = <IoMicOutline />;
+          text = "Tin nhắn thoại";
           break;
         default:
           text = "";

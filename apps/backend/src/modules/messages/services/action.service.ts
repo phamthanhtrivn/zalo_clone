@@ -105,6 +105,7 @@ export class MessagesActionService {
         text: content?.text ?? null,
         icon: content?.icon ?? null,
         files: [],
+        voiceDuration: content?.voiceDuration ?? null,
       };
 
       if (files && files.length > 0) {

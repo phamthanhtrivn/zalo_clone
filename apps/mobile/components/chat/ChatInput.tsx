@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -7,12 +7,15 @@ import {
   Keyboard,
   Alert,
   ScrollView,
+  Modal,
+  Pressable,
 } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import EmojiPicker from "rn-emoji-keyboard";
+import { Audio } from "expo-av";
 import { COLORS } from "@/constants/colors";
 
 interface SelectedFile {
@@ -21,20 +24,40 @@ interface SelectedFile {
   type: string;
 }
 
+interface RecordedVoice {
+  uri: string;
+  name: string;
+  type: string;
+  durationMs: number;
+}
+
 interface ChatInputProps {
   chatName?: string;
   onSendMessage: (text: string) => void;
   onSendFiles: (files: SelectedFile[]) => void;
+  onSendVoiceAudio: (voice: RecordedVoice) => Promise<void> | void;
   isSelectMode?: boolean;
   selectedMessages?: string[];
   onOpenForwardModal?: () => void;
   onCancelSelect?: () => void;
 }
 
+type VoiceMode = "audio";
+
+const formatVoiceDuration = (durationMs: number) => {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins.toString().padStart(2, "0")}:${secs
+    .toString()
+    .padStart(2, "0")}`;
+};
+
 const ChatInput: React.FC<ChatInputProps> = ({
   chatName,
   onSendMessage,
   onSendFiles,
+  onSendVoiceAudio,
   isSelectMode = false,
   selectedMessages = [],
   onOpenForwardModal,
@@ -43,7 +66,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [text, setText] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
+  const [voiceModalVisible, setVoiceModalVisible] = useState(false);
+  const [voiceMode] = useState<VoiceMode>("audio");
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDurationMs, setRecordingDurationMs] = useState(0);
+  const [recordedVoice, setRecordedVoice] = useState<RecordedVoice | null>(
+    null,
+  );
+  const [isSubmittingVoice, setIsSubmittingVoice] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
 
   const handleSend = () => {
     if (text.trim()) {
@@ -59,10 +91,19 @@ const ChatInput: React.FC<ChatInputProps> = ({
   useEffect(() => {
     const showSub = Keyboard.addListener("keyboardDidShow", () => {
       setShowEmoji(false);
+      setVoiceModalVisible(false);
     });
 
     return () => {
       showSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (recordingRef.current) {
+        void recordingRef.current.stopAndUnloadAsync().catch(() => undefined);
+      }
     };
   }, []);
 
@@ -72,6 +113,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   const toggleEmoji = () => {
     Keyboard.dismiss();
+    setVoiceModalVisible(false);
     setShowEmoji(true);
   };
 
@@ -93,7 +135,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        // ✅ FIX deprecated
         mediaTypes: ["images", "videos"],
         allowsMultipleSelection: true,
         selectionLimit: 15,
@@ -139,7 +180,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
       if (!result.canceled && result.assets?.length > 0) {
         const newFiles = result.assets.map((asset, index) => {
           const fileName = asset.name || `file_${Date.now()}_${index}`;
-
           const mimeType = asset.mimeType || "application/octet-stream";
 
           return {
@@ -159,7 +199,106 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  // ===== SELECT MODE BAR =====
+  const openVoiceModal = () => {
+    Keyboard.dismiss();
+    setShowEmoji(false);
+    setVoiceModalVisible(true);
+  };
+
+  const closeVoiceModal = () => {
+    if (isRecording) return;
+    setVoiceModalVisible(false);
+    setRecordedVoice(null);
+    setRecordingDurationMs(0);
+  };
+
+  const startRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Quyền microphone", "Cần cấp quyền microphone để ghi âm.");
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const recording = new Audio.Recording();
+      recordingRef.current = recording;
+
+      recording.setOnRecordingStatusUpdate((status) => {
+        if (status.isRecording) {
+          setRecordingDurationMs(status.durationMillis || 0);
+        }
+      });
+
+      await recording.prepareToRecordAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      );
+      await recording.startAsync();
+      setRecordedVoice(null);
+      setRecordingDurationMs(0);
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Start recording error:", error);
+      Alert.alert("Lỗi", "Không thể bắt đầu ghi âm.");
+    }
+  };
+
+  const stopRecording = async () => {
+    const recording = recordingRef.current;
+    if (!recording) return;
+
+    try {
+      await recording.stopAndUnloadAsync();
+      const status = await recording.getStatusAsync();
+      const uri = recording.getURI();
+
+      if (uri) {
+        setRecordedVoice({
+          uri,
+          name: `voice_${Date.now()}.m4a`,
+          type: "audio/m4a",
+          durationMs: status.durationMillis || recordingDurationMs,
+        });
+      }
+    } catch (error) {
+      console.error("Stop recording error:", error);
+      Alert.alert("Lỗi", "Không thể dừng ghi âm.");
+    } finally {
+      recordingRef.current = null;
+      setIsRecording(false);
+    }
+  };
+
+  const toggleRecording = async () => {
+    if (isRecording) {
+      await stopRecording();
+      return;
+    }
+
+    await startRecording();
+  };
+
+  const handleSendVoice = async () => {
+    if (!recordedVoice) return;
+
+    try {
+      setIsSubmittingVoice(true);
+      await onSendVoiceAudio(recordedVoice);
+      setRecordedVoice(null);
+      setRecordingDurationMs(0);
+      setVoiceModalVisible(false);
+    } catch (error) {
+      console.error("Send voice error:", error);
+      Alert.alert("Lỗi", "Không thể gửi bản ghi âm.");
+    } finally {
+      setIsSubmittingVoice(false);
+    }
+  };
+
   if (isSelectMode) {
     return (
       <View
@@ -206,7 +345,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <View style={{ backgroundColor: "white" }}>
-      {/* Preview Bar */}
       {selectedFiles.length > 0 && (
         <ScrollView
           horizontal
@@ -284,7 +422,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
         </ScrollView>
       )}
 
-      {/* Input */}
       <View
         style={{
           flexDirection: "row",
@@ -294,12 +431,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
           borderTopColor: "#e5e7eb",
         }}
       >
-        {/* Emoji */}
         <TouchableOpacity onPress={toggleEmoji} style={{ padding: 6 }}>
           <Ionicons name="happy-outline" size={26} color="#6b7280" />
         </TouchableOpacity>
 
-        {/* Input */}
         <TextInput
           ref={inputRef}
           style={{
@@ -315,20 +450,24 @@ const ChatInput: React.FC<ChatInputProps> = ({
           value={text}
           onChangeText={setText}
           multiline
-          onFocus={() => setShowEmoji(false)}
+          onFocus={() => {
+            setShowEmoji(false);
+            setVoiceModalVisible(false);
+          }}
         />
 
-        {/* Image */}
         <TouchableOpacity onPress={pickImages} style={{ padding: 6 }}>
           <MaterialIcons name="image" size={26} color="#6b7280" />
         </TouchableOpacity>
 
-        {/* File */}
         <TouchableOpacity onPress={pickDocuments} style={{ padding: 6 }}>
           <Ionicons name="attach-outline" size={26} color="#6b7280" />
         </TouchableOpacity>
 
-        {/* Send */}
+        <TouchableOpacity onPress={openVoiceModal} style={{ padding: 6 }}>
+          <Ionicons name="mic-outline" size={24} color={COLORS.primary} />
+        </TouchableOpacity>
+
         <TouchableOpacity
           onPress={handleSend}
           disabled={!text.trim() && selectedFiles.length === 0}
@@ -348,12 +487,166 @@ const ChatInput: React.FC<ChatInputProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Emoji Picker */}
       <EmojiPicker
         open={showEmoji}
         onClose={() => setShowEmoji(false)}
         onEmojiSelected={handleEmojiSelect}
       />
+
+      <Modal
+        visible={voiceModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={closeVoiceModal}
+      >
+        <Pressable
+          onPress={closeVoiceModal}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.2)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: "white",
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingHorizontal: 24,
+              paddingTop: 24,
+              paddingBottom: 36,
+              minHeight: 360,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ fontSize: 18, fontWeight: "700", color: "#111" }}>
+                Gửi bản ghi âm
+              </Text>
+              <TouchableOpacity onPress={closeVoiceModal} disabled={isRecording}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text
+              style={{
+                textAlign: "center",
+                color: "#4b5563",
+                marginTop: 28,
+                fontSize: 16,
+              }}
+            >
+              {isRecording
+                ? "Đang ghi âm..."
+                : recordedVoice
+                  ? `Đã ghi xong ${formatVoiceDuration(recordedVoice.durationMs)}`
+                  : "Bấm hoặc bấm giữ để ghi âm"}
+            </Text>
+
+            <View style={{ alignItems: "center", marginTop: 28 }}>
+              <TouchableOpacity
+                onPress={toggleRecording}
+                style={{
+                  width: 120,
+                  height: 120,
+                  borderRadius: 60,
+                  backgroundColor: isRecording ? "#ef4444" : COLORS.primary,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons
+                  name={isRecording ? "stop" : "mic"}
+                  size={42}
+                  color="white"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text
+              style={{
+                textAlign: "center",
+                fontSize: 28,
+                fontWeight: "700",
+                color: "#111827",
+                marginTop: 24,
+              }}
+            >
+              {formatVoiceDuration(
+                recordedVoice?.durationMs || recordingDurationMs,
+              )}
+            </Text>
+
+            <View
+              style={{
+                flexDirection: "row",
+                marginTop: 30,
+                gap: 12,
+              }}
+            >
+              <TouchableOpacity
+                disabled={isRecording || isSubmittingVoice}
+                onPress={() => {
+                  setRecordedVoice(null);
+                  setRecordingDurationMs(0);
+                }}
+                style={{
+                  flex: 1,
+                  borderRadius: 18,
+                  paddingVertical: 14,
+                  alignItems: "center",
+                  backgroundColor: "#f3f4f6",
+                  opacity: !recordedVoice || isSubmittingVoice ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ fontWeight: "600", color: "#374151" }}>
+                  Ghi lại
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                disabled={!recordedVoice || isRecording || isSubmittingVoice}
+                onPress={handleSendVoice}
+                style={{
+                  flex: 1,
+                  borderRadius: 18,
+                  paddingVertical: 14,
+                  alignItems: "center",
+                  backgroundColor: COLORS.primary,
+                  opacity:
+                    !recordedVoice || isRecording || isSubmittingVoice
+                      ? 0.5
+                      : 1,
+                }}
+              >
+                <Text style={{ fontWeight: "700", color: "white" }}>
+                  {isSubmittingVoice ? "Đang gửi..." : "Gửi bản ghi âm"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View
+              style={{
+                marginTop: 18,
+                paddingVertical: 12,
+                borderRadius: 18,
+                backgroundColor: "#f8fafc",
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ color: "#6b7280", fontWeight: "600" }}>
+                Chế độ hiện tại: {voiceMode === "audio" ? "Gửi audio" : ""}
+              </Text>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 };

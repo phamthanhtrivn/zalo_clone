@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
-import { Video, ResizeMode } from "expo-av";
+import { Audio, Video, ResizeMode } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -129,7 +129,13 @@ export default function MessageBubble({
   const mediaFiles = files.filter(
     (f: any) => f.type === "IMAGE" || f.type === "VIDEO",
   );
+  const voiceFiles = files.filter((f: any) => f.type === "VOICE");
   const docFiles = files.filter((f: any) => f.type === "FILE");
+  const [voiceSound, setVoiceSound] = useState<Audio.Sound | null>(null);
+  const [playingVoiceUri, setPlayingVoiceUri] = useState<string | null>(null);
+  const [isVoicePlaying, setIsVoicePlaying] = useState(false);
+  const [voicePositionMs, setVoicePositionMs] = useState(0);
+  const voiceDurationMsRef = useRef((content?.voiceDuration || 0) * 1000);
 
   const renderCallContent = () => {
     if (!call) return null;
@@ -220,6 +226,18 @@ export default function MessageBubble({
     return () => clearTimeout(timeoutId);
   }, [message.expired, message.expiresAt]);
 
+  useEffect(() => {
+    voiceDurationMsRef.current = (content?.voiceDuration || 0) * 1000;
+  }, [content?.voiceDuration]);
+
+  useEffect(() => {
+    return () => {
+      if (voiceSound) {
+        void voiceSound.unloadAsync();
+      }
+    };
+  }, [voiceSound]);
+
   const handleDownload = async (file: any) => {
     try {
       setDownloading(true);
@@ -251,6 +269,50 @@ export default function MessageBubble({
       );
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleToggleVoicePlayback = async (file: any) => {
+    try {
+      if (voiceSound && playingVoiceUri === file.fileKey) {
+        const status = await voiceSound.getStatusAsync();
+        if (status.isLoaded && status.isPlaying) {
+          await voiceSound.pauseAsync();
+          setIsVoicePlaying(false);
+          return;
+        }
+        await voiceSound.playAsync();
+        setIsVoicePlaying(true);
+        return;
+      }
+
+      if (voiceSound) {
+        await voiceSound.unloadAsync();
+      }
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: file.fileKey },
+        { shouldPlay: true },
+        (status) => {
+          if (!status.isLoaded) return;
+          setVoicePositionMs(status.positionMillis || 0);
+          if (status.durationMillis) {
+            voiceDurationMsRef.current = status.durationMillis;
+          }
+          setIsVoicePlaying(status.isPlaying);
+          if (status.didJustFinish) {
+            setPlayingVoiceUri(null);
+            setVoicePositionMs(0);
+            setIsVoicePlaying(false);
+          }
+        },
+      );
+
+      setVoiceSound(sound);
+      setPlayingVoiceUri(file.fileKey);
+    } catch (error) {
+      console.error("Voice playback error:", error);
+      Alert.alert("Lỗi", "Không thể phát bản ghi âm.");
     }
   };
 
@@ -602,6 +664,88 @@ export default function MessageBubble({
           {content?.icon && (
             <Text style={{ fontSize: 32 }}>{content.icon}</Text>
           )}
+
+          {voiceFiles.map((file: any, index: number) => {
+            const isPlaying =
+              playingVoiceUri === file.fileKey && isVoicePlaying;
+            const durationMs = voiceDurationMsRef.current;
+            const progress =
+              durationMs > 0
+                ? Math.min(1, Math.max(0, voicePositionMs / durationMs))
+                : 0;
+
+            return (
+              <View
+                key={`voice-${index}`}
+                style={{
+                  marginTop: 6,
+                  padding: 12,
+                  borderRadius: 14,
+                  backgroundColor: isMe ? "#dff0ff" : "#f3f4f6",
+                  minWidth: 240,
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => handleToggleVoicePlayback(file)}
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 24,
+                      backgroundColor: "#0068ff",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Ionicons
+                      name={isPlaying ? "pause" : "play"}
+                      size={22}
+                      color="white"
+                    />
+                  </TouchableOpacity>
+
+                  <View style={{ flex: 1 }}>
+                    <View
+                      style={{
+                        height: 6,
+                        borderRadius: 999,
+                        backgroundColor: "rgba(0,104,255,0.18)",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: `${progress * 100}%`,
+                          height: "100%",
+                          backgroundColor: "#0068ff",
+                        }}
+                      />
+                    </View>
+                    <Text
+                      style={{
+                        marginTop: 8,
+                        fontSize: 12,
+                        color: "#374151",
+                        fontWeight: "600",
+                      }}
+                    >
+                      {formatDuration(
+                        Math.floor(
+                          (isPlaying ? voicePositionMs : durationMs) / 1000,
+                        ),
+                      )}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
 
           {/* DOCUMENT FILES */}
           {docFiles.map((file: any, index: number) => {
