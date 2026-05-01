@@ -13,6 +13,7 @@ import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import GroupAvatar from "../ui/GroupAvatar";
+import PollMessage from "./PollMessage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { formatTime } from "@/utils/format-message-time..util";
@@ -101,7 +102,7 @@ const getIsExpired = (expired?: boolean, expiresAt?: string | null) => {
   return expiresAtMs <= Date.now();
 };
 
-export default function MessageBubble({
+const MessageBubble = React.memo(({
   message,
   isMe,
   showAvatar,
@@ -116,7 +117,7 @@ export default function MessageBubble({
   isHighlighted = false,
   onReplyPress,
   isGroup,
-}: Props) {
+}: Props) => {
   const content = message.content;
   const files = content?.files || [];
   const call = message.call;
@@ -362,19 +363,6 @@ export default function MessageBubble({
           <Text style={{ color: "#9ca3af", fontStyle: "italic", fontSize: 13 }}>
             Tin nhắn đã được thu hồi
           </Text>
-
-          {/* {showTime && (
-            <Text
-              style={{
-                fontSize: 10,
-                color: "#9ca3af",
-                marginTop: 4,
-                textAlign: "right",
-              }}
-            >
-              {formatTime(message.createdAt)}
-            </Text>
-          )} */}
         </View>
       </View>
     );
@@ -481,7 +469,7 @@ export default function MessageBubble({
 
                     return (
                       <TouchableOpacity
-                        key={index}
+                        key={`media-${index}`}
                         activeOpacity={0.85}
                         onPress={() =>
                           setPreviewIndex(mediaFiles.indexOf(file))
@@ -537,19 +525,6 @@ export default function MessageBubble({
             </>
           )}
 
-          {/* THỜI GIAN TRONG BUBBLE */}
-          {/* {showTime && (
-            <Text
-              style={{
-                fontSize: 10,
-                color: isMe ? "#0068ff" : "#9ca3af",
-                marginTop: 4,
-                textAlign: "right",
-              }}
-            >
-              {formatTime(message.createdAt)}
-            </Text>
-          )} */}
           {/* REPLY PREVIEW */}
           {message.repliedId && (
             <TouchableOpacity
@@ -596,6 +571,15 @@ export default function MessageBubble({
             <Text style={{ fontSize: 32 }}>{content.icon}</Text>
           )}
 
+          {/* POLL */}
+          {message.type === "POLL" && (
+            <PollMessage 
+              pollId={message.pollId || ""} 
+              conversationId={message.conversationId} 
+              initialPoll={message.poll}
+            />
+          )}
+
           {/* DOCUMENT FILES */}
           {docFiles.map((file: any, index: number) => {
             const { name: iconName, color: iconColor } = getFileIconName(
@@ -603,7 +587,7 @@ export default function MessageBubble({
             );
             return (
               <View
-                key={index}
+                key={`doc-${index}`}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
@@ -805,10 +789,10 @@ export default function MessageBubble({
         {/* READ RECEIPTS */}
         {renderReadReceipts && message.readReceipts?.length > 0 && (
           <View style={{ flexDirection: "row", gap: -8, marginTop: 4 }}>
-            {message.readReceipts.slice(0, 3).map((rr) => (
+            {message.readReceipts.slice(0, 3).map((rr, index) => (
               <Image
-                key={rr.userId._id}
-                source={{ uri: rr.userId.profile?.avatarUrl || "" }}
+                key={rr.userId?._id || index}
+                source={{ uri: rr.userId?.profile?.avatarUrl || "" }}
                 style={{ width: 14, height: 14, borderRadius: 7 }}
               />
             ))}
@@ -817,4 +801,6 @@ export default function MessageBubble({
       </View>
     </View>
   );
-}
+});
+
+export default MessageBubble;

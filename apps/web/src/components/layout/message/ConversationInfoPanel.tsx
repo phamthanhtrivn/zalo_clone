@@ -23,6 +23,8 @@ import {
   Settings2,
   Check,
   Pencil,
+  BarChart2,
+  X,
 } from "lucide-react";
 import {
   useFloating,
@@ -72,6 +74,8 @@ import {
   removeConversation,
   updateConversationSetting,
 } from "@/store/slices/conversationSlice";
+import { pollService } from "@/services/poll.service";
+import PollMessage from "./PollMessage";
 
 // Types & Utils
 import type { ConversationItemType } from "@/types/conversation-item.type";
@@ -141,7 +145,11 @@ const ConversationInfoPanel = ({
     members: true,
     management: false,
     requests: true,
+    polls: false,
   });
+
+  const [polls, setPolls] = useState<any[]>([]);
+  const [selectedPollMsg, setSelectedPollMsg] = useState<any | null>(null);
 
   const [members, setMembers] = useState<ConversationMemberRow[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -611,6 +619,22 @@ const ConversationInfoPanel = ({
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const handleTogglePolls = async () => {
+    const willExpand = !expandedSections.polls;
+    toggleSection("polls");
+    
+    if (willExpand && conversation?.conversationId) {
+      try {
+        const res = await pollService.getPolls(conversation.conversationId);
+        if (res.success) {
+          setPolls(res.data || []);
+        }
+      } catch (error) {
+        console.error("Lỗi lấy danh sách bình chọn:", error);
+      }
+    }
   };
 
   const handleSaveName = async () => {
@@ -1179,6 +1203,54 @@ const ConversationInfoPanel = ({
           )}
         </div>
 
+        {/* POLL SECTION */}
+        <div className="bg-white border-t">
+          <button
+            onClick={handleTogglePolls}
+            className="h-12 w-full flex items-center justify-between px-4 hover:bg-gray-50 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <BarChart2 size={18} className="text-gray-600" />
+              <span className="text-[14px] font-medium text-gray-800">Bình chọn</span>
+            </div>
+            {expandedSections.polls ? (
+              <ChevronDown size={16} className="text-gray-500" />
+            ) : (
+              <ChevronRight size={16} className="text-gray-500" />
+            )}
+          </button>
+          
+          {expandedSections.polls && (
+            <div className="px-4 pb-4 space-y-2 animate-in fade-in duration-200">
+              {polls.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-2">
+                  Chưa có bình chọn nào
+                </p>
+              ) : (
+                polls.map((msg) => {
+                  const pollData = msg.poll;
+                  if (!pollData) return null;
+
+                  return (
+                    <div 
+                      key={msg._id} 
+                      onClick={() => setSelectedPollMsg(msg)}
+                      className="p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-all group/poll"
+                    >
+                      <p className="text-[13px] font-semibold text-gray-800 line-clamp-1 group-hover/poll:text-blue-700">
+                        {pollData.title || "Bình chọn không tiêu đề"}
+                      </p>
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        {pollData.totalParticipants || 0} người đã bình chọn
+                      </p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+
         {/* MEMBERS SECTION */}
         {isGroup && (
           <div className="bg-white border-t">
@@ -1520,6 +1592,32 @@ const ConversationInfoPanel = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* MODAL XEM CHI TIẾT POLL */}
+      {selectedPollMsg &&
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 animate-in fade-in backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl relative max-w-[360px] w-full overflow-hidden transform animate-in zoom-in-95 duration-200">
+            {/* Header Modal */}
+            <div className="h-14 border-b flex items-center justify-between px-4 bg-gray-50/50">
+              <span className="text-[15px] font-bold text-gray-800">Chi tiết bình chọn</span>
+              <button 
+                onClick={() => setSelectedPollMsg(null)}
+                className="p-1.5 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
+              <PollMessage 
+                pollId={selectedPollMsg.pollId._id || selectedPollMsg.pollId} 
+                conversationId={currentConversation?.conversationId || conversation?.conversationId || ""} 
+                initialPoll={selectedPollMsg.poll}
+              />
+            </div>
+          </div>
+        </div>
+      }
     </div>
   );
 };

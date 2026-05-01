@@ -10,11 +10,14 @@ export interface MessagesType {
     };
   };
   conversationId: string;
+  type: "USER_MESSAGE" | "SYSTEM" | "POLL";
   content: {
     text: string | null;
     icon: string | null;
     files: File[];
   };
+  pollId?: string;
+  poll?: any;
   pinned: boolean;
   recalled: boolean;
   reactions: ReactionType[];

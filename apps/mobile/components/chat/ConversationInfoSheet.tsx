@@ -43,6 +43,7 @@ import CreateGroupModal from "./CreateGroupModal";
 import { useRouter } from "expo-router";
 import MemberActionSheet from "../ui/MemberActionSheet";
 import GroupAvatar from "../ui/GroupAvatar";
+import { pollService } from "@/services/poll.service";
 
 const { width } = Dimensions.get("window");
 
@@ -113,6 +114,9 @@ const ConversationInfoSheet: React.FC<Props> = ({
   const [joinRequests, setJoinRequests] = useState<any[]>([]);
   const [expandedRequests, setExpandedRequests] = useState(true);
   const [expandedManagement, setExpandedManagement] = useState(false);
+  const [polls, setPolls] = useState<any[]>([]);
+  const [expandedPoll, setExpandedPoll] = useState(false);
+  const [loadingPolls, setLoadingPolls] = useState(false);
   const [membersRefreshKey, setMembersRefreshKey] = useState(0);
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState(conversation?.name || "");
@@ -610,6 +614,26 @@ const ConversationInfoSheet: React.FC<Props> = ({
         err?.response?.data?.message ||
           "Không thể thực hiện thao tác này. Vui lòng thử lại.",
       );
+    }
+  };
+ 
+  const handleTogglePolls = async () => {
+    const willExpand = !expandedPoll;
+    setExpandedPoll(willExpand);
+    if (willExpand && conversation?.conversationId) {
+      setLoadingPolls(true);
+      try {
+        const res: any = await pollService.getPolls(
+          conversation.conversationId,
+        );
+        if (res) {
+          setPolls(res);
+        }
+      } catch (error) {
+        console.error("Lỗi khi tải danh sách bình chọn:", error);
+      } finally {
+        setLoadingPolls(false);
+      }
     }
   };
 
@@ -1248,6 +1272,76 @@ const ConversationInfoSheet: React.FC<Props> = ({
                               {domain}
                             </Text>
                           </View>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </View>
+              )}
+            </View>
+
+            <View style={{ backgroundColor: "white", marginBottom: 2 }}>
+              <SectionHeader
+                icon={<Ionicons name="stats-chart" size={18} color="#374151" />}
+                title="Bình chọn"
+                expanded={expandedPoll}
+                onToggle={handleTogglePolls}
+              />
+              {expandedPoll && (
+                <View style={{ paddingHorizontal: 12, paddingBottom: 16 }}>
+                  {loadingPolls ? (
+                    <ActivityIndicator size="small" color="#0068ff" />
+                  ) : polls.length === 0 ? (
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#9ca3af",
+                        textAlign: "center",
+                        paddingVertical: 8,
+                      }}
+                    >
+                      Chưa có bình chọn nào trong cuộc trò chuyện
+                    </Text>
+                  ) : (
+                    polls.map((msg, idx) => {
+                      const pollData = msg.poll;
+                      if (!pollData) return null;
+                      return (
+                        <TouchableOpacity
+                          key={msg._id || idx}
+                          style={{
+                            padding: 12,
+                            borderRadius: 10,
+                            backgroundColor: "#f9fafb",
+                            borderWidth: 1,
+                            borderColor: "#f3f4f6",
+                            marginBottom: 8,
+                          }}
+                          onPress={() => {
+                            onClose();
+                            router.push({
+                              pathname: "/private/chat/[id]",
+                              params: {
+                                id: conversation.conversationId,
+                                messageId: msg._id,
+                              },
+                            });
+                          }}
+                        >
+                          <Text
+                            numberOfLines={1}
+                            style={{
+                              fontSize: 14,
+                              fontWeight: "600",
+                              color: "#111",
+                              marginBottom: 4,
+                            }}
+                          >
+                            {pollData.title || "Bình chọn không tiêu đề"}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: "#6b7280" }}>
+                            {pollData.totalParticipants || 0} người đã bình chọn
+                          </Text>
                         </TouchableOpacity>
                       );
                     })

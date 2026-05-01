@@ -718,12 +718,26 @@ export default function ChatWindow() {
         });
       }
     };
+    const handleUpdatePoll = (data: any) => {
+      if (data.conversationId !== id) return;
+      setMessages((prev) =>
+        prev.map((m) => {
+          const mPollId = typeof m.pollId === "string" ? m.pollId : m.pollId?._id;
+          if (String(mPollId) === String(data._id)) {
+            return { ...m, poll: data };
+          }
+          return m;
+        }),
+      );
+    };
+
     socket.on("read_receipt", handleReadReceipt);
     socket.on("messages_expired", handleMessagesExpired);
     socket.on("new_message", handleNewMessage);
     socket.on("message_reacted", handleMessageReacted);
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
+    socket.on("update_poll", handleUpdatePoll);
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -732,6 +746,7 @@ export default function ChatWindow() {
       socket.off("message_pinned", handleMessagePinned);
       socket.off("read_receipt", handleReadReceipt);
       socket.off("messages_expired", handleMessagesExpired);
+      socket.off("update_poll", handleUpdatePoll);
 
       socket.emit("leave_room", id);
     };
@@ -1155,6 +1170,8 @@ export default function ChatWindow() {
                 setIsSelectMode(false);
                 setSelectedMessages([]);
               }}
+              isGroup={isGroup}
+              conversationId={id}
             />
           )}
 

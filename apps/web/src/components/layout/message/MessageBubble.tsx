@@ -1,18 +1,19 @@
-import { formatDuration, formatTime } from "@/utils/format-message-time..util";
+import { formatTime } from "@/utils/format-message-time..util";
 import type { MessagesType } from "@/types/messages.type";
 import {
   Download,
-  Phone,
-  PhoneMissed,
-  Video,
+  X,
   ChevronLeft,
   ChevronRight,
-  X,
 } from "lucide-react";
 import { getFileIcon } from "@/utils/file-icon.util";
 import { saveAs } from "file-saver";
 import { useState } from "react";
 import { truncateFileName } from "@/utils/render-file";
+import PollMessage from "./PollMessage";
+import CallContent from "./sub-components/CallContent";
+import MediaGrid from "./sub-components/MediaGrid";
+import DocumentList from "./sub-components/DocumentList";
 
 interface Props {
   message: MessagesType;
@@ -85,54 +86,6 @@ export const MessageBubble = ({
     }
   };
 
-  // --- Logic Call từ nhánh HEAD ---
-  const renderCallContent = () => {
-    if (!call) return null;
-    const isVideo = call.type === "VIDEO";
-    let statusText = "";
-    let Icon = isVideo ? Video : Phone;
-    let iconColor = isMe ? "text-blue-600" : "text-gray-600";
-
-    switch (call.status) {
-      case "ENDED":
-      case "ACCEPTED":
-        statusText = `Cuộc gọi ${isVideo ? "video" : "thoại"} (${formatDuration(call.duration)})`;
-        break;
-      case "MISSED":
-        statusText = isMe ? "Đối phương đã lỡ" : "Cuộc gọi nhỡ";
-        Icon = PhoneMissed;
-        iconColor = "text-red-500";
-        break;
-      case "REJECTED":
-        statusText = isMe ? "Cuộc gọi bị từ chối" : "Cuộc gọi nhỡ";
-        Icon = PhoneMissed;
-        iconColor = "text-red-500";
-        break;
-      case "BUSY":
-        statusText = "Máy bận";
-        iconColor = "text-orange-500";
-        break;
-      default:
-        statusText = `Đang thiết lập...`;
-    }
-    return (
-      <div className="flex items-center gap-3 py-1">
-        <div className={`p-2 rounded-full bg-white/50 ${iconColor}`}>
-          <Icon size={20} />
-        </div>
-        <div className="flex flex-col">
-          <span className="text-[14px] font-medium leading-tight">
-            {statusText}
-          </span>
-          <span className="text-[11px] opacity-70">
-            {isMe ? "Cuộc gọi đi" : "Cuộc gọi đến"}
-          </span>
-        </div>
-      </div>
-    );
-  };
-
-  // --- Logic Hết hạn từ nhánh KhongVanTam ---
   if (message.expired) {
     return (
       <div className="flex items-center gap-1.5 bg-[#f0f0f0] rounded-xl px-3 py-2 max-w-xs">
@@ -162,7 +115,7 @@ export const MessageBubble = ({
     return (
       <div
         className={`rounded-lg px-3 py-2 max-w-md border shadow-sm text-gray-500 ${
-          isMe ? "bg-[#E5F1FF]" : "bg-white"
+          isMe ? "bg-zalo-light" : "bg-white"
         }`}
       >
         <p>Tin nhắn đã được thu hồi</p>
@@ -185,10 +138,10 @@ export const MessageBubble = ({
       } ${
         isMe
           ? selectedMessages.includes(message._id)
-            ? "bg-[#B4CBE7]"
-            : "bg-[#E5F1FF]"
+            ? "bg-zalo-selected"
+            : "bg-zalo-light"
           : selectedMessages.includes(message._id)
-            ? "bg-[#B4CBE7]"
+            ? "bg-zalo-selected"
             : "bg-white"
       }`}
     >
@@ -217,10 +170,23 @@ export const MessageBubble = ({
         )}
 
         {/* MAIN CONTENT */}
-        {call ? (
-          renderCallContent()
+        {message.call ? (
+          <CallContent 
+            type={message.call.type} 
+            status={message.call.status} 
+            duration={message.call.duration} 
+            isMe={isMe} 
+          />
         ) : (
           <>
+            {/* POLL */}
+            {message.type === "POLL" && message.pollId && (
+              <PollMessage
+                pollId={message.pollId}
+                conversationId={message.conversationId}
+              />
+            )}
+
             {/* TEXT */}
             {content?.text && (
               <p className="text-[15px]">{renderTextWithLinks(content.text)}</p>
@@ -230,75 +196,17 @@ export const MessageBubble = ({
             {content?.icon && <p className="text-3xl">{content.icon}</p>}
 
             {/* MEDIA GRID (Ảnh/Video) */}
-            {mediaFiles.length > 0 && (
-              <div
-                className={`grid gap-1 ${
-                  mediaFiles.length === 1
-                    ? "grid-cols-1"
-                    : mediaFiles.length === 2
-                      ? "grid-cols-2"
-                      : "grid-cols-3"
-                }`}
-              >
-                {mediaFiles.map((file: any, index: number) => (
-                  <div
-                    key={index}
-                    className="relative overflow-hidden rounded-xl border bg-black group cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPreviewIndex(index); // Mở Modal tại vị trí ảnh tương ứng
-                    }}
-                  >
-                    {file.type === "IMAGE" && (
-                      <img
-                        src={file.fileKey}
-                        className="w-full h-32 object-cover group-hover:scale-105 transition"
-                        onLoad={dispatchMediaLoaded}
-                        alt="attachment"
-                      />
-                    )}
-                    {file.type === "VIDEO" && (
-                      <video
-                        src={file.fileKey}
-                        className="w-full h-32 object-cover"
-                        onLoadedMetadata={dispatchMediaLoaded}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            <MediaGrid
+              mediaFiles={mediaFiles}
+              onPreview={setPreviewIndex}
+              onLoad={dispatchMediaLoaded}
+            />
 
             {/* DOCUMENT LIST (File Text/PDF/Zip...) */}
-            {documentFiles.length > 0 && (
-              <div className="space-y-1 mt-1">
-                {documentFiles.map((file: any, index: number) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-3 p-2 bg-black/5 rounded-md"
-                  >
-                    <div>{getFileIcon(file.fileName)}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {truncateFileName(file.fileName, 40)}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {(file.fileSize / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDownload(file);
-                      }}
-                      className="p-1 border border-gray-300 rounded-md bg-white hover:bg-gray-50"
-                    >
-                      <Download className="w-4 h-4 text-gray-600" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <DocumentList
+              documentFiles={documentFiles}
+              onDownload={handleDownload}
+            />
           </>
         )}
       </div>
