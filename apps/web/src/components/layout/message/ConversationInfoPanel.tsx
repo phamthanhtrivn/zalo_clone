@@ -25,6 +25,7 @@ import {
   Pencil,
   BarChart2,
   X,
+  QrCode,
 } from "lucide-react";
 import {
   useFloating,
@@ -56,6 +57,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import CreateGroupModal from "@/components/layout/CreateGroupModal";
 import { Switch } from "@/components/ui/switch";
+import ShareGroupQRModal from "./ShareGroupQRModal";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
@@ -174,6 +176,8 @@ const ConversationInfoPanel = ({
     index: 0,
   });
 
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(currentConversation?.name || "");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -189,6 +193,7 @@ const ConversationInfoPanel = ({
   const currentMember = members.find(
     (m) => String(m.userId) === String(currentUserId),
   );
+  const currentUserRole = currentMember?.role || (isGroup ? "MEMBER" : "OWNER");
   const canManageMembers =
     currentMember?.role === "OWNER" || currentMember?.role === "ADMIN";
 
@@ -855,6 +860,19 @@ const ConversationInfoPanel = ({
               </span>
             </button>
           )}
+
+          {/* Share QR Button */}
+          {isGroup && (
+            <button
+              onClick={() => setQrModalOpen(true)}
+              className="flex flex-col items-center gap-1.5 flex-1 group cursor-pointer"
+            >
+              <div className="w-10 h-10 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center group-hover:bg-gray-200 transition-colors">
+                <QrCode size={20} />
+              </div>
+              <span className="text-[11px] font-medium text-gray-600">Mã QR</span>
+            </button>
+          )}
         </div>
 
         {/* SECTION: PHÊ DUYỆT THÀNH VIÊN */}
@@ -1410,6 +1428,25 @@ const ConversationInfoPanel = ({
         excludeUserIds={members.map((m) => m.userId)}
         onMembersAdded={() => setMembersRefreshKey((k) => k + 1)}
       />
+
+      {isGroup && (
+        <ShareGroupQRModal
+          open={qrModalOpen}
+          onClose={() => setQrModalOpen(false)}
+          conversationId={currentConversation?.conversationId || ""}
+          conversationName={currentConversation?.name || ""}
+          initialJoinToken={currentConversation?.group?.joinToken || null}
+          myRole={currentUserRole as any}
+          onTokenRefreshed={(newToken) => {
+            dispatch(
+              updateConversationSetting({
+                conversationId: currentConversation!.conversationId,
+                group: { ...currentConversation!.group!, joinToken: newToken },
+              }),
+            );
+          }}
+        />
+      )}
 
       {/* Image Preview Overlay */}
       {preview.isOpen && (

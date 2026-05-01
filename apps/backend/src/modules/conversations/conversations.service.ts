@@ -7,6 +7,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Conversation, JoinRequest } from './schemas/conversation.schema';
 import { Connection, Model, Types } from 'mongoose';
@@ -1083,6 +1084,7 @@ export class ConversationsService {
           conversationId: '$conversation._id',
           type: '$conversation.type',
           group: '$conversation.group',
+          myRole: '$role',
           unreadCount: {
             $ifNull: [{ $arrayElemAt: ['$unreadData.count', 0] }, 0],
           },
@@ -1965,5 +1967,245 @@ export class ConversationsService {
       messages,
       files,
     };
+  }
+
+  async refreshGroupJoinToken(conversationId: string, userId: string) {
+    const convObjectId = new Types.ObjectId(conversationId);
+    const userObjectId = new Types.ObjectId(userId);
+
+    // Kiểm tra quyền Admin/Owner
+    const member = await this.memberModel.findOne({
+      conversationId: convObjectId,
+      userId: userObjectId,
+      leftAt: null,
+    });
+
+    if (!member || ![MemberRole.OWNER, MemberRole.ADMIN].includes(member.role as any)) {
+      throw new ForbiddenException('Chỉ Trưởng/Phó nhóm mới có quyền làm mới mã QR');
+    }
+
+    // Sinh token ngẫu nhiên (32 ký tự hex)
+    const newToken = randomBytes(16).toString('hex');
+
+    const updatedConversation = await this.conversationModel.findByIdAndUpdate(
+      convObjectId,
+      { $set: { 'group.joinToken': newToken } },
+      { new: true }
+    );
+
+    if (updatedConversation) {
+      this.chatGateway.server.to(conversationId.toString()).emit('group_updated', {
+        conversationId: conversationId.toString(),
+        group: updatedConversation.group,
+      });
+    }
+
+    return { success: true, joinToken: newToken };
+  }
+
+  async getGroupInfoByToken(conversationId: string, token: string) {
+    const convObjectId = new Types.ObjectId(conversationId);
+
+    // 1. Tìm Conversation 
+    const conversation = (await this.conversationModel
+      .findOne({
+        _id: convObjectId,
+        type: ConversationType.GROUP,
+        'group.joinToken': token,
+      })
+      .populate({
+        path: 'participants',
+        select: 'profile.name',
+      })
+      .lean()) as any;
+
+    if (!conversation) {
+      throw new BadRequestException(
+        'Mã QR không hợp lệ hoặc đã bị vô hiệu hóa.',
+      );
+    }
+
+    // 2. Tính số thành viên thực tế
+    const activeMembersCount = await this.memberModel.countDocuments({
+      conversationId: convObjectId,
+      leftAt: null,
+    });
+
+    // 3. Xử lý TÊN NHÓM 
+    let groupName = conversation.group?.name;
+
+    // Nếu nhóm chưa đặt tên
+    if (!groupName || groupName.trim() === '') {
+      const participantNames = (conversation.participants || [])
+        .filter((p: any) => p && p.profile && p.profile.name)
+        .slice(0, 3) 
+        .map((p: any) => p.profile.name);
+
+      groupName = participantNames.join(', ');
+      if (activeMembersCount > 3) {
+        groupName += ` và ${activeMembersCount - 3} người khác`;
+      }
+    }
+
+    const result = {
+      success: true,
+      data: {
+        conversationId: String(conversation._id),
+        name: groupName || 'Nhóm chưa đặt tên',
+        avatarUrl: conversation.group?.avatarUrl
+          ? this.storageService.signFileUrl(conversation.group.avatarUrl)
+          : null,
+        memberCount: activeMembersCount,
+        approvalRequired: conversation.group?.approvalRequired,
+      },
+    };
+
+    console.log('🚀 [Backend] QR Group Info:', JSON.stringify(result, null, 2));
+
+    return result;
+  }
+
+  async joinGroupByToken(conversationId: string, token: string, userId: string) {
+    const convObjectId = new Types.ObjectId(conversationId);
+    const userObjectId = new Types.ObjectId(userId);
+    const convIdStr = conversationId.toString();
+
+    // 1. Xác thực Token
+    const conversation = await this.conversationModel.findOne({
+      _id: convObjectId,
+      type: ConversationType.GROUP,
+      'group.joinToken': token,
+    });
+
+    if (!conversation) {
+      throw new BadRequestException('Mã QR không hợp lệ hoặc đã bị vô hiệu hóa.');
+    }
+
+    // 2. Kiểm tra xem đã là thành viên chưa
+    const existingMember = await this.memberModel.findOne({
+      conversationId: convObjectId,
+      userId: userObjectId,
+      leftAt: null,
+    });
+    if (existingMember) throw new BadRequestException('Bạn đã là thành viên của nhóm này rồi.');
+
+    const session = await this.connection.startSession();
+    session.startTransaction();
+
+    try {
+      const isApprovalRequired = conversation.group?.approvalRequired === true;
+
+      // --- TRƯỜNG HỢP 1: CẦN PHÊ DUYỆT ---
+      if (isApprovalRequired) {
+        const existingReq = await this.joinRequestModel.findOne({
+          conversationId: convObjectId,
+          userId: userObjectId,
+          status: 'PENDING',
+        }).session(session);
+
+        if (existingReq) {
+          throw new BadRequestException('Bạn đã gửi yêu cầu rồi, vui lòng chờ quản trị viên duyệt.');
+        }
+
+        await this.joinRequestModel.create([{
+          conversationId: convObjectId,
+          userId: userObjectId,
+          invitedBy: userObjectId,
+          status: 'PENDING',
+        }], { session });
+
+        // Bắn socket cho Admin biết
+        const admins = await this.memberModel.find({
+          conversationId: convObjectId,
+          role: { $in: [MemberRole.OWNER, MemberRole.ADMIN] },
+          leftAt: null
+        }).session(session).lean();
+
+        await session.commitTransaction();
+
+        if (this.chatGateway.server) {
+          admins.forEach(admin => {
+            this.chatGateway.server.to(admin.userId.toString()).emit('new_approval_request', {
+              conversationId: convIdStr,
+              count: 1, 
+            });
+          });
+        }
+
+        return { success: true, message: 'Đã gửi yêu cầu tham gia nhóm', isPending: true };
+      }
+
+      // --- TRƯỜNG HỢP 2: VÀO THẲNG NHÓM (KHÔNG CẦN DUYỆT) ---
+      
+      // Tìm xem ngày xưa có từng ở trong nhóm không 
+      const oldMember = await this.memberModel.findOne({
+        conversationId: convObjectId,
+        userId: userObjectId,
+      }).session(session);
+
+      if (oldMember) {
+        oldMember.leftAt = null as any;
+        oldMember.joinedAt = new Date();
+        oldMember.role = MemberRole.MEMBER;
+        oldMember.unreadCount = 1; 
+        await oldMember.save({ session });
+      } else {
+        await this.memberModel.create([{
+          conversationId: convObjectId,
+          userId: userObjectId,
+          role: MemberRole.MEMBER,
+          joinedAt: new Date(),
+          unreadCount: 1,
+        }], { session });
+      }
+
+      await this.conversationModel.findByIdAndUpdate(
+        convObjectId,
+        { $addToSet: { participants: userObjectId } },
+        { session }
+      );
+
+      // Tạo tin nhắn hệ thống
+      const userName = await this.getUserName(userId);
+      const systemMsg = await this.createSystemMessage(
+        conversationId,
+        `${userName} đã tham gia nhóm từ link/mã QR`,
+        session
+      );
+
+      await session.commitTransaction();
+
+      // Đồng bộ Socket cho mọi người và người mới
+      if (this.chatGateway.server) {
+        const msgData = systemMsg.toJSON ? systemMsg.toJSON() : systemMsg;
+        this.chatGateway.server.to(convIdStr).emit('new_message', {
+          ...msgData,
+          conversationId: convIdStr,
+        });
+
+        const formattedConv = await this.getFormattedConversationForUser(convIdStr, userId);
+        if (formattedConv) {
+          this.chatGateway.server.to(userId).emit('new_conversation', formattedConv);
+        }
+        this.chatGateway.handleUserJoinRoom(userId, convIdStr);
+        
+        this.chatGateway.server.to(convIdStr).emit('member_updated', {
+          conversationId: convIdStr,
+          type: 'ADD',
+        });
+      }
+
+      return { success: true, message: 'Đã tham gia nhóm thành công', isPending: false };
+
+    } catch (error) {
+      if (session.inTransaction()) {
+        await session.abortTransaction();
+      }
+      console.error('Error in joinGroupByToken:', error);
+      if (error instanceof BadRequestException) throw error;
+      throw new InternalServerErrorException(error.message || 'Lỗi hệ thống khi tham gia nhóm');
+    } finally {
+      session.endSession();
+    }
   }
 }

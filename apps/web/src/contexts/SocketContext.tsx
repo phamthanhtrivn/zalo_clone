@@ -14,6 +14,7 @@ import {
   removeConversation,
   removeExpiredMessages,
   updateConversationFromSocket,
+  updateConversationSetting,
   updateRecallMessageInConversation,
 } from "@/store/slices/conversationSlice";
 import { 
@@ -254,6 +255,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     };
     const onDisconnect = () => setIsConnected(false);
 
+    const handleGroupUpdated = (data: any) => {
+      console.log("📢 [Web Socket] Nhận group_updated:", data);
+      dispatch(updateConversationSetting({
+        conversationId: data.conversationId,
+        name: data.name,
+        avatar: data.avatar,
+        group: data.group,
+      }));
+    };
+
     socketInstance.on("connect", onConnect);
     socketInstance.on("disconnect", onDisconnect);
     socketInstance.on("new_message", handleNewMessage);
@@ -265,6 +276,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on("update_poll", handleUpdatePoll);
     socketInstance.on("poll_option_added", handlePollOptionAdded);
     socketInstance.on("group_disbanded", handleGroupDisbanded);
+    socketInstance.on("group_updated", handleGroupUpdated);
     socketInstance.on("force_logout", handleForceLogout);
 
     return () => {
@@ -279,6 +291,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.off("update_poll", handleUpdatePoll);
       socketInstance.off("poll_option_added", handlePollOptionAdded);
       socketInstance.off("group_disbanded", handleGroupDisbanded);
+      socketInstance.off("group_updated", handleGroupUpdated);
       socketInstance.off("force_logout", handleForceLogout);
     };
   }, [apiUrl, user?.userId, accessToken, handleNewMessage, handleMessageReacted, handleMessageRecalled, handleMessagePinned, handleReadReceipt, handleMessagesExpired, handleUpdatePoll, handlePollOptionAdded, handleGroupDisbanded, handleForceLogout]);

@@ -125,4 +125,12 @@ export const conversationService = {
     });
     return response;
   },
+  refreshGroupJoinToken: (id: string) =>
+    api.patch(`/conversations/${id}/qr-token`),
+
+  getGroupInfoByToken: (id: string, token: string) =>
+    api.get(`/conversations/${id}/qr-info/${token}`),
+
+  joinViaQR: (id: string, token: string) =>
+    api.post(`/conversations/${id}/join-via-qr`, { token }),
 };

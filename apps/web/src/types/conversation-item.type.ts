@@ -26,6 +26,16 @@ export interface ConversationItemType {
   };
   unreadCount: number;
   lastMessageAt: string;
+  myRole?: "OWNER" | "ADMIN" | "MEMBER";
+  group?: {
+    name: string;
+    avatarUrl?: string;
+    allowMembersInvite: boolean;
+    allowMembersSendMessages: boolean;
+    approvalRequired: boolean;
+    ownerId: string;
+    joinToken: string | null;
+  };
 }
 
 export interface File {
