@@ -120,6 +120,10 @@ export class MessagesService {
     return this.queryService.searchMessages(conversationId, searchDto);
   }
 
+  async getPollMessagesFromConversation(conversationId: string, userId: string) {
+    return this.queryService.getPollMessagesFromConversation(conversationId, userId);
+  }
+
   // --- Action Methods ---
   async sendMessage(
     sendMessageDto: SendMessageDto,

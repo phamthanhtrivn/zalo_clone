@@ -377,6 +377,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.on("group_updated", handleGroupUpdate);
       socketInstance.on("force_logout", handleForceLogout);
 
+      const handleUpdatePoll = (data: any) => {
+        console.log("🚀 [Mobile Socket] Nhận update_poll:", data);
+        if (data.conversationId) {
+          dispatch(updateConversation(data));
+        } else {
+          console.error("❌ [Mobile Socket] payload update_poll thiếu conversationId", data);
+        }
+      };
+      socketInstance.on("update_poll", handleUpdatePoll);
+
       // BUG-9 fix: Đăng ký 4 events còn thiếu
       socketInstance.on("member_removed", handleMemberRemoved);
       socketInstance.on("member_updated", handleMemberUpdated);
@@ -406,6 +416,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         socketInstance.off("group_settings_updated", handleGroupSettingsUpdate);
         socketInstance.off("group_updated", handleGroupUpdate);
         socketInstance.off("force_logout", handleForceLogout);
+        socketInstance.off("update_poll", handleUpdatePoll);
 
         socketInstance.off("member_removed", handleMemberRemoved);
         socketInstance.off("member_updated", handleMemberUpdated);
@@ -428,8 +439,4 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 };
 
-/**
- * Hook để set conversationId đang active (dùng trong chat screen)
- * để SocketProvider biết có nên navigate khi bị kick không.
- */
 export { SocketContext };
