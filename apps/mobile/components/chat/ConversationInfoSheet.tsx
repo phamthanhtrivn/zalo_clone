@@ -43,6 +43,7 @@ import CreateGroupModal from "./CreateGroupModal";
 import { useRouter } from "expo-router";
 import MemberActionSheet from "../ui/MemberActionSheet";
 import GroupAvatar from "../ui/GroupAvatar";
+import ShareGroupQRModal from "./ShareGroupQRModal";
 import { pollService } from "@/services/poll.service";
 
 const { width } = Dimensions.get("window");
@@ -118,12 +119,13 @@ const ConversationInfoSheet: React.FC<Props> = ({
   const [expandedPoll, setExpandedPoll] = useState(false);
   const [loadingPolls, setLoadingPolls] = useState(false);
   const [membersRefreshKey, setMembersRefreshKey] = useState(0);
+  const [isQrModalVisible, setIsQrModalVisible] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState(conversation?.name || "");
   const isGroup = conversation?.type === "GROUP";
   const currentConversation =
     useAppSelector((state) =>
-      state.conversation.items?.find(
+      state.conversation.conversations?.find(
         (c) => c.conversationId === conversation?.conversationId,
       ),
     ) || conversation;
@@ -859,6 +861,12 @@ const ConversationInfoSheet: React.FC<Props> = ({
                       setIsAddMemberVisible(true);
                     }
                   },
+                  active: false,
+                },
+                {
+                  icon: "qr-code-outline",
+                  label: "Mã QR",
+                  onPress: () => setIsQrModalVisible(true),
                   active: false,
                 },
               ].map((action) => (
@@ -1607,6 +1615,25 @@ const ConversationInfoSheet: React.FC<Props> = ({
         excludedIds={members.map((m) => m.userId)}
         onSuccess={fetchMembers}
       />
+
+      {isGroup && (
+        <ShareGroupQRModal
+          visible={isQrModalVisible}
+          onClose={() => setIsQrModalVisible(false)}
+          conversationId={conversation.conversationId}
+          conversationName={conversation.name}
+          initialJoinToken={currentConversation?.group?.joinToken || null}
+          myRole={currentUserRole as any}
+          onTokenRefreshed={(newToken) => {
+            dispatch(
+              updateConversationSetting({
+                conversationId: conversation.conversationId,
+                group: { ...currentConversation.group, joinToken: newToken },
+              }),
+            );
+          }}
+        />
+      )}
       <MemberActionSheet
         visible={!!selectedMemberForAction}
         onClose={() => setSelectedMemberForAction(null)}
