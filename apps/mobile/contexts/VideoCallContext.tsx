@@ -136,19 +136,23 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
   const createPeerConnection = useCallback((partnerId: string) => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
 
+    // In No-Trickle mode, we don't emit individual candidates via socket.
+    // They will be gathered into the final localDescription (SDP).
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        socket?.emit("call:signal", {
-          to: partnerId,
-          signal: event.candidate,
-          conversationId: videoCallData.conversationId,
-        });
+        console.log("🚀 [Mobile-ICE] Gathered candidate:", event.candidate.candidate.substring(0, 30) + "...");
       }
     };
 
     pc.ontrack = (event) => {
+      console.log("🚀 [Mobile-WebRTC] Received remote track:", event.track.kind);
       if (event.streams && event.streams[0]) {
         setRemoteStream(event.streams[0]);
+        // Transition to CONNECTED if we were RINGING or CALLING
+        if (sessionStateRef.current !== 'CONNECTED') {
+          updateCallState('CONNECTED');
+          stopSound();
+        }
       }
     };
 
@@ -161,6 +165,23 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
     peerRef.current = pc;
     return pc;
   }, [socket, videoCallData.conversationId, leaveCall]);
+
+  // Helper to wait for ICE gathering to complete (No-Trickle)
+  const waitForICE = (pc: any) => new Promise<void>((resolve) => {
+    if (pc.iceGatheringState === 'complete') {
+      resolve();
+    } else {
+      const checkState = () => {
+        if (pc.iceGatheringState === 'complete') {
+          pc.removeEventListener('icegatheringstatechange', checkState);
+          resolve();
+        }
+      };
+      pc.addEventListener('icegatheringstatechange', checkState);
+      // Fallback timeout
+      setTimeout(resolve, 2000);
+    }
+  });
 
   const startCall = async (targetId: string, convId: string, type: string, targetName?: string, targetAvatar?: string) => {
     if (!isWebRTCSupported) {
@@ -184,6 +205,12 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
     playSound("dialing");
 
     try {
+      console.log("🚀 [DEBUG API CALL] Payload:", {
+        conversationId: convId,
+        senderId: currentUser?.userId || currentUser?._id,
+        type: type.toUpperCase()
+      });
+
       const res = await messageService.createCallMessage({
         conversationId: convId,
         senderId: currentUser?.userId || currentUser?._id,
@@ -203,9 +230,12 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
+      console.log("🚀 [Mobile-WebRTC] Gathering ICE candidates...");
+      await waitForICE(pc);
+
       const offerPayload = {
         to: targetId,
-        signal: offer,
+        signal: pc.localDescription, // Use localDescription after ICE is complete
         conversationId: convId,
         callType: type.toUpperCase(),
         fromName: currentUser?.profile?.name || currentUser?.name || "Người dùng Mobile",
@@ -262,9 +292,12 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
+      console.log("🚀 [Mobile-WebRTC] Gathering ICE candidates for Answer...");
+      await waitForICE(pc);
+
       socket?.emit("call:signal", {
         to: videoCallData.from,
-        signal: answer,
+        signal: pc.localDescription, // Use localDescription after ICE is complete
         conversationId: videoCallData.conversationId,
         messageId: videoCallData.messageId,
       });

@@ -240,6 +240,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
 
       try {
         if (data.signal) {
+          console.log("🚀 [WebRTC Web] Signaling incoming data:", data.signal.type || "candidate");
           if (peerRef.current) {
             peerRef.current.signal(data.signal);
           } else if (data.signal.type === "offer") {
@@ -295,12 +296,17 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
         video: type === CallType.VIDEO,
         audio: true,
       });
+      
+      currentStream.getVideoTracks().forEach(track => {
+        track.enabled = true;
+      });
+
       setStream(currentStream);
       if (myVideoRef.current) myVideoRef.current.srcObject = currentStream;
 
       const p = new Peer({
         initiator: true,
-        trickle: true,
+        trickle: false,
         stream: currentStream,
         config: ICE_SERVERS,
       });
@@ -374,12 +380,17 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
         video: videoCallData.callType === CallType.VIDEO,
         audio: true,
       });
+
+      currentStream.getVideoTracks().forEach(track => {
+        track.enabled = true;
+      });
+
       setStream(currentStream);
       if (myVideoRef.current) myVideoRef.current.srcObject = currentStream;
 
       const p = new Peer({
         initiator: false,
-        trickle: true,
+        trickle: false,
         stream: currentStream,
         config: ICE_SERVERS,
       });

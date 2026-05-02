@@ -7,7 +7,8 @@ import {
   Dimensions, 
   Animated, 
   PanResponder,
-  SafeAreaView
+  SafeAreaView,
+  StyleSheet
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoCall } from "@/contexts/VideoCallContext";
@@ -109,15 +110,17 @@ export default function ActiveCallOverlay() {
     <Modal visible={isOpen} animationType="fade" transparent={false}>
       <View className="flex-1 bg-black">
         {/* 1. REMOTE VIDEO (FULL SCREEN) */}
-        <View className="flex-1 bg-slate-900">
+        <View style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT, backgroundColor: "black" }}>
           {isVideo && remoteStream ? (
             <RTCView
+              key={remoteStream.id || "remote-video"}
               streamURL={remoteStream.toURL()}
-              className="flex-1"
+              style={StyleSheet.absoluteFillObject}
               objectFit="cover"
+              zOrder={1}
             />
           ) : (
-            <View className="flex-1 items-center justify-center">
+            <View style={StyleSheet.absoluteFillObject} className="items-center justify-center">
               <View className="w-32 h-32 rounded-full bg-blue-600 items-center justify-center shadow-2xl">
                 <Text className="text-4xl text-white font-bold">
                   {displayName.charAt(0)}
@@ -140,27 +143,29 @@ export default function ActiveCallOverlay() {
                 position: "absolute",
                 top: 60,
                 right: 20,
-                width: 120,
-                height: 180,
+                width: 120, // Explicit width
+                height: 180, // Explicit height
                 borderRadius: 16,
                 overflow: "hidden",
                 borderWidth: 1,
                 borderColor: "rgba(255,255,255,0.2)",
                 backgroundColor: "black",
-                zIndex: 50,
+                zIndex: 100, // Ensure it's above everything
                 transform: [{ translateX: pan.x }, { translateY: pan.y }],
               },
             ]}
           >
             {camOn ? (
               <RTCView
+                key={localStream.id || "local-video"} // Force re-render
                 streamURL={localStream.toURL()}
-                className="flex-1"
+                style={StyleSheet.absoluteFillObject}
                 objectFit="cover"
+                zOrder={2} // Layer 2: Top
                 mirror={true}
               />
             ) : (
-              <View className="flex-1 items-center justify-center bg-slate-800">
+              <View style={StyleSheet.absoluteFillObject} className="items-center justify-center bg-slate-800">
                 <Ionicons name="videocam-off" size={24} color="white" />
               </View>
             )}
