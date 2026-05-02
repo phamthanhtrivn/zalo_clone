@@ -879,6 +879,15 @@ export class ConversationsService {
 
   async getConversationsFromUser(userId: string) {
     const userObjectId = new Types.ObjectId(userId);
+    const currentUser = await this.userModel
+      .findById(userObjectId)
+      .select({ friends: 1 })
+      .lean();
+    const acceptedFriendIds = new Set(
+      (currentUser?.friends ?? [])
+        .filter((friend) => friend.status === FriendStatus.ACCEPTED)
+        .map((friend) => friend.friendId.toString()),
+    );
     const conversations = await this.memberModel.aggregate([
       { $match: { userId: userObjectId, leftAt: null } },
       {
@@ -993,6 +1002,38 @@ export class ConversationsService {
         },
       },
       { $unwind: { path: '$settings', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'messages',
+          let: {
+            conversationId: '$conversation._id',
+            currentUser: userObjectId,
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$conversationId', '$$conversationId'] },
+                    { $eq: ['$senderId', '$$currentUser'] },
+                    {
+                      $not: {
+                        $in: [
+                          '$$currentUser',
+                          { $ifNull: ['$deletedFor', []] },
+                        ],
+                      },
+                    },
+                    { $ne: ['$recalled', true] },
+                  ],
+                },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: 'sentByCurrentUser',
+        },
+      },
 
       // Tính unreadCount
       {
@@ -1124,6 +1165,9 @@ export class ConversationsService {
             ],
           },
           otherMemberId: '$otherMemberInfo.userId',
+          hasSentMessage: {
+            $gt: [{ $size: { $ifNull: ['$sentByCurrentUser', []] } }, 0],
+          },
           lastMessage: {
             _id: '$lastMessage._id',
             senderName: {
@@ -1136,6 +1180,7 @@ export class ConversationsService {
             content: '$lastMessage.content',
             recalled: { $ifNull: ['$lastMessage.recalled', false] },
             type: '$lastMessage.type',
+            call: '$lastMessage.call',
             expired: '$lastMessage.expired',
             expiresAt: '$lastMessage.expiresAt',
           },
@@ -1150,6 +1195,13 @@ export class ConversationsService {
     return conversations.map((c) => ({
       ...c,
       otherMemberId: c?.otherMemberId?.toString?.() ?? c?.otherMemberId ?? null,
+      isStranger:
+        c?.type === ConversationType.DIRECT &&
+        !!(c?.otherMemberId?.toString?.() ?? c?.otherMemberId) &&
+        !acceptedFriendIds.has(
+          c?.otherMemberId?.toString?.() ?? c?.otherMemberId ?? '',
+        ) &&
+        !c?.hasSentMessage,
       avatar: c.avatar ? this.storageService.signFileUrl(c.avatar) : null,
     }));
   }

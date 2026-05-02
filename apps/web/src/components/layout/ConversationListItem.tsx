@@ -1,9 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
-import { cn } from "@/lib/utils";
-import { formatMessageTime } from "@/utils/format-message-time..util";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Users } from "lucide-react";
 import { MdGroups, MdNotificationsOff } from "react-icons/md";
 import {
   autoUpdate,
@@ -13,6 +10,16 @@ import {
   shift,
   useFloating,
 } from "@floating-ui/react";
+import { PiPushPinFill } from "react-icons/pi";
+import { IoCheckmark } from "react-icons/io5";
+import { CiImageOn } from "react-icons/ci";
+import { RiVideoLine } from "react-icons/ri";
+import { LuSticker } from "react-icons/lu";
+import { HiMiniLink } from "react-icons/hi2";
+import { GoFileSymlinkFile } from "react-icons/go";
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { cn } from "@/lib/utils";
+import { formatMessageTime } from "@/utils/format-message-time..util";
 import {
   pinConversation,
   unpinConversation,
@@ -31,16 +38,8 @@ import {
   removeConversation,
   setUnreadCount,
 } from "@/store/slices/conversationSlice";
-import { PiPushPinFill } from "react-icons/pi";
-import { IoCheckmark } from "react-icons/io5";
-import { CiImageOn } from "react-icons/ci";
-import { RiVideoLine } from "react-icons/ri";
-import { LuSticker } from "react-icons/lu";
-import { HiMiniLink } from "react-icons/hi2";
-import { GoFileSymlinkFile } from "react-icons/go";
 import { useSocket } from "@/contexts/SocketContext";
 import { getAvatarData, getColorByName } from "@/utils/avatar-utils";
-import { Users } from "lucide-react";
 import type {
   ConversationCategory,
   ConversationItemType,
@@ -60,7 +59,44 @@ const CATEGORY_STYLE = {
   friends: "bg-purple-500 before:bg-purple-500",
   later: "bg-yellow-500 before:bg-yellow-500",
   colleague: "bg-blue-500 before:bg-blue-500",
+} as const;
+
+const CATEGORY_LABEL: Record<Exclude<ConversationCategory, null>, string> = {
+  customer: "Khách hàng",
+  family: "Gia đình",
+  work: "Công việc",
+  friends: "Bạn bè",
+  later: "Trả lời sau",
+  colleague: "Đồng nghiệp",
 };
+
+const CATEGORY_SHORT: Record<Exclude<ConversationCategory, null>, string> = {
+  customer: "KH",
+  family: "GĐ",
+  work: "CV",
+  friends: "BB",
+  later: "Sau",
+  colleague: "ĐN",
+};
+
+const CATEGORY_DOT: Record<Exclude<ConversationCategory, null>, string> = {
+  customer: "bg-red-500",
+  family: "bg-green-500",
+  work: "bg-orange-500",
+  friends: "bg-purple-500",
+  later: "bg-yellow-500",
+  colleague: "bg-blue-500",
+};
+
+const CATEGORY_VALUES: Exclude<ConversationCategory, null>[] = [
+  "customer",
+  "family",
+  "work",
+  "friends",
+  "later",
+  "colleague",
+];
+
 const getIsExpired = (expired?: boolean, expiresAt?: string | null) => {
   if (expired) return true;
   if (!expiresAt) return false;
@@ -80,52 +116,52 @@ const ConversationListItem = ({
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
+  const { socket, markAsRead, markAsUnread } = useSocket();
   const [hoverMenu, setHoverMenu] = useState<string | null>(null);
   const [isLastMessageExpired, setIsLastMessageExpired] = useState(() =>
-    getIsExpired(conversation.lastMessage?.expired, conversation.lastMessage?.expiresAt),
+    getIsExpired(
+      conversation.lastMessage?.expired,
+      conversation.lastMessage?.expiresAt,
+    ),
   );
-  const { socket } = useSocket();
 
   const closeSubMenu = () => setHoverMenu(null);
   const isDirect = conversation.type === "DIRECT";
 
-  const { markAsRead, markAsUnread } = useSocket(); // ✅ Lấy từ context
-  const handleConversationClick = useCallback(async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleConversationClick = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    // Chuyển hướng đến conversation
-    navigate(`/conversation/${conversation.conversationId}`);
+      navigate(`/conversation/${conversation.conversationId}`);
 
-    // ✅ Nếu có tin nhắn chưa đọc, đánh dấu đã đọc
-    if (conversation.unreadCount > 0 && user?.userId && socket) {
-      console.log(`📖 Marking conversation ${conversation.conversationId} as read`);
-
-      // Optimistic update
-      dispatch(
-        setUnreadCount({
-          conversationId: conversation.conversationId,
-          unreadCount: 0,
-        })
-      );
-
-      try {
-        await markAsRead({
-          userId: user.userId,
-          conversationId: conversation.conversationId,
-        });
-      } catch (error) {
-        console.error("Failed to mark as read:", error);
-        // Rollback nếu có lỗi
+      if (conversation.unreadCount > 0 && user?.userId && socket) {
         dispatch(
           setUnreadCount({
             conversationId: conversation.conversationId,
-            unreadCount: conversation.unreadCount,
-          })
+            unreadCount: 0,
+          }),
         );
+
+        try {
+          await markAsRead({
+            userId: user.userId,
+            conversationId: conversation.conversationId,
+          });
+        } catch (error) {
+          console.error("Failed to mark as read:", error);
+          dispatch(
+            setUnreadCount({
+              conversationId: conversation.conversationId,
+              unreadCount: conversation.unreadCount,
+            }),
+          );
+        }
       }
-    }
-  }, [conversation, user, socket, markAsRead, dispatch, navigate]);
+    },
+    [conversation, dispatch, markAsRead, navigate, socket, user],
+  );
+
   const handleMarkUnread = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -136,23 +172,20 @@ const ConversationListItem = ({
     const prevUnreadCount = conversation.unreadCount;
     const isCurrentlyUnread = prevUnreadCount > 0;
 
-    // ✅ Optimistic update
     dispatch(
       setUnreadCount({
         conversationId: conversation.conversationId,
         unreadCount: isCurrentlyUnread ? 0 : 1,
-      })
+      }),
     );
 
     try {
       if (isCurrentlyUnread) {
-        console.log("📖 Marking as read...");
         await markAsRead({
           userId: user.userId,
           conversationId: conversation.conversationId,
         });
       } else {
-        console.log("📝 Marking as unread...");
         await markAsUnread({
           userId: user.userId,
           conversationId: conversation.conversationId,
@@ -164,7 +197,7 @@ const ConversationListItem = ({
         setUnreadCount({
           conversationId: conversation.conversationId,
           unreadCount: prevUnreadCount,
-        })
+        }),
       );
     }
   };
@@ -215,15 +248,70 @@ const ConversationListItem = ({
     return () => window.clearTimeout(timeoutId);
   }, [conversation.lastMessage]);
 
-  const getPreviewContent = useMemo(() => {
+  const previewData = useMemo(() => {
     const lastMsg = conversation.lastMessage;
-    if (!lastMsg) return "";
-    if (lastMsg.recalled) return "Tin nhắn đã bị thu hồi";
-    if (isLastMessageExpired) return "Tin nhắn đã hết hạn";
-    const content = lastMsg.content;
-    if (!content) return "";
 
-    let icon = null;
+    if (!lastMsg?._id) {
+      return {
+        showSender: false,
+        content: "Chưa có tin nhắn",
+      };
+    }
+
+    if (lastMsg.recalled) {
+      return {
+        showSender: true,
+        content: "Tin nhắn đã bị thu hồi",
+      };
+    }
+
+    if (isLastMessageExpired) {
+      return {
+        showSender: true,
+        content: "Tin nhắn đã hết hạn",
+      };
+    }
+
+    if (lastMsg.call?.type) {
+      const isVideo = lastMsg.call.type === "VIDEO";
+      const isMe = lastMsg.senderName === "Bạn";
+      let text = isMe
+        ? `Cuộc gọi ${isVideo ? "video" : "thoại"} đi`
+        : `Cuộc gọi ${isVideo ? "video" : "thoại"} đến`;
+
+      switch (lastMsg.call.status) {
+        case "MISSED":
+          text = isMe ? "Bạn đã gọi nhỡ" : "Cuộc gọi nhỡ";
+          break;
+        case "REJECTED":
+          text = isMe ? "Cuộc gọi bị từ chối" : "Bạn đã từ chối cuộc gọi";
+          break;
+        case "BUSY":
+          text = "Máy bận";
+          break;
+        case "ENDED":
+        case "ACCEPTED":
+          text = `Cuộc gọi ${isVideo ? "video" : "thoại"}`;
+          break;
+        default:
+          break;
+      }
+
+      return {
+        showSender: false,
+        content: text,
+      };
+    }
+
+    const content = lastMsg.content;
+    if (!content) {
+      return {
+        showSender: false,
+        content: "Tin nhắn mới",
+      };
+    }
+
+    let icon: React.ReactNode = null;
     let text = "";
 
     if (content.text && /https?:\/\//.test(content.text)) {
@@ -253,12 +341,19 @@ const ConversationListItem = ({
       text = content.text;
     }
 
-    return (
-      <span className="flex items-center gap-1 truncate">
-        {icon}
-        <span className="truncate">{text}</span>
-      </span>
-    );
+    if (!text) {
+      text = "Tin nhắn mới";
+    }
+
+    return {
+      showSender: true,
+      content: (
+        <span className="flex items-center gap-1 truncate">
+          {icon}
+          <span className="truncate">{text}</span>
+        </span>
+      ),
+    };
   }, [conversation.lastMessage, isLastMessageExpired]);
 
   const handlePinConversation = async (e: React.MouseEvent) => {
@@ -335,10 +430,10 @@ const ConversationListItem = ({
       duration === 0
         ? await unmuteConversation(user?.userId, conversation.conversationId)
         : await muteConversation(
-          user?.userId,
-          conversation.conversationId,
-          duration,
-        );
+            user?.userId,
+            conversation.conversationId,
+            duration,
+          );
     } catch (error) {
       dispatch(
         updateConversationSetting({
@@ -382,43 +477,12 @@ const ConversationListItem = ({
       console.error("Set category failed:", error);
     }
   };
-  useEffect(() => {
-    const lastMessage = conversation.lastMessage;
 
-    if (lastMessage?.expired) {
-      setIsLastMessageExpired(true);
-      return;
-    }
-
-    if (!lastMessage?.expiresAt) {
-      setIsLastMessageExpired(false);
-      return;
-    }
-
-    const expiresAtMs = new Date(lastMessage.expiresAt).getTime();
-    if (Number.isNaN(expiresAtMs)) {
-      setIsLastMessageExpired(Boolean(lastMessage.expired));
-      return;
-    }
-
-    const remainingMs = expiresAtMs - Date.now();
-    if (remainingMs <= 0) {
-      setIsLastMessageExpired(true);
-      return;
-    }
-
-    setIsLastMessageExpired(false);
-    const timeoutId = window.setTimeout(
-      () => setIsLastMessageExpired(true),
-      remainingMs + 50,
-    );
-
-    return () => window.clearTimeout(timeoutId);
-  }, [conversation.lastMessage]);
   const handleDeleteConversation = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setOpenMenu(null);
+
     try {
       await deleteConversation(user?.userId, conversation.conversationId);
       dispatch(removeConversation(conversation.conversationId));
@@ -462,28 +526,28 @@ const ConversationListItem = ({
     <div
       onClick={handleConversationClick}
       className={cn(
-        "flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors group mt-2 mx-2 rounded-lg",
+        "group mx-2 mt-2 flex cursor-pointer items-center gap-3 rounded-lg px-4 py-3 transition-colors",
         isActive ? "bg-[#e5efff]" : "hover:bg-[#f3f5f6]",
       )}
     >
-      <Avatar className="w-12 h-12 shrink-0">
+      <Avatar className="h-12 w-12 shrink-0">
         <AvatarImage src={conversation.avatar} alt={conversation.name} />
-        <AvatarFallback 
-          className="text-white font-bold"
+        <AvatarFallback
+          className="font-bold text-white"
           style={{ backgroundColor: getColorByName(conversation.name) }}
         >
           {(() => {
             const { initials, isGroupIcon } = getAvatarData(conversation.name);
-            return isGroupIcon ? <Users className="w-6 h-6" /> : initials;
+            return isGroupIcon ? <Users className="h-6 w-6" /> : initials;
           })()}
         </AvatarFallback>
       </Avatar>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-0.5">
+      <div className="min-w-0 flex-1">
+        <div className="mb-0.5 flex items-start justify-between gap-2">
           <h4
             className={cn(
-              "text-sm truncate flex gap-2 items-center",
+              "flex min-w-0 flex-1 items-center gap-2 text-sm",
               conversation.unreadCount > 0
                 ? "font-semibold text-black"
                 : "font-normal text-gray-900",
@@ -491,28 +555,26 @@ const ConversationListItem = ({
             )}
           >
             {conversation.type === "GROUP" && (
-              <MdGroups size={18} color="gray" />
+              <MdGroups size={18} color="gray" className="shrink-0" />
             )}
-            <span className="flex items-center gap-2 truncate">
-              {conversation.name}
-            </span>
+            <span className="min-w-0 truncate">{conversation.name}</span>
             {conversation.pinned && (
-              <PiPushPinFill className="text-blue-500 w-3 h-3 ml-1" />
+              <PiPushPinFill className="ml-1 h-3 w-3 shrink-0 text-blue-500" />
             )}
           </h4>
 
-          <div className="relative flex items-center">
+          <div className="relative flex w-[54px] shrink-0 items-start justify-end">
             {conversation.muted && (
-              <MdNotificationsOff className="text-gray-400 w-5 h-5 mr-1" />
+              <MdNotificationsOff className="mr-1 h-5 w-5 shrink-0 text-gray-400" />
             )}
 
-            <div className="flex flex-col items-end">
-              <span className="text-[11px] text-gray-400 transition-opacity group-hover:opacity-0">
+            <div className="flex min-w-0 flex-col items-end">
+              <span className="max-w-full break-words text-right text-[11px] leading-3 text-gray-400 transition-opacity group-hover:opacity-0">
                 {formatMessageTime(conversation.lastMessageAt)}
               </span>
 
               {conversation.unreadCount > 0 && (
-                <span span className="mt-1 bg-red-500 text-white text-[10px] px-2 py-[1px] rounded-full">
+                <span className="mt-1 rounded-full bg-red-500 px-2 py-[1px] text-[10px] text-white">
                   {conversation.unreadCount > 99
                     ? "99+"
                     : conversation.unreadCount}
@@ -531,7 +593,7 @@ const ConversationListItem = ({
                       : conversation.conversationId,
                   );
                 }}
-                className="absolute top-1/2 right-0 -translate-y-1/2 p-1 rounded-full hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity bg-transparent"
+                className="absolute right-0 top-1/2 -translate-y-1/2 rounded-full bg-transparent p-1 opacity-0 transition-opacity hover:bg-gray-200 group-hover:opacity-100"
               >
                 <MoreHorizontal size={16} className="text-gray-500" />
               </button>
@@ -541,12 +603,12 @@ const ConversationListItem = ({
                   <div
                     ref={refs.setFloating}
                     style={floatingStyles}
-                    className="z-50 w-56 bg-white rounded-xl shadow-lg border text-sm"
+                    className="z-50 w-56 rounded-xl border bg-white text-sm shadow-lg"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div
                       onMouseEnter={closeSubMenu}
-                      className="p-3 hover:bg-gray-100 cursor-pointer"
+                      className="cursor-pointer p-3 hover:bg-gray-100"
                       onClick={handlePinConversation}
                     >
                       {conversation.pinned
@@ -557,7 +619,7 @@ const ConversationListItem = ({
                     <div
                       ref={subRefs.setReference}
                       onMouseEnter={() => setHoverMenu("category")}
-                      className="p-3 hover:bg-gray-100 cursor-pointer flex justify-between relative"
+                      className="relative flex cursor-pointer justify-between p-3 hover:bg-gray-100"
                     >
                       Phân loại <span>›</span>
                       {hoverMenu === "category" && (
@@ -566,72 +628,40 @@ const ConversationListItem = ({
                           style={subFloatingStyles}
                           onMouseEnter={() => setHoverMenu("category")}
                           onMouseLeave={closeSubMenu}
-                          className="w-56 bg-white rounded-xl shadow-lg border text-sm"
+                          className="w-56 rounded-xl border bg-white text-sm shadow-lg"
                         >
-                          {(
-                            [
-                              "customer",
-                              "family",
-                              "work",
-                              "friends",
-                              "later",
-                              "colleague",
-                            ] as ConversationCategory[]
-                          ).map((cat) => {
-                            const colorMap: Record<
-                              ConversationCategory,
-                              string
-                            > = {
-                              customer: "bg-red-500",
-                              family: "bg-green-500",
-                              work: "bg-orange-500",
-                              friends: "bg-purple-500",
-                              later: "bg-yellow-500",
-                              colleague: "bg-blue-500",
-                            };
-                            const labelMap: Record<
-                              ConversationCategory,
-                              string
-                            > = {
-                              customer: "Khách hàng",
-                              family: "Gia đình",
-                              work: "Công việc",
-                              friends: "Bạn bè",
-                              later: "Trả lời sau",
-                              colleague: "Đồng nghiệp",
-                            };
-                            return (
-                              <div
-                                key={cat}
-                                onClick={(e) => handleCategory(cat, e)}
-                                className="p-3 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className={cn(
-                                      "w-3 h-3 rounded-sm",
-                                      colorMap[cat],
-                                    )}
-                                  ></span>
-                                  {labelMap[cat]}
-                                </div>
-                                {conversation.category === cat && (
-                                  <IoCheckmark className="text-blue-500 w-4 h-4" />
-                                )}
+                          {CATEGORY_VALUES.map((cat) => (
+                            <div
+                              key={cat}
+                              onClick={(e) => handleCategory(cat, e)}
+                              className="flex cursor-pointer items-center justify-between p-3 hover:bg-gray-100"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={cn(
+                                    "h-3 w-3 rounded-sm",
+                                    CATEGORY_DOT[cat],
+                                  )}
+                                />
+                                {CATEGORY_LABEL[cat]}
                               </div>
-                            );
-                          })}
+                              {conversation.category === cat && (
+                                <IoCheckmark className="h-4 w-4 text-blue-500" />
+                              )}
+                            </div>
+                          ))}
 
-                          <div className="border-t"></div>
-                          <div className="p-3 hover:bg-gray-100 cursor-pointer">
+                          <div className="border-t" />
+                          <div className="cursor-pointer p-3 hover:bg-gray-100">
                             Quản lý thẻ phân loại
                           </div>
                         </div>
                       )}
                     </div>
+
                     <div
                       onMouseEnter={closeSubMenu}
-                      className="p-3 hover:bg-gray-100 cursor-pointer"
+                      className="cursor-pointer p-3 hover:bg-gray-100"
                       onClick={handleMarkUnread}
                     >
                       {conversation.unreadCount > 0
@@ -639,29 +669,28 @@ const ConversationListItem = ({
                         : "Đánh dấu chưa đọc"}
                     </div>
 
-                    <div className="border-t my-1"></div>
+                    <div className="my-1 border-t" />
 
                     {isDirect && (
                       <div
                         onMouseEnter={closeSubMenu}
-                        className="p-3 hover:bg-gray-100 cursor-pointer"
+                        className="cursor-pointer p-3 hover:bg-gray-100"
                       >
                         Thêm vào nhóm
                       </div>
                     )}
 
-                    {/* MUTE */}
                     {!conversation.muted ? (
                       <div
                         onMouseEnter={() => setHoverMenu("mute")}
-                        className="p-3 hover:bg-gray-100 cursor-pointer flex justify-between relative"
+                        className="relative flex cursor-pointer justify-between p-3 hover:bg-gray-100"
                       >
                         Tắt thông báo <span>›</span>
                         {hoverMenu === "mute" && (
                           <div
                             onMouseEnter={() => setHoverMenu("mute")}
                             onMouseLeave={closeSubMenu}
-                            className="absolute left-full ml-1 top-0 w-48 bg-white rounded-xl shadow-lg border"
+                            className="absolute left-full top-0 ml-1 w-48 rounded-xl border bg-white shadow-lg"
                           >
                             {[
                               { label: "Trong 1 giờ", duration: 60 },
@@ -671,7 +700,7 @@ const ConversationListItem = ({
                             ].map((opt) => (
                               <div
                                 key={opt.label}
-                                className="p-3 hover:bg-gray-100 cursor-pointer"
+                                className="cursor-pointer p-3 hover:bg-gray-100"
                                 onClick={(e) => handleMute(opt.duration, e)}
                               >
                                 {opt.label}
@@ -683,7 +712,7 @@ const ConversationListItem = ({
                     ) : (
                       <div
                         onMouseEnter={closeSubMenu}
-                        className="p-3 hover:bg-gray-100 cursor-pointer"
+                        className="cursor-pointer p-3 hover:bg-gray-100"
                         onClick={(e) => handleMute(0, e)}
                       >
                         Bật lại thông báo
@@ -692,22 +721,19 @@ const ConversationListItem = ({
 
                     <div
                       onMouseEnter={closeSubMenu}
-                      className="p-3 hover:bg-gray-100 cursor-pointer"
+                      className="cursor-pointer p-3 hover:bg-gray-100"
                       onClick={handleHideConversation}
                     >
-                      {conversation.hidden
-                        ? "Bỏ ẩn trò chuyện"
-                        : "Ẩn trò chuyện"}
+                      {conversation.hidden ? "Bỏ ẩn trò chuyện" : "Ẩn trò chuyện"}
                     </div>
 
-                    {/* DELETE TIMER */}
                     <div
                       onMouseEnter={() => setHoverMenu("delete")}
-                      className="p-3 hover:bg-gray-100 cursor-pointer flex justify-between relative"
+                      className="relative flex cursor-pointer justify-between p-3 hover:bg-gray-100"
                     >
                       Tin nhắn tự xóa <span>›</span>
                       {hoverMenu === "delete" && (
-                        <div className="absolute left-full ml-1 top-0 w-44 bg-white rounded-xl shadow-lg border">
+                        <div className="absolute left-full top-0 ml-1 w-44 rounded-xl border bg-white shadow-lg">
                           {[
                             { label: "1 ngày", days: 1 },
                             { label: "7 ngày", days: 7 },
@@ -715,12 +741,12 @@ const ConversationListItem = ({
                           ].map((opt) => (
                             <div
                               key={opt.label}
-                              className="p-3 hover:bg-gray-100 cursor-pointer flex justify-between"
+                              className="flex cursor-pointer justify-between p-3 hover:bg-gray-100"
                               onClick={(e) => handleExpire(opt.days, e)}
                             >
                               {opt.label}
                               {expireDays === opt.days && (
-                                <IoCheckmark className="text-blue-500 w-4 h-4" />
+                                <IoCheckmark className="h-4 w-4 text-blue-500" />
                               )}
                             </div>
                           ))}
@@ -728,11 +754,11 @@ const ConversationListItem = ({
                       )}
                     </div>
 
-                    <div className="border-t my-1"></div>
+                    <div className="my-1 border-t" />
 
                     <div
                       onMouseEnter={closeSubMenu}
-                      className="p-3 text-red-500 hover:bg-gray-100 cursor-pointer"
+                      className="cursor-pointer p-3 text-red-500 hover:bg-gray-100"
                       onClick={handleDeleteConversation}
                     >
                       Xóa hội thoại
@@ -740,7 +766,7 @@ const ConversationListItem = ({
 
                     <div
                       onMouseEnter={closeSubMenu}
-                      className="p-3 hover:bg-gray-100 cursor-pointer"
+                      className="cursor-pointer p-3 hover:bg-gray-100"
                     >
                       Báo xấu
                     </div>
@@ -751,50 +777,42 @@ const ConversationListItem = ({
           </div>
         </div>
 
-        {/* Dòng hiển thị Tin nhắn cuối cùng và Thẻ tag */}
-        <p className="text-[13px] text-gray-500 truncate flex items-center gap-2 mt-0.5">
+        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[13px] text-gray-500">
           {conversation.category && (
             <span
               className={cn(
-                "relative inline-flex items-center px-2 py-[2px] text-[10px] font-medium text-white rounded-l-md",
+                "relative inline-flex shrink-0 items-center rounded-l-md px-2 py-[2px] text-[10px] font-medium text-white",
                 "before:absolute before:right-[-6px] before:top-0 before:h-full before:w-3 before:skew-x-[-30deg]",
                 CATEGORY_STYLE[conversation.category],
               )}
             >
-              {
-                {
-                  customer: "KH",
-                  family: "GĐ",
-                  work: "CV",
-                  friends: "BB",
-                  later: "Sau",
-                  colleague: "ĐN",
-                }[conversation.category]
-              }
+              {CATEGORY_SHORT[conversation.category]}
             </span>
           )}
-          <span className="text-[13px] text-gray-500 flex items-center gap-1 truncate">
-            {/* sender */}
+          <span className="flex min-w-0 items-center gap-1 text-[13px] text-gray-500">
             <span className="shrink-0">
-              {conversation.type === "PRIVATE" &&
-                conversation.lastMessage?.senderName !== "Bạn"
+              {!previewData.showSender
                 ? ""
-                : `${conversation.lastMessage?.senderName ?? ""}: `}
+                : conversation.type === "PRIVATE" &&
+                    conversation.lastMessage?.senderName !== "Bạn"
+                  ? ""
+                  : `${conversation.lastMessage?.senderName ?? ""}: `}
             </span>
 
-            {/* message content */}
             <span
               className={cn(
-                "flex items-center gap-1 truncate",
-                conversation.unreadCount > 0 ? "font-semibold text-gray-900" : "text-gray-500"
+                "flex min-w-0 items-center gap-1 truncate",
+                conversation.unreadCount > 0
+                  ? "font-semibold text-gray-900"
+                  : "text-gray-500",
               )}
             >
-              {getPreviewContent}
+              {previewData.content}
             </span>
           </span>
-        </p>
+        </div>
       </div>
-    </div >
+    </div>
   );
 };
 

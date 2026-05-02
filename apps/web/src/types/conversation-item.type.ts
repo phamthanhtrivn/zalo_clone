@@ -4,6 +4,7 @@ export interface ConversationItemType {
   name: string;
   avatar: string;
   otherMemberId?: string | null;
+  isStranger?: boolean;
   muted: boolean;
   mutedUntil?: string | null;
   pinned: boolean;
@@ -15,12 +16,17 @@ export interface ConversationItemType {
     _id: string;
     senderName: string;
     content: {
-      text: string;
-      icon: string;
-      file: File;
+      text?: string;
+      icon?: string;
+      files?: File[];
     };
     recalled: boolean;
     type?: string;
+    call?: {
+      type?: "VIDEO" | "VOICE";
+      status?: string;
+      duration?: number | null;
+    };
     expired?: boolean;
     expiresAt?: string | null;
   };
