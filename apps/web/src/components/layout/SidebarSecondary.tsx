@@ -62,10 +62,10 @@ export const SidebarSecondary = () => {
   };
 
   return (
-    <aside className="w-86 bg-white border-r border-[#e5e7eb] flex flex-col shrink-0 z-10 transition-all duration-300">
+    <aside className="w-86 min-h-0 bg-white border-r border-[#e5e7eb] flex flex-col shrink-0 z-10 transition-all duration-300">
       {isContactsRoute ? (
         /* Contacts Menu Sidebar */
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full min-h-0">
           <SidebarSearch
             keyword={searchKeyword}
             setKeyword={setSearchKeyword}
@@ -77,14 +77,14 @@ export const SidebarSecondary = () => {
           {!isSearching ? (
             <ContactMenu />
           ) : (
-            <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
+            <div className="sidebar-scrollbar flex-1 min-h-0 overflow-y-auto custom-scrollbar bg-white">
               <SearchResultList results={searchResults} keyword={searchKeyword} onSelect={handleSelectResult} />
             </div>
           )}
         </div>
       ) : (
         /* Chat List Sidebar (Default) */
-        <div className="flex flex-col h-full relative">
+        <div className="flex flex-col h-full min-h-0 relative">
           <SidebarSearch
             keyword={searchKeyword}
             setKeyword={setSearchKeyword}
@@ -98,7 +98,7 @@ export const SidebarSecondary = () => {
             <ConversationList />
           ) : (
             /* Search Results sẽ hiển thị thay thế ConversationList */
-            <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
+            <div className="sidebar-scrollbar flex-1 min-h-0 overflow-y-auto custom-scrollbar bg-white">
               <SearchResultList results={searchResults} keyword={searchKeyword} onSelect={handleSelectResult} />
             </div>
           )}
