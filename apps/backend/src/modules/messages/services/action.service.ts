@@ -314,21 +314,40 @@ export class MessagesActionService {
       let fileToUpload: Express.Multer.File = audioFile;
 
       if (audioFile.mimetype === 'audio/webm') {
-        const outputPath = audioFile.path.replace(/\.webm$/, '.m4a');
+        const tempInputPath = path.join(
+          process.cwd(),
+          'tmp',
+          `${Date.now()}.webm`,
+        );
 
-        await this.convertToM4A(audioFile.path, outputPath);
+        const tempOutputPath = tempInputPath.replace('.webm', '.m4a');
+
+        // đảm bảo folder tmp tồn tại
+        if (!fs.existsSync(path.dirname(tempInputPath))) {
+          fs.mkdirSync(path.dirname(tempInputPath), { recursive: true });
+        }
+
+        // ghi buffer ra file
+        fs.writeFileSync(tempInputPath, audioFile.buffer);
+
+        // convert
+        await this.convertToM4A(tempInputPath, tempOutputPath);
+
+        // đọc lại file m4a
+        const m4aBuffer = fs.readFileSync(tempOutputPath);
 
         fileToUpload = {
           ...audioFile,
-          path: outputPath,
-          filename: path.basename(outputPath),
+          buffer: m4aBuffer,
+          originalname:
+            tempOutputPath.split('/').pop() || `voice-${Date.now()}.m4a`,
           mimetype: 'audio/mp4',
         };
 
-        // xoá file webm gốc
-        fs.unlinkSync(audioFile.path);
+        // cleanup
+        fs.unlinkSync(tempInputPath);
+        fs.unlinkSync(tempOutputPath);
       }
-
       const uploaded = await this.storageService.uploadFile(fileToUpload);
 
       const formattedContent: any = {
