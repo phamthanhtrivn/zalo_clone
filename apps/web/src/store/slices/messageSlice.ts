@@ -225,6 +225,24 @@ const messageSlice = createSlice({
                 }
             }
         },
+        updateCallStatus(
+            state,
+            action: PayloadAction<{
+                conversationId: string;
+                messageId: string;
+                status: string;
+                duration?: number;
+            }>
+        ) {
+            const { conversationId, messageId, status, duration } = action.payload;
+            const messages = state.messagesByConversation[conversationId];
+            if (!messages) return;
+            const msg = messages.find((m) => m._id === messageId);
+            if (msg && msg.call) {
+                msg.call.status = status as any;
+                if (duration !== undefined) msg.call.duration = duration;
+            }
+        },
     },
 });
 
@@ -240,6 +258,7 @@ export const {
     updateMessagesExpired,
     updatePoll,
     addPollOption,
+    updateCallStatus,
 } = messageSlice.actions;
 
 export default messageSlice.reducer;

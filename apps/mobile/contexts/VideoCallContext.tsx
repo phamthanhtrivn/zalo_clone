@@ -6,26 +6,66 @@ import React, {
   useRef,
   useCallback,
 } from "react";
+import {
+  Alert
+} from "react-native";
+import { Camera } from "expo-camera";
+import { Audio } from "expo-av";
 import { useSocket } from "./SocketContext";
 import { useAppSelector } from "@/store/store";
-import { Audio } from "expo-av";
 import { messageService } from "@/services/message.service";
+
+// Safe WebRTC Import for Expo Go compatibility
+let WebRTC: any = {};
+try {
+  WebRTC = require("react-native-webrtc");
+} catch (e) {
+  console.warn("WebRTC native module not found. Use Development Build to enable video calls.");
+}
+
+const {
+  RTCPeerConnection,
+  RTCIceCandidate,
+  RTCSessionDescription,
+  mediaDevices,
+} = WebRTC;
+
+const isWebRTCSupported = !!RTCPeerConnection;
+
+export type CallSessionState = 'IDLE' | 'CALLING' | 'RINGING' | 'CONNECTED' | 'ENDED';
+
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+  ],
+};
 
 const VideoCallContext = createContext<any>(null);
 
-export const VideoCallProvider = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => {
+export const VideoCallProvider = ({ children }: { children: React.ReactNode }) => {
   const { socket } = useSocket();
-  const user = useAppSelector((state) => state.auth.user);
+  const currentUser = useAppSelector((state) => state.auth.user);
 
-  const [callData, setCallData] = useState<any>(null);
-  const [isCalling, setIsCalling] = useState(false);
-  const [isReceiving, setIsReceiving] = useState(false);
-  const [videoAccepted, setVideoAccepted] = useState(false);
+  const [sessionState, setSessionState] = useState<CallSessionState>('IDLE');
+  const sessionStateRef = useRef<CallSessionState>('IDLE');
+
+  const [videoCallData, setVideoCallData] = useState<any>({
+    isReceiving: false,
+    from: "",
+  });
+
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+
+  const peerRef = useRef<RTCPeerConnection | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
+
+  const updateCallState = useCallback((newState: CallSessionState) => {
+    setSessionState(newState);
+    sessionStateRef.current = newState;
+    console.log(`[Mobile-CallState] Transition to: ${newState}`);
+  }, []);
 
   const stopSound = async () => {
     if (soundRef.current) {
@@ -51,166 +91,267 @@ export const VideoCallProvider = ({
     } catch (e) {}
   };
 
-  const resetCall = useCallback(() => {
-    setCallData(null);
-    setIsCalling(false);
-    setIsReceiving(false);
-    setVideoAccepted(false);
+  const stopMediaStream = useCallback(() => {
+    if (localStream) {
+      localStream.getTracks().forEach((track) => track.stop());
+      setLocalStream(null);
+    }
+    setRemoteStream(null);
+  }, [localStream]);
+
+  const cleanupCall = useCallback(() => {
+    stopMediaStream();
     stopSound();
-  }, []);
+    if (peerRef.current) {
+      peerRef.current.close();
+      peerRef.current = null;
+    }
+    setVideoCallData({ isReceiving: false, from: "" });
+  }, [stopMediaStream]);
 
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleSignal = (data: any) => {
-      // LUỒNG NHẬN CUỘC GỌI TỪ WEB (OFFER)
-      if (data.signal?.type === "offer") {
-        // Kiểm tra: Nếu mình KHÔNG phải người gọi thì mới hiện màn hình và update RINGING
-        const myId = String(user?.userId || user?._id);
-        if (String(data.from) !== myId) {
-          setCallData(data);
-          setIsReceiving(true);
-          playSound("incoming");
-
-          // FIX QUAN TRỌNG: Truyền Object { ... } thay vì 3 tham số rời
-          if (data.messageId) {
-            messageService
-              .updateCallStatus({
-                messageId: data.messageId,
-                status: "RINGING",
-                conversationId: data.conversationId,
-              })
-              .catch((err) => console.log("Lỗi update RINGING:", err.message));
-          }
-        }
+  const leaveCall = useCallback((reason = "ENDED", isRemote = false) => {
+    if (videoCallData.from || videoCallData.to) {
+      const partnerId = videoCallData.isReceiving ? videoCallData.from : videoCallData.to;
+      
+      if (!isRemote) {
+        const event = (reason === "REJECTED") ? "call:reject" : "call:end";
+        socket?.emit(event, {
+          to: partnerId,
+          conversationId: videoCallData.conversationId,
+          messageId: videoCallData.messageId,
+          status: (sessionStateRef.current === 'CALLING' && !isRemote) ? 'MISSED' : reason,
+        });
       }
+    }
 
-      // FIX CHO LUỒNG MOBILE GỌI WEB: Khi Web nhấn "Trả lời" (ANSWER)
-      if (data.signal?.type === "answer") {
-        console.log("Web đã trả lời Mobile, chuyển sang Đàm thoại");
-        setVideoAccepted(true);
-        setIsCalling(false);
-        stopSound();
-        // Cập nhật thông tin đối phương (Web) để hiện tên
-        setCallData((prev: any) => ({
-          ...prev,
-          fromName: data.fromName || prev?.toName || "Người dùng Web",
-        }));
+    cleanupCall();
+    updateCallState('ENDED');
+    setTimeout(() => {
+      if (sessionStateRef.current === 'ENDED') {
+        updateCallState('IDLE');
+      }
+    }, 2000);
+  }, [socket, videoCallData, cleanupCall, updateCallState]);
+
+  const createPeerConnection = useCallback((partnerId: string) => {
+    const pc = new RTCPeerConnection(ICE_SERVERS);
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket?.emit("call:signal", {
+          to: partnerId,
+          signal: event.candidate,
+          conversationId: videoCallData.conversationId,
+        });
       }
     };
 
-    socket.on("call:signal", handleSignal);
-    socket.on("call:rejected", resetCall);
-    socket.on("call:ended", resetCall);
-    return () => {
-      socket.off("call:signal");
-      socket.off("call:rejected");
-      socket.off("call:ended");
+    pc.ontrack = (event) => {
+      if (event.streams && event.streams[0]) {
+        setRemoteStream(event.streams[0]);
+      }
     };
-  }, [socket, resetCall]);
 
-  // HÀM GỌI ĐI
-  const startCall = async (
-    targetId: string,
-    targetName: string,
-    convId: string,
-    type: string,
-  ) => {
-    setIsCalling(true);
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === "disconnected" || pc.connectionState === "failed" || pc.connectionState === "closed") {
+        leaveCall("ENDED", true);
+      }
+    };
+
+    peerRef.current = pc;
+    return pc;
+  }, [socket, videoCallData.conversationId, leaveCall]);
+
+  const startCall = async (targetId: string, convId: string, type: string, targetName?: string, targetAvatar?: string) => {
+    if (!isWebRTCSupported) {
+      Alert.alert(
+        "Không hỗ trợ",
+        "Tính năng gọi Video yêu cầu Development Build (Native Module). Vui lòng chạy 'npm run android' hoặc 'npm run ios' thay vì Expo Go.",
+        [{ text: "Đã hiểu" }]
+      );
+      return;
+    }
+
+    const cameraStatus = await Camera.requestCameraPermissionsAsync();
+    const audioStatus = await Audio.requestPermissionsAsync();
+
+    if (cameraStatus.status !== 'granted' || audioStatus.status !== 'granted') {
+      console.warn("Permissions not granted");
+      return;
+    }
+
+    updateCallState('CALLING');
     playSound("dialing");
 
     try {
-      // 1. Tạo bản ghi message cuộc gọi
       const res = await messageService.createCallMessage({
         conversationId: convId,
-        senderId: user?.userId || user?._id,
+        senderId: currentUser?.userId || currentUser?._id,
         type: type.toUpperCase() as any,
       });
 
       const msgId = res.data?._id || res._id;
+      const stream = await mediaDevices.getUserMedia({
+        audio: true,
+        video: type.toUpperCase() === "VIDEO" ? { facingMode: "user" } : false,
+      });
+      setLocalStream(stream);
 
-      // 2. Signaling
-      const payload = {
+      const pc = createPeerConnection(targetId);
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const offerPayload = {
         to: targetId,
-        toName: targetName,
+        signal: offer,
         conversationId: convId,
         callType: type.toUpperCase(),
+        fromName: currentUser?.profile?.name || currentUser?.name || "Người dùng Mobile",
+        fromAvatar: currentUser?.profile?.avatarUrl || currentUser?.avatarUrl,
         messageId: msgId,
-        from: user?.userId || user?._id,
-        // Gửi fromName để Web hiện: "Hà Thanh Tuấn đang gọi..."
-        fromName: user?.profile?.name || "Người dùng Mobile",
-        // SDP giả nhưng đúng cấu trúc khởi đầu v=0 để tránh lỗi parse nghiêm trọng
-        signal: {
-          type: "offer",
-          sdp: "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n",
-        },
       };
 
-      setCallData(payload);
-      socket?.emit("call:signal", payload);
-    } catch (error) {
-      console.log("Lỗi gọi đi:", error);
-      resetCall();
-    }
-  };
-
-  // HÀM TRẢ LỜI (Mobile nghe Web)
-  const answerCall = async () => {
-    if (!callData) return;
-    setVideoAccepted(true);
-    setIsReceiving(false);
-    stopSound();
-
-    // Gửi tín hiệu về Web (kèm thông tin profile của mình)
-    socket?.emit("call:signal", {
-      to: callData.from,
-      conversationId: callData.conversationId,
-      messageId: callData.messageId,
-      fromName: user?.profile?.name || "Người dùng Mobile",
-      fromAvatar: user?.profile?.avatarUrl,
-      signal: { type: "answer", sdp: "v=0\r\no=-..." },
-    });
-
-    // FIX 2: Truyền Object vào Service
-    if (callData.messageId) {
-      messageService
-        .updateCallStatus({
-          messageId: callData.messageId,
-          status: "ACCEPTED",
-          conversationId: callData.conversationId,
-        })
-        .catch((err) => console.log("Lỗi ACCEPTED:", err.message));
-    }
-  };
-
-  const endCall = (status = "ENDED") => {
-    if (callData) {
-      const myId = String(user?.userId || user?._id);
-      const callerId = String(callData.from || "");
-      const isInitiator = myId === callerId;
-
-      const target = isInitiator ? callData.to : callData.from;
-
-      socket?.emit(status === "REJECTED" ? "call:reject" : "call:end", {
-        to: target,
-        conversationId: callData.conversationId,
-        messageId: callData.messageId,
-        status: isCalling && !videoAccepted ? "MISSED" : status,
+      setVideoCallData({
+        ...offerPayload,
+        isReceiving: false,
+        to: targetId,
+        fromName: targetName,
+        fromAvatar: targetAvatar,
       });
+
+      socket?.emit("call:signal", offerPayload);
+    } catch (error) {
+      console.error("Error starting call:", error);
+      leaveCall();
     }
-    resetCall();
   };
+
+  const answerCall = async () => {
+    if (!isWebRTCSupported) {
+      Alert.alert(
+        "Không hỗ trợ",
+        "Tính năng gọi Video yêu cầu Development Build (Native Module). Vui lòng chạy 'npm run android' hoặc 'npm run ios' thay vì Expo Go.",
+        [{ text: "Đã hiểu" }]
+      );
+      return;
+    }
+
+    if (!videoCallData.signal || sessionStateRef.current !== 'RINGING') return;
+
+    const cameraStatus = await Camera.requestCameraPermissionsAsync();
+    const audioStatus = await Audio.requestPermissionsAsync();
+
+    if (cameraStatus.status !== 'granted' || audioStatus.status !== 'granted') return;
+
+    stopSound();
+    updateCallState('CONNECTED');
+
+    try {
+      const stream = await mediaDevices.getUserMedia({
+        audio: true,
+        video: videoCallData.callType === "VIDEO" ? { facingMode: "user" } : false,
+      });
+      setLocalStream(stream);
+
+      const pc = createPeerConnection(videoCallData.from);
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+      await pc.setRemoteDescription(new RTCSessionDescription(videoCallData.signal));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      socket?.emit("call:signal", {
+        to: videoCallData.from,
+        signal: answer,
+        conversationId: videoCallData.conversationId,
+        messageId: videoCallData.messageId,
+      });
+
+      if (videoCallData.messageId) {
+        messageService.updateCallStatus({
+          messageId: videoCallData.messageId,
+          status: "ACCEPTED",
+          conversationId: videoCallData.conversationId,
+        }).catch(() => {});
+      }
+    } catch (error) {
+      console.error("Error answering call:", error);
+      leaveCall();
+    }
+  };
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleIncomingSignal = async (data: any) => {
+      const currentState = sessionStateRef.current;
+
+      // Handle ICE Candidate
+      if (data.signal?.candidate || data.signal?.sdpMid) {
+        if (peerRef.current) {
+          try {
+            await peerRef.current.addIceCandidate(new RTCIceCandidate(data.signal));
+          } catch (e) {}
+        }
+        return;
+      }
+
+      // Handle Offer
+      if (data.signal?.type === "offer") {
+        if (currentState !== 'IDLE' && currentState !== 'ENDED') {
+          socket.emit("call:respond_status", { to: data.from, status: "BUSY", conversationId: data.conversationId });
+          return;
+        }
+
+        setVideoCallData({ ...data, isReceiving: true });
+        updateCallState('RINGING');
+        playSound("incoming");
+
+        if (data.messageId) {
+          messageService.updateCallStatus({
+            messageId: data.messageId,
+            status: "RINGING",
+            conversationId: data.conversationId,
+          }).catch(() => {});
+        }
+      }
+
+      // Handle Answer
+      if (data.signal?.type === "answer") {
+        if (peerRef.current) {
+          await peerRef.current.setRemoteDescription(new RTCSessionDescription(data.signal));
+          updateCallState('CONNECTED');
+          stopSound();
+        }
+      }
+    };
+
+    const handleCallEnded = () => leaveCall("ENDED", true);
+    const handleCallRejected = () => leaveCall("REJECTED", true);
+
+    socket.on("call:signal", handleIncomingSignal);
+    socket.on("call:ended", handleCallEnded);
+    socket.on("call:rejected", handleCallRejected);
+
+    return () => {
+      socket.off("call:signal", handleIncomingSignal);
+      socket.off("call:ended", handleCallEnded);
+      socket.off("call:rejected", handleCallRejected);
+    };
+  }, [socket, leaveCall, updateCallState, createPeerConnection]);
 
   return (
     <VideoCallContext.Provider
       value={{
-        callData,
-        isCalling,
-        isReceiving,
-        videoAccepted,
+        videoCallData,
+        sessionState,
+        localStream,
+        remoteStream,
         startCall,
         answerCall,
-        endCall,
+        leaveCall,
       }}
     >
       {children}
@@ -219,228 +360,3 @@ export const VideoCallProvider = ({
 };
 
 export const useVideoCall = () => useContext(VideoCallContext);
-
-// Build co video
-// import React, {
-//   createContext,
-//   useContext,
-//   useState,
-//   useEffect,
-//   useRef,
-//   useCallback,
-// } from "react";
-// import { useSocket } from "./SocketContext";
-// import { useAppSelector } from "@/store/store";
-// import { Audio } from "expo-av";
-// import { messageService } from "@/services/message.service";
-// import { mediaDevices, MediaStream } from "react-native-webrtc"; // RTCView sẽ dùng ở file Overlay
-
-// const VideoCallContext = createContext<any>(null);
-
-// export const VideoCallProvider = ({
-//   children,
-// }: {
-//   children: React.ReactNode;
-// }) => {
-//   const { socket } = useSocket();
-//   const user = useAppSelector((state) => state.auth.user);
-
-//   const [callData, setCallData] = useState<any>(null);
-//   const [isCalling, setIsCalling] = useState(false);
-//   const [isReceiving, setIsReceiving] = useState(false);
-//   const [videoAccepted, setVideoAccepted] = useState(false);
-//   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-
-//   const soundRef = useRef<Audio.Sound | null>(null);
-
-//   // Hàm lấy Camera
-//   const getCameraStream = async () => {
-//     try {
-//       const stream = await mediaDevices.getUserMedia({
-//         audio: true,
-//         video: {
-//           facingMode: "user",
-//           width: 640,
-//           height: 480,
-//           frameRate: 30,
-//         },
-//       });
-//       setLocalStream(stream as any);
-//       return stream;
-//     } catch (err) {
-//       console.error("Lỗi lấy Camera:", err);
-//       return null;
-//     }
-//   };
-
-//   const stopSound = async () => {
-//     if (soundRef.current) {
-//       try {
-//         await soundRef.current.stopAsync();
-//         await soundRef.current.unloadAsync();
-//       } catch (e) {}
-//       soundRef.current = null;
-//     }
-//   };
-
-//   const playSound = async (type: "incoming" | "dialing") => {
-//     await stopSound();
-//     try {
-//       const { sound } = await Audio.Sound.createAsync(
-//         type === "incoming"
-//           ? require("@/assets/sounds/incoming.mp3")
-//           : require("@/assets/sounds/dialing.mp3"),
-//       );
-//       soundRef.current = sound;
-//       await sound.setIsLoopingAsync(true);
-//       await sound.playAsync();
-//     } catch (e) {}
-//   };
-
-//   const resetCall = useCallback(() => {
-//     // QUAN TRỌNG: Tắt camera khi kết thúc để giải phóng phần cứng
-//     if (localStream) {
-//       localStream.getTracks().forEach((track) => track.stop());
-//       setLocalStream(null);
-//     }
-//     setCallData(null);
-//     setIsCalling(false);
-//     setIsReceiving(false);
-//     setVideoAccepted(false);
-//     stopSound();
-//   }, [localStream]);
-
-//   useEffect(() => {
-//     if (!socket) return;
-//     const handleSignal = (data: any) => {
-//       if (data.signal?.type === "offer") {
-//         const myId = String(user?.userId || user?._id);
-//         if (String(data.from) !== myId) {
-//           setCallData(data);
-//           setIsReceiving(true);
-//           playSound("incoming");
-//           if (data.messageId) {
-//             messageService
-//               .updateCallStatus({
-//                 messageId: data.messageId,
-//                 status: "RINGING",
-//                 conversationId: data.conversationId,
-//               })
-//               .catch(console.log);
-//           }
-//         }
-//       }
-//       if (data.signal?.type === "answer") {
-//         setVideoAccepted(true);
-//         setIsCalling(false);
-//         stopSound();
-//         setCallData((prev: any) => ({
-//           ...prev,
-//           fromName: data.fromName || prev?.toName || "Người dùng Web",
-//         }));
-//       }
-//     };
-//     socket.on("call:signal", handleSignal);
-//     socket.on("call:rejected", resetCall);
-//     socket.on("call:ended", resetCall);
-//     return () => {
-//       socket.off("call:signal");
-//       socket.off("call:rejected");
-//       socket.off("call:ended");
-//     };
-//   }, [socket, resetCall, user]);
-
-//   const startCall = async (
-//     targetId: string,
-//     targetName: string,
-//     convId: string,
-//     type: string,
-//   ) => {
-//     setIsCalling(true);
-//     playSound("dialing");
-//     const stream = await getCameraStream(); // Mở camera ngay khi gọi
-
-//     try {
-//       const res = await messageService.createCallMessage({
-//         conversationId: convId,
-//         senderId: user?.userId || user?._id,
-//         type: type.toUpperCase() as any,
-//       });
-//       const msgId = res.data?._id || res._id;
-//       const payload = {
-//         to: targetId,
-//         toName: targetName,
-//         conversationId: convId,
-//         callType: type.toUpperCase(),
-//         messageId: msgId,
-//         from: user?.userId || user?._id,
-//         fromName: user?.profile?.name || "Người dùng Mobile",
-//         signal: {
-//           type: "offer",
-//           sdp: "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n",
-//         },
-//       };
-//       setCallData(payload);
-//       socket?.emit("call:signal", payload);
-//     } catch (error) {
-//       console.log("Lỗi gọi đi:", error);
-//       resetCall();
-//     }
-//   };
-
-//   const answerCall = async () => {
-//     if (!callData) return;
-//     await getCameraStream(); // Mở camera khi nghe
-//     setVideoAccepted(true);
-//     setIsReceiving(false);
-//     stopSound();
-//     socket?.emit("call:signal", {
-//       to: callData.from,
-//       conversationId: callData.conversationId,
-//       messageId: callData.messageId,
-//       fromName: user?.profile?.name || "Người dùng Mobile",
-//       signal: { type: "answer", sdp: "v=0\r\no=-..." },
-//     });
-//     if (callData.messageId) {
-//       messageService
-//         .updateCallStatus({
-//           messageId: callData.messageId,
-//           status: "ACCEPTED",
-//           conversationId: callData.conversationId,
-//         })
-//         .catch(console.log);
-//     }
-//   };
-
-//   const endCall = (status = "ENDED") => {
-//     if (callData) {
-//       const target = isCalling ? callData.to : callData.from;
-//       socket?.emit(status === "REJECTED" ? "call:reject" : "call:end", {
-//         to: target,
-//         conversationId: callData.conversationId,
-//         messageId: callData.messageId,
-//         status: isCalling && !videoAccepted ? "MISSED" : status,
-//       });
-//     }
-//     resetCall();
-//   };
-
-//   return (
-//     <VideoCallContext.Provider
-//       value={{
-//         callData,
-//         isCalling,
-//         isReceiving,
-//         videoAccepted,
-//         localStream,
-//         startCall,
-//         answerCall,
-//         endCall,
-//       }}
-//     >
-//       {children}
-//     </VideoCallContext.Provider>
-//   );
-// };
-
-// export const useVideoCall = () => useContext(VideoCallContext);

@@ -53,6 +53,6 @@ import { MessagesTransformService } from './services/transform.service';
   ],
   controllers: [MessagesController],
   
-  exports: [MessagesService, PollService],
+  exports: [MessagesService, PollService, MessagesCallService],
 })
 export class MessagesModule {}

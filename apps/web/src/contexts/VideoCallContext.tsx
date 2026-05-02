@@ -14,6 +14,8 @@ import { ICE_SERVERS } from "@/constants/webrtc";
 import { CallStatus, CallType } from "@/constants/types";
 import { messageService } from "@/services/message.service";
 
+export type CallSessionState = 'IDLE' | 'CALLING' | 'RINGING' | 'CONNECTED' | 'ENDED';
+
 interface VideoCallData {
   isReceiving: boolean;
   from: string;
@@ -27,9 +29,7 @@ interface VideoCallData {
 
 interface VideoCallContextType {
   videoCallData: VideoCallData;
-  videoAccepted: boolean;
-  isCalling: boolean;
-  callEnded: boolean;
+  sessionState: CallSessionState;
   myVideoRef: React.RefObject<HTMLVideoElement | null>;
   userVideoRef: React.RefObject<HTMLVideoElement | null>;
   stream: MediaStream | undefined;
@@ -60,9 +60,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
   const { socket } = useSocket();
   const currentUser = useAppSelector((state) => state.auth.user);
 
-  const [videoAccepted, setVideoAccepted] = useState(false);
-  const [isCalling, setIsCalling] = useState(false);
-  const [callEnded, setCallEnded] = useState(false);
+  // Phase 2: Introduce State Machine
+  const [sessionState, setSessionState] = useState<CallSessionState>('IDLE');
+  const sessionStateRef = useRef<CallSessionState>('IDLE');
+
   const [stream, setStream] = useState<MediaStream>();
   const [remoteStream, setRemoteStream] = useState<MediaStream | undefined>(
     undefined,
@@ -88,16 +89,35 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
     if (dialingRef.current) dialingRef.current.loop = true;
   }, []);
 
+  // Helper to update both state and ref (PM note #2)
+  const updateCallState = useCallback((newState: CallSessionState) => {
+    setSessionState(newState);
+    sessionStateRef.current = newState;
+    console.log(`[CallState] Transition to: ${newState}`);
+  }, []);
+
   const stopMediaStream = useCallback(() => {
-    if (stream) stream.getTracks().forEach((t) => t.stop());
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+    }
     setStream(undefined);
     setRemoteStream(undefined);
     if (myVideoRef.current) myVideoRef.current.srcObject = null;
     if (userVideoRef.current) userVideoRef.current.srcObject = null;
+
     [ringtoneRef, dialingRef].forEach((ref) => {
       if (ref.current) {
-        ref.current.pause();
-        ref.current.currentTime = 0;
+        // Phase 3: Fix DOM Exception on Audio (PM note: handle play promise)
+        const playPromise = ref.current.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            ref.current!.pause();
+            ref.current!.currentTime = 0;
+          }).catch(e => console.warn("Audio pause interrupted:", e));
+        } else {
+          ref.current.pause();
+          ref.current.currentTime = 0;
+        }
       }
     });
   }, [stream]);
@@ -106,22 +126,21 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
     if (remoteStream && userVideoRef.current) {
       userVideoRef.current.srcObject = remoteStream;
     }
-  }, [remoteStream, videoAccepted]);
+  }, [remoteStream]);
 
   const leaveCall = useCallback(
     (reason: CallStatus = CallStatus.ENDED, isRemote: boolean = false) => {
       let finalStatus = reason;
+      const currentState = sessionStateRef.current;
 
-      if (!videoAccepted) {
-        if (isCalling) finalStatus = CallStatus.MISSED;
-        else if (videoCallData.isReceiving) finalStatus = CallStatus.REJECTED;
+      if (currentState !== 'CONNECTED') {
+        if (currentState === 'CALLING') finalStatus = CallStatus.MISSED;
+        else if (currentState === 'RINGING') finalStatus = CallStatus.REJECTED;
       }
 
       if (!isRemote) {
-        // --- FIX QUAN TRỌNG: Xác định đúng ID đối phương ---
-        // Nếu mình là người gọi (isCalling), thì đối phương là videoCallData.from (trước đó là targetId)
-        // Nếu mình là người nhận (isReceiving), thì đối phương là videoCallData.from
-        const partnerId = isCalling ? videoCallData.from : videoCallData.from;
+        // Phase 3: Fix "Ghost Call" Target Bug
+        const partnerId = videoCallData.from;
 
         if (finalStatus === CallStatus.REJECTED) {
           socket?.emit("call:reject", {
@@ -141,25 +160,40 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       stopMediaStream();
+      
+      // Phase 3: Prevent Memory Leaks
       if (peerRef.current) {
         peerRef.current.destroy();
+        if (peerRef.current.removeAllListeners) {
+          peerRef.current.removeAllListeners();
+        }
         peerRef.current = null;
       }
-      setIsCalling(false);
-      setVideoAccepted(false);
-      setCallEnded(true);
-      setVideoCallData({ isReceiving: false, from: "" });
+      
+      setPendingSignals([]);
+      updateCallState('ENDED');
+      
+      // Cleanup UI state after delay
+      setTimeout(() => {
+        if (sessionStateRef.current === 'ENDED') {
+          updateCallState('IDLE');
+          setVideoCallData({ isReceiving: false, from: "" });
+        }
+      }, 2000);
 
       console.log(`Đã dọn dẹp cuộc gọi (${isRemote ? "Từ xa" : "Tại chỗ"})`);
     },
-    [socket, videoCallData, videoAccepted, isCalling, stopMediaStream],
+    [socket, videoCallData, stopMediaStream, updateCallState],
   );
 
+  // Phase 2: Fix Socket Dependency Hell - use sessionStateRef
   useEffect(() => {
     if (!socket) return;
+
     const handleIncomingSignal = (data: any) => {
-      // 1. Nếu đang bận thì báo bận ngay
-      if ((isCalling || videoAccepted) && data.signal?.type === "offer") {
+      const currentState = sessionStateRef.current;
+
+      if ((currentState === 'CALLING' || currentState === 'CONNECTED' || currentState === 'RINGING') && data.signal?.type === "offer") {
         socket.emit("call:respond_status", {
           to: data.from,
           status: CallStatus.BUSY,
@@ -168,19 +202,21 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
 
-      // 2. PHẢI SET STATE UI TRƯỚC (Để hiện Popup trả lời ngay lập tức)
       if (data.signal?.type === "offer") {
-        console.log("Web nhận cuộc gọi từ Mobile, hiện Popup...");
-        setCallEnded(false);
+        console.log("[WebRTC] Received Offer Payload:", data);
+        console.log("Web nhận cuộc gọi, hiện Popup...");
         setVideoCallData({
           ...data,
           isReceiving: true,
           from: data.from,
         });
-        ringtoneRef.current.play().catch(() => {});
-        setPendingSignals([]);
+        updateCallState('RINGING');
+        
+        const ringtonePromise = ringtoneRef.current.play();
+        if (ringtonePromise !== undefined) {
+          ringtonePromise.catch(e => console.warn("Ringtone play failed:", e));
+        }
 
-        // Cập nhật trạng thái Ringing lên DB
         if (data.messageId) {
           messageService.updateCallStatus({
             messageId: data.messageId,
@@ -190,15 +226,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
 
-      // 3. XỬ LÝ ANSWER (Nếu là người gọi nhận được phản hồi)
       if (data.signal?.type === "answer") {
-        setVideoAccepted(true);
-        setCallEnded(false);
-        setIsCalling(false);
-        dialingRef.current.pause();
+        updateCallState('CONNECTED');
+        const dialingPromise = dialingRef.current.play();
+        if (dialingPromise !== undefined) {
+           dialingPromise.then(() => {
+             dialingRef.current.pause();
+           }).catch(() => {});
+        } else {
+           dialingRef.current.pause();
+        }
       }
 
-      // 4. CUỐI CÙNG MỚI XỬ LÝ PEER VÀ BỌC TRONG TRY-CATCH (Để không làm treo UI)
       try {
         if (data.signal) {
           if (peerRef.current) {
@@ -208,22 +247,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
           }
         }
       } catch (err) {
-        console.warn(
-          "Lờ đi lỗi định dạng SDP từ Mobile để giữ Popup UI:",
-          err.message,
-        );
+        console.warn("Peer signal error:", err.message);
       }
     };
 
-    const handleCallEnded = () => {
-      console.log("Đối phương đã cúp máy/hủy cuộc gọi");
-      leaveCall(CallStatus.ENDED, true);
-    };
-
-    const handleCallRejected = () => {
-      console.log("Đối phương đã từ chối cuộc gọi");
-      leaveCall(CallStatus.REJECTED, true);
-    };
+    const handleCallEnded = () => leaveCall(CallStatus.ENDED, true);
+    const handleCallRejected = () => leaveCall(CallStatus.REJECTED, true);
 
     socket.on("call:signal", handleIncomingSignal);
     socket.on("call:ended", handleCallEnded);
@@ -234,9 +263,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
       socket.off("call:ended", handleCallEnded);
       socket.off("call:rejected", handleCallRejected);
     };
-  }, [socket, isCalling, videoAccepted, leaveCall]);
+  }, [socket, leaveCall, updateCallState]);
 
-  // 1. Cập nhật callUser
   const callUser = async (
     targetId: string,
     convId: string,
@@ -245,14 +273,16 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
     targetName?: string,
     targetAvatar?: string,
   ) => {
-    setIsCalling(true);
-    setCallEnded(false);
-    dialingRef.current.play().catch(() => {});
+    updateCallState('CALLING');
+    
+    const dialingPromise = dialingRef.current.play();
+    if (dialingPromise !== undefined) {
+      dialingPromise.catch(() => {});
+    }
 
-    // PHẢI lưu targetId vào videoCallData.from ngay lập tức
     setVideoCallData({
       isReceiving: false,
-      from: targetId, // Lưu ID người mình đang gọi
+      from: targetId,
       conversationId: convId,
       callType: type,
       messageId: msgId,
@@ -277,18 +307,17 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
 
       p.on("signal", (sig: any) => {
         if (sig.type === "offer") {
-          socket?.emit("call:signal", {
+          const offerPayload = {
             to: targetId,
             signal: sig,
             conversationId: convId,
             callType: type,
-            fromName:
-              (currentUser as any)?.profile?.name || (currentUser as any)?.name,
-            fromAvatar:
-              (currentUser as any)?.profile?.avatarUrl ||
-              (currentUser as any)?.avatarUrl,
+            fromName: (currentUser as any)?.profile?.name || (currentUser as any)?.name,
+            fromAvatar: (currentUser as any)?.profile?.avatarUrl || (currentUser as any)?.avatarUrl,
             messageId: msgId,
-          });
+          };
+          console.log("[WebRTC] Sending Offer Payload:", offerPayload);
+          socket?.emit("call:signal", offerPayload);
         } else {
           socket?.emit("call:signal", {
             to: targetId,
@@ -299,31 +328,35 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
       });
 
       p.on("stream", (remStream: any) => {
-        console.log("Người nhận đã trả lời, đang nhận stream...");
         setRemoteStream(remStream);
-        setVideoAccepted(true);
+        updateCallState('CONNECTED');
         dialingRef.current.pause();
-        dialingRef.current.currentTime = 0;
       });
 
       p.on("connect", () => {
-        setVideoAccepted(true);
+        updateCallState('CONNECTED');
         dialingRef.current.pause();
       });
 
       peerRef.current = p;
     } catch (err) {
-      setIsCalling(false);
-      dialingRef.current.pause();
-      setVideoCallData({ isReceiving: false, from: "" });
+      // Phase 3: Handle Media Permissions Rejection
+      console.error("Media error:", err);
+      socket?.emit("call:end", {
+        to: targetId,
+        conversationId: convId,
+        status: CallStatus.MISSED,
+        messageId: msgId,
+      });
+      stopMediaStream();
+      updateCallState('IDLE');
     }
   };
 
   const answerCall = async () => {
-    setVideoAccepted(true);
-    setCallEnded(false);
+    updateCallState('CONNECTED');
     ringtoneRef.current.pause();
-    setVideoCallData((prev) => ({ ...prev, fromName: prev.fromName }));
+
     if (videoCallData.messageId) {
       try {
         await messageService.updateCallStatus({
@@ -331,7 +364,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
           conversationId: videoCallData.conversationId!,
           status: CallStatus.ACCEPTED,
         });
-        console.log("Đã cập nhật trạng thái ACCEPTED thành công");
       } catch (error) {
         console.error("Lỗi cập nhật ACCEPTED:", error);
       }
@@ -351,6 +383,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
         stream: currentStream,
         config: ICE_SERVERS,
       });
+
       p.on("signal", (sig: any) => {
         socket?.emit("call:signal", {
           to: videoCallData.from,
@@ -359,12 +392,15 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
           callType: videoCallData.callType,
         });
       });
+
       p.on("stream", (remStream: any) => setRemoteStream(remStream));
+      
       pendingSignals.forEach((sig) => p.signal(sig));
       setPendingSignals([]);
       peerRef.current = p;
     } catch (err) {
-      console.error(err);
+      console.error("Answer media error:", err);
+      leaveCall(CallStatus.REJECTED);
     }
   };
 
@@ -372,9 +408,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
     <VideoCallContext.Provider
       value={{
         videoCallData,
-        videoAccepted,
-        isCalling,
-        callEnded,
+        sessionState,
         myVideoRef,
         userVideoRef,
         stream,

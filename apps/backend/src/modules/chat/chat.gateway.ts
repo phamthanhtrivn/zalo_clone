@@ -19,6 +19,8 @@ import { REDIS_CHANNEL_SOCKET_EVENTS } from 'src/common/constants/redis.constant
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Types } from 'mongoose';
 import { TokenService } from 'src/common/jwt-token/jwt.service';
+import { MessagesCallService } from '../messages/services/call.service';
+import { CallStatus } from 'src/common/types/enums/call-status';
 @WebSocketGateway({
   cors: {
     origin: '*',
@@ -31,6 +33,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     @Inject(forwardRef(() => MessagesService))
     private readonly messagesService: MessagesService,
+    private readonly messagesCallService: MessagesCallService,
     private readonly redisService: RedisService,
     private readonly eventEmitter: EventEmitter2,
     private readonly tokenService: TokenService,
@@ -282,6 +285,83 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   forceLogoutDevice(deviceId: string) {
     this.server.to(deviceId).emit('force_logout', {
       message: 'Phiên đăng nhập đã hết hạn hoặc bạn bị đăng xuất từ nơi khác.',
+    });
+  }
+
+  // --- WebRTC Signaling Handlers ---
+
+  @SubscribeMessage('call:signal')
+  async handleCallSignal(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+    // Phase 3: Check for answer signal to update DB status
+    if (data.signal?.type === 'answer' && data.messageId) {
+      try {
+        await this.messagesCallService.updateCallMessage({
+          messageId: data.messageId,
+          conversationId: data.conversationId,
+          status: CallStatus.ACCEPTED,
+        });
+      } catch (err) {
+        console.warn('[Socket] Failed to update call to ACCEPTED:', err.message);
+      }
+    }
+
+    this.server.to(data.to).emit('call:signal', {
+      ...data,
+      from: client.data.userId,
+    });
+  }
+
+  @SubscribeMessage('call:reject')
+  async handleCallReject(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+    // Phase 1: Update DB on reject
+    if (data.messageId) {
+      try {
+        await this.messagesCallService.updateCallMessage({
+          messageId: data.messageId,
+          conversationId: data.conversationId,
+          status: CallStatus.REJECTED,
+        });
+      } catch (err) {
+        console.warn('[Socket] Failed to update call to REJECTED:', err.message);
+      }
+    }
+
+    this.server.to(data.to).emit('call:rejected', {
+      ...data,
+      from: client.data.userId,
+    });
+  }
+
+  @SubscribeMessage('call:end')
+  async handleCallEnd(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+    // Phase 1: Update DB on end
+    if (data.messageId) {
+      try {
+        await this.messagesCallService.updateCallMessage({
+          messageId: data.messageId,
+          conversationId: data.conversationId,
+          status: data.status || CallStatus.ENDED,
+        });
+      } catch (err) {
+        console.warn('[Socket] Failed to update call to ENDED:', err.message);
+      }
+    }
+
+    this.server.to(data.to).emit('call:ended', {
+      ...data,
+      from: client.data.userId,
+    });
+  }
+
+  @SubscribeMessage('call:respond_status')
+  handleCallRespondStatus(
+    @MessageBody() data: any,
+    @ConnectedSocket() client: Socket,
+  ) {
+    console.log(`[Socket] Forwarding call:respond_status from ${client.data.userId} to ${data.to}`);
+    this.server.to(data.to).emit('call:signal', {
+      ...data,
+      from: client.data.userId,
     });
   }
 }

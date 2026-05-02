@@ -1,48 +1,31 @@
-import React, { useEffect, useMemo } from "react";
-import { Phone, PhoneOff, Video } from "lucide-react"; // Thêm icon Phone
-import { useParams } from "react-router-dom";
-import { useAppSelector } from "@/store";
+import React, { useEffect } from "react";
+import { Phone, PhoneOff, Video } from "lucide-react"; 
 import { useCall } from "@/contexts/VideoCallContext";
 import { CallType } from "@/constants/types";
 
 export default function OutgoingCall() {
-  const { id } = useParams();
   const {
-    isCalling,
-    videoAccepted,
-    callEnded,
+    sessionState,
     myVideoRef,
     stream,
     leaveCall,
     videoCallData,
   } = useCall();
 
+  // Phase 4: Simplify visibility logic (PM note #3)
+  const isOpen = sessionState === "CALLING";
+
   // Kiểm tra loại cuộc gọi
   const isVideo = videoCallData.callType === CallType.VIDEO;
 
   useEffect(() => {
     const el = myVideoRef.current;
-    if (!el || !isVideo) return; // Chỉ gắn stream vào video nếu là cuộc gọi VIDEO
+    if (!el || !isVideo || !isOpen) return;
     el.srcObject = stream ?? null;
-  }, [stream, isVideo]);
+  }, [stream, isVideo, isOpen]);
 
-  const isOpen = isCalling && !videoAccepted && !callEnded;
-
-  const conversations = useAppSelector(
-    (state) => state.conversation.conversations,
-  );
-
-  const recipient = useMemo(() => {
-    return conversations.find(
-      (c) =>
-        String(c.conversationId) === String(id) ||
-        String((c as any)?._id ?? "") === String(id) ||
-        String((c as any)?.id ?? "") === String(id),
-    );
-  }, [conversations, id]);
-
-  const recipientName = recipient?.name || "Người dùng";
-  const recipientAvatar = (recipient as any)?.avatarUrl || "";
+  const recipientName = videoCallData.fromName || "Người dùng";
+  const recipientAvatar = videoCallData.fromAvatar || "";
 
   if (!isOpen) return null;
 
