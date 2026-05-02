@@ -13,6 +13,7 @@ import { getFileIcon } from "@/utils/file-icon.util";
 import { saveAs } from "file-saver";
 import { useState } from "react";
 import { truncateFileName } from "@/utils/render-file";
+import { VoicePlayer } from "./VoicePlayer";
 
 interface Props {
   message: MessagesType;
@@ -57,14 +58,21 @@ export const MessageBubble = ({
   const call = message.call;
 
   // Hỗ trợ cả 2 chuẩn: array files (mới) và single file (cũ)
-  const files = content?.files || (content?.file ? [content.file] : []);
+  const files = content?.files || [];
+  const repliedMessage =
+    message.repliedId && typeof message.repliedId === "object"
+      ? (message.repliedId as any)
+      : null;
 
   // Tách riêng Media (Ảnh/Video) để hiển thị Grid và Document để hiển thị List
   const mediaFiles = files.filter(
     (f: any) => f.type === "IMAGE" || f.type === "VIDEO",
   );
+  const voiceFiles = files.filter((f: any) => f.type === "VOICE");
   const documentFiles = files.filter(
-    (f: any) => f.type === "FILE" || !["IMAGE", "VIDEO"].includes(f.type),
+    (f: any) =>
+      f.type === "FILE" ||
+      !["IMAGE", "VIDEO", "VOICE"].includes(f.type),
   );
 
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
@@ -199,18 +207,24 @@ export const MessageBubble = ({
             className="mb-2 p-2 rounded border-l-4 border-blue-400 bg-black/5 cursor-pointer hover:bg-black/10 transition-colors"
             onClick={(e) => {
               e.stopPropagation();
-              if (onJumpToMessage && message.repliedId?._id) {
-                onJumpToMessage(message.repliedId._id);
+              if (onJumpToMessage) {
+                const repliedId =
+                  typeof message.repliedId === "string"
+                    ? message.repliedId
+                    : repliedMessage?._id;
+                if (repliedId) {
+                  onJumpToMessage(repliedId);
+                }
               }
             }}
           >
             <div className="text-[11px] font-bold text-blue-600 truncate">
-              {message.repliedId.senderId?.profile?.name || "Người dùng"}
+              {repliedMessage?.senderId?.profile?.name || "Người dùng"}
             </div>
             <div className="text-[12px] text-gray-600 truncate">
-              {message.repliedId.content?.text ||
-                (message.repliedId.content?.files?.length > 0
-                  ? message.repliedId.content.files[0].fileName
+              {repliedMessage?.content?.text ||
+                (repliedMessage?.content?.files?.length > 0
+                  ? repliedMessage.content.files[0].fileName
                   : "Đính kèm")}
             </div>
           </div>
@@ -269,6 +283,20 @@ export const MessageBubble = ({
               </div>
             )}
 
+            {/* VOICE (Audio) */}
+            {voiceFiles.length > 0 && (
+              <div className="space-y-2 mt-2">
+                {voiceFiles.map((file: any, index: number) => (
+                  <VoicePlayer
+                    key={index}
+                    fileUrl={file.fileKey}
+                    durationMs={content?.voiceDuration || 0}
+                    onDownload={() => handleDownload(file)}
+                  />
+                ))}
+              </div>
+            )}
+
             {/* DOCUMENT LIST (File Text/PDF/Zip...) */}
             {documentFiles.length > 0 && (
               <div className="space-y-1 mt-1">
@@ -317,7 +345,7 @@ export const MessageBubble = ({
       {/* IMAGE / VIDEO PREVIEW MODAL */}
       {previewIndex !== null && mediaFiles[previewIndex] && (
         <div
-          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center"
+          className="fixed inset-0 z-100 bg-black/90 flex items-center justify-center"
           onClick={(e) => e.stopPropagation()}
         >
           {/* CLOSE */}

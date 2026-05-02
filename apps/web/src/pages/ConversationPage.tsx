@@ -7,7 +7,6 @@ import ConversationInfoPanel from "@/components/layout/message/ConversationInfoP
 import { messageService } from "@/services/message.service";
 import { userService } from "@/services/user.service";
 import type { MessagesType } from "@/types/messages.type";
-import type { EmojiType } from "@/constants/emoji.constant";
 import { toast, Zoom } from "react-toastify";
 import { useSocket } from "@/contexts/SocketContext";
 import { conversationService } from "@/services/conversation.service";
@@ -66,7 +65,7 @@ const ConversationPage = () => {
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [loadingForward, setLoadingForward] = useState(false);
-  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
   const pendingJumpMessageIdRef = useRef<string | null>(null);
 
@@ -357,14 +356,66 @@ const ConversationPage = () => {
     if (!id || !currentUserId || !files.length) return;
     try {
       const filesArray = Array.from(files);
+      const audioFiles = filesArray.filter((f) => f.type.startsWith("audio/"));
       const mediaFiles = filesArray.filter(
         (f) => f.type.startsWith("image/") || f.type.startsWith("video/"),
       );
       const docFiles = filesArray.filter(
-        (f) => !f.type.startsWith("image/") && !f.type.startsWith("video/"),
+        (f) =>
+          !f.type.startsWith("image/") &&
+          !f.type.startsWith("video/") &&
+          !f.type.startsWith("audio/"),
       );
 
+      const getAudioDurationSeconds = (file: File) =>
+        new Promise<number>((resolve) => {
+          const url = URL.createObjectURL(file);
+          const audio = new Audio();
+          audio.preload = "metadata";
+          audio.src = url;
+
+          const cleanup = () => {
+            URL.revokeObjectURL(url);
+          };
+
+          audio.onloadedmetadata = () => {
+            const duration = Number.isFinite(audio.duration)
+              ? audio.duration
+              : 0;
+            cleanup();
+            resolve(duration);
+          };
+
+          audio.onerror = () => {
+            cleanup();
+            resolve(0);
+          };
+        });
+
       const promises: Promise<any>[] = [];
+
+      // Voice: 1 message / audio file
+      for (const file of audioFiles) {
+        promises.push(
+          (async () => {
+            const durationSeconds = await getAudioDurationSeconds(file);
+            const voiceDuration = Math.max(1, Math.floor(durationSeconds || 1));
+            const formData = new FormData();
+            formData.append("conversationId", id);
+            formData.append("senderId", currentUserId);
+            if (replyingMessage?._id) formData.append("repliedId", replyingMessage._id);
+            formData.append(
+              "content",
+              JSON.stringify({
+                voiceDuration,
+              }),
+            );
+            formData.append("files", file);
+            return messageService.sendVoiceMessage(formData);
+          })(),
+        );
+      }
+
       if (mediaFiles.length > 0)
         promises.push(
           messageService.sendMessage(
@@ -392,6 +443,37 @@ const ConversationPage = () => {
     } catch (error) {
       console.error(error);
     }
+  };
+
+  const onSendVoice = async (voice: {
+    blob: Blob;
+    fileName: string;
+    mimeType: string;
+    durationMs: number;
+  }) => {
+    if (!id || !currentUserId) return;
+
+    const formData = new FormData();
+    formData.append("conversationId", id);
+    formData.append("senderId", currentUserId);
+    if (replyingMessage?._id) {
+      formData.append("repliedId", replyingMessage._id);
+    }
+
+    const audioFile = new File([voice.blob], voice.fileName, {
+      type: voice.mimeType || "audio/webm",
+    });
+
+    formData.append(
+      "content",
+      JSON.stringify({
+        voiceDuration: Math.max(1, Math.floor(voice.durationMs / 1000)),
+      }),
+    );
+    formData.append("files", audioFile);
+
+    await messageService.sendVoiceMessage(formData);
+    if (replyingMessage) dispatch(clearReplyingMessage());
   };
 
   const handleRecalledMessage = async (messageId: string) => {
@@ -739,6 +821,7 @@ const ConversationPage = () => {
           chatName={conversation.name}
           onSendMessage={onSendMessage}
           onSendFiles={onSendFiles}
+          onSendVoice={onSendVoice}
           isSelected={isSelected}
           setIsSelected={setIsSelected}
           selectedMessages={selectedMessages}

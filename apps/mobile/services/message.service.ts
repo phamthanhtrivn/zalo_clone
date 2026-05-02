@@ -143,21 +143,15 @@ export const messageService = {
     return response.data;
   },
 
-  // Dùng cho các trường hợp đặc biệt đã đóng gói sẵn FormData
+  sendVoiceMessage: async (formData: FormData) => {
+    const response = await api.post(`/messages/voice`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  },
+
   sendFormData: async (formData: FormData) => {
     const response = await api.post(`/messages`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-    return response.data;
-  },
-  sendVoiceMessage: async (formData: FormData) => {
-    const response = await api.post(`/messages`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-    return response.data;
-  },
-  transcribeVoice: async (formData: FormData) => {
-    const response = await api.post(`/messages/voice/transcribe`, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return response.data;

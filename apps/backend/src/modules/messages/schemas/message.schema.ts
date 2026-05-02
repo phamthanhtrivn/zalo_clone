@@ -32,7 +32,7 @@ export class Content {
   @Prop({ type: [File] })
   files?: File[];
 
-  @Prop({ default: null })
+  @Prop({ type: Number, default: null })
   voiceDuration?: number | null;
 }
 
@@ -120,7 +120,7 @@ export class Message {
   @Prop({ default: false })
   expired: boolean;
 
-  // Khai báo để sửa lỗi TypeScript 
+  // Khai báo để sửa lỗi TypeScript
   createdAt: Date;
   updatedAt: Date;
 }

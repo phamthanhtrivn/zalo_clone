@@ -274,6 +274,12 @@ export default function MessageBubble({
 
   const handleToggleVoicePlayback = async (file: any) => {
     try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+      });
+
       if (voiceSound && playingVoiceUri === file.fileKey) {
         const status = await voiceSound.getStatusAsync();
         if (status.isLoaded && status.isPlaying) {

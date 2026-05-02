@@ -181,6 +181,32 @@ export const messageService = {
     }
   },
 
+  sendVoiceMessage: async (formData: FormData) => {
+    try {
+      const response = await apiClient.post(`/api/messages/voice`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      return response?.data ?? null;
+    } catch (error) {
+      console.error("sendVoiceMessage Error:", error);
+      if (axios.isAxiosError(error)) {
+        const data = error.response?.data as
+          | { message?: string | string[] }
+          | undefined;
+        const msg = Array.isArray(data?.message)
+          ? data.message[0]
+          : data?.message;
+        return {
+          success: false,
+          message: msg || error.message || "Gửi voice thất bại",
+        };
+      }
+      return { success: false, message: "Gửi voice thất bại" };
+    }
+  },
+
   deleteMessageForMe: async (
     userId: string,
     messageId: string,

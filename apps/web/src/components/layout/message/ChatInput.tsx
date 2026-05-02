@@ -2,6 +2,8 @@ import {
   Smile,
   Paperclip,
   Image as ImageIcon,
+  Mic,
+  Square,
   SendHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +22,12 @@ type Props = {
   chatName: string;
   onSendMessage: (text: string) => void;
   onSendFiles: (files: FileList) => void;
+  onSendVoice: (voice: {
+    blob: Blob;
+    fileName: string;
+    mimeType: string;
+    durationMs: number;
+  }) => Promise<void> | void;
   isSelected: boolean;
   setIsSelected: (isSelected: boolean) => void;
   selectedMessages: string[];
@@ -32,6 +40,7 @@ const ChatInput = ({
   chatName,
   onSendMessage,
   onSendFiles,
+  onSendVoice,
   isSelected,
   setIsSelected,
   selectedMessages,
@@ -45,12 +54,36 @@ const ChatInput = ({
 
   const [text, setText] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [isSendingVoice, setIsSendingVoice] = useState(false);
+  const [recordingDurationMs, setRecordingDurationMs] = useState(0);
+  const [recordedVoice, setRecordedVoice] = useState<{
+    blob: Blob;
+    url: string;
+    fileName: string;
+    mimeType: string;
+    durationMs: number;
+  } | null>(null);
   const [myRole, setMyRole] = useState<string>("MEMBER");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingStartedAtRef = useRef<number>(0);
+  const recordingTimerRef = useRef<number | null>(null);
+
+  const formatVoiceDuration = (durationMs: number) => {
+    const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, "0")}:${seconds
+      .toString()
+      .padStart(2, "0")}`;
+  };
 
   // Lấy thông tin hội thoại và user từ Redux
   const currentConversation = useAppSelector((state) =>
@@ -63,7 +96,7 @@ const ChatInput = ({
   // Logic kiểm tra khóa chat
   const isGroup = currentConversation?.type === "GROUP";
   const allowSend =
-    currentConversation?.group?.allowMembersSendMessages !== false;
+    (currentConversation as any)?.group?.allowMembersSendMessages !== false;
 
   // Tự động lấy quyền (Role) của mình khi mở nhóm
   useEffect(() => {
@@ -137,6 +170,128 @@ const ChatInput = ({
     if (e.target.files?.length) {
       onSendFiles(e.target.files);
       e.target.value = "";
+    }
+  };
+
+  const cleanupRecording = () => {
+    if (recordingTimerRef.current) {
+      window.clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingStreamRef.current = null;
+    mediaRecorderRef.current = null;
+    recordingStartedAtRef.current = 0;
+    setIsRecordingVoice(false);
+  };
+
+  const discardRecordedVoice = () => {
+    if (recordedVoice?.url) {
+      URL.revokeObjectURL(recordedVoice.url);
+    }
+    setRecordedVoice(null);
+    setRecordingDurationMs(0);
+  };
+
+  const openVoiceModal = () => {
+    setShowEmoji(false);
+    setShowVoiceModal(true);
+    discardRecordedVoice();
+  };
+
+  const startRecordingVoice = async () => {
+    if (isRecordingVoice) return;
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        alert("Trình duyệt không hỗ trợ ghi âm.");
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
+
+      const supportedMimeType = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+      ].find((mimeType) => MediaRecorder.isTypeSupported(mimeType));
+
+      const recorder = supportedMimeType
+        ? new MediaRecorder(stream, { mimeType: supportedMimeType })
+        : new MediaRecorder(stream);
+
+      const chunks: BlobPart[] = [];
+      recordingStartedAtRef.current = Date.now();
+      setRecordingDurationMs(0);
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const durationMs = Math.max(
+          1000,
+          Date.now() - recordingStartedAtRef.current,
+        );
+        const blob = new Blob(chunks, {
+          type: recorder.mimeType || supportedMimeType || "audio/webm",
+        });
+        const url = URL.createObjectURL(blob);
+
+        setRecordedVoice({
+          blob,
+          url,
+          fileName: `voice_${Date.now()}.webm`,
+          mimeType: blob.type || "audio/webm",
+          durationMs,
+        });
+        cleanupRecording();
+      };
+
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecordingVoice(true);
+
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingDurationMs(Date.now() - recordingStartedAtRef.current);
+      }, 250);
+    } catch (error) {
+      console.error("Start voice recording error:", error);
+      cleanupRecording();
+      alert("Không thể bắt đầu ghi âm.");
+    }
+  };
+
+  const stopRecordingVoice = async () => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+
+    try {
+      recorder.stop();
+    } catch (error) {
+      console.error("Stop voice recording error:", error);
+      cleanupRecording();
+    }
+  };
+
+  const sendRecordedVoice = async () => {
+    if (!recordedVoice || isSendingVoice) return;
+
+    try {
+      setIsSendingVoice(true);
+      await onSendVoice(recordedVoice);
+      discardRecordedVoice();
+      setRecordingDurationMs(0);
+      setShowVoiceModal(false);
+    } catch (error) {
+      console.error("Send voice error:", error);
+      alert("Không thể gửi bản ghi âm.");
+    } finally {
+      setIsSendingVoice(false);
     }
   };
 
@@ -270,6 +425,15 @@ const ChatInput = ({
         >
           <ImageIcon className="w-10 h-10" />
         </Button>
+
+        <Button
+          onClick={openVoiceModal}
+          variant="ghost"
+          className="w-10 h-10 text-gray-500 cursor-pointer"
+          title="Ghi âm"
+        >
+          <Mic className="w-10 h-10" />
+        </Button>
         <div className="flex-1"></div>
       </div>
       <div className="flex items-center gap-2 p-2">
@@ -304,6 +468,98 @@ const ChatInput = ({
           </span>
         </Button>
       </div>
+
+      {showVoiceModal && (
+        <div className="fixed inset-0 z-120 bg-black/40 flex items-end sm:items-center justify-center p-3">
+          <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl border border-black/5 overflow-hidden">
+            <div className="px-5 py-4 border-b bg-linear-to-r from-[#f7fbff] to-white">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">
+                    Ghi âm tin nhắn thoại
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (!isRecordingVoice) {
+                      cleanupRecording();
+                      discardRecordedVoice();
+                      setShowVoiceModal(false);
+                    }
+                  }}
+                  className="h-8 w-8 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-5 py-6">
+              {recordedVoice ? (
+                <div className="space-y-4">
+                  <div className="rounded-2xl bg-gray-50 border border-gray-200 p-4">
+                    <audio controls src={recordedVoice.url} className="w-full" />
+                    <div className="mt-3 text-xs text-gray-500 flex items-center justify-between">
+                      <span>{formatVoiceDuration(recordedVoice.durationMs)}</span>
+                      <span className="truncate ml-3">Bản ghi sẵn sàng gửi</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => {
+                        discardRecordedVoice();
+                        setRecordingDurationMs(0);
+                        void startRecordingVoice();
+                      }}
+                      disabled={isSendingVoice}
+                      variant="outline"
+                      className="flex-1 rounded-2xl cursor-pointer"
+                    >
+                      Ghi lại
+                    </Button>
+                    <Button
+                      onClick={sendRecordedVoice}
+                      disabled={isSendingVoice}
+                      className="flex-1 rounded-2xl bg-[#0068ff] hover:bg-[#005ae0] cursor-pointer"
+                    >
+                      {isSendingVoice ? "Đang gửi..." : "Gửi"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-5 py-4">
+                  <button
+                    onClick={() => {
+                      if (isRecordingVoice) {
+                        void stopRecordingVoice();
+                      } else {
+                        void startRecordingVoice();
+                      }
+                    }}
+                    className={`h-24 w-24 rounded-full flex items-center justify-center shadow-xl transition-all cursor-pointer ${isRecordingVoice ? "bg-red-500 text-white scale-95" : "bg-[#0068ff] text-white hover:scale-105"}`}
+                  >
+                    {isRecordingVoice ? <Square size={28} /> : <Mic size={30} />}
+                  </button>
+
+                  <div className="text-center">
+                    <div className="text-sm font-medium text-gray-900">
+                      {isRecordingVoice ? "Đang ghi âm" : "Bấm để bắt đầu ghi âm"}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500">
+                      {formatVoiceDuration(recordingDurationMs)}
+                    </div>
+                  </div>
+
+                  <div className="w-full rounded-2xl bg-gray-50 border border-dashed border-gray-200 px-4 py-5 text-center text-sm text-gray-500">
+                    Khi dừng, bạn có thể nghe lại trước khi gửi.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -32,7 +32,7 @@ const PinnedMessagesBar = ({
     <div className="relative z-50">
       {/* 🔹 HEADER */}
       <div
-        className={`bg-white border mx-3 mt-2 rounded-lg px-3 py-2 flex items-center justify-between transition-all duration-200
+        className={`bg-white border mx-3 mt-2 rounded-lg px-3 py-2 flex items-center justify-between transition-all duration-200 mb-2
         ${openList ? "shadow-md ring-1 ring-gray-200" : "shadow-sm hover:shadow-md"}
       `}
       >

@@ -35,9 +35,6 @@ const ChatHeader = ({
     conversation?.participants?.find((id: string) => id !== currentUserId) ||
     (conversation as any)?.otherMemberId;
 
-  console.log("CHECK: conversationId =", conversation.conversationId);
-  console.log("CHECK: otherMemberId =", otherMemberId);
-
   const handleVideoCall = async () => {
     if (!conversation.conversationId || !otherMemberId || !currentUserId) {
       console.log("Không đủ thông tin để thực hiện cuộc gọi");

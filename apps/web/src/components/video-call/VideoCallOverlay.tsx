@@ -25,7 +25,6 @@ export default function VideoCallOverlay() {
   } = useCall();
 
   const isOpen = videoAccepted && !callEnded;
-  console.log("DEBUG CallType:", videoCallData.callType);
   const isVideo = useMemo(() => {
     return (
       

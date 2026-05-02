@@ -10,6 +10,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Message } from './schemas/message.schema';
 import { SendMessageDto } from './dto/send-message.dto';
+import { SendVoiceMessageDto } from './dto/send-voice-message.dto';
 import { Member } from '../members/schemas/member.schema';
 import { Conversation } from '../conversations/schemas/conversation.schema';
 import { PinnedMessageDto } from './dto/pinned-message.dto';
@@ -121,6 +122,13 @@ export class MessagesService {
     files?: Express.Multer.File[],
   ) {
     return this.actionService.sendMessage(sendMessageDto, files);
+  }
+
+  async sendVoiceMessage(
+    sendVoiceMessageDto: SendVoiceMessageDto,
+    files?: Express.Multer.File[],
+  ) {
+    return this.actionService.sendVoiceMessage(sendVoiceMessageDto, files);
   }
 
   async createCallMessage(callMessageDto: CallMessageDto) {
