@@ -504,4 +504,22 @@ export class UsersService {
 
     return user;
   }
+  async getFriendStatus(userId: string, friendId: string) {
+    const user = await this.userModel
+      .findOne(
+        { _id: userId, 'friends.friendId': friendId },
+        { 'friends.$': 1 },
+      )
+      .lean();
+
+    const friendship = user?.friends?.[0];
+
+    return {
+      success: true,
+      data: {
+        isFriend: friendship?.status === FriendStatus.ACCEPTED,
+        status: friendship?.status || null, // PENDING, REQUESTED, etc.
+      },
+    };
+  }
 }

@@ -3,8 +3,10 @@ import {
   changePassword,
   completeSignUp,
   logOut,
+  logout2,
   resetPassword,
   restoreSession,
+  scanQrLogin,
   signIn,
   verifyOtp,
 } from "./authThunk";
@@ -120,6 +122,18 @@ const authSlice = createSlice({
       })
       .addCase(changePassword.rejected, (state, action) => {
         state.error = action.payload;
+        state.loading = false;
+      })
+      .addCase(logout2.fulfilled, (state) => {
+        state.user = null;
+      })
+      .addCase(scanQrLogin.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(scanQrLogin.fulfilled, (state) => {
+        state.loading = false;
+      })
+      .addCase(scanQrLogin.rejected, (state) => {
         state.loading = false;
       });
   },

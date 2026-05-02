@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -14,6 +15,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Types } from 'mongoose';
 import { ConversationsService } from './conversations.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
@@ -203,12 +205,43 @@ export class ConversationsController {
       updateDto,
       file,
     );
-
   }
   @Get('search')
-  async search(@Query() query: SearchConversationsDto) {
+  async search(@Req() req, @Query() query: SearchConversationsDto) {
+    query.userId = req.user.userId;
     return this.conversationsService.search(query);
-
   }
 
+  // 1. Tạo/Làm mới mã QR
+  @Patch(':id/qr-token')
+  async refreshJoinToken(@Req() req: any, @Param('id') id: string) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Mã nhóm không hợp lệ!');
+    }
+    console.log('🚀 HIT refreshJoinToken Controller:', { id, userId: req.user.userId });
+    return this.conversationsService.refreshGroupJoinToken(id, req.user.userId);
+  }
+
+  // 2. Quét QR -> Xem thông tin nhóm trước khi join
+  @Get(':id/qr-info/:token')
+  async getGroupInfoByToken(@Param('id') id: string, @Param('token') token: string) {
+    return this.conversationsService.getGroupInfoByToken(id, token);
+  }
+
+  // 3. Quét QR -> Xác nhận Tham gia
+  @Post(':id/join-via-qr')
+  async joinGroupByToken(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('token') token: string,
+  ) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Mã nhóm không hợp lệ!');
+    }
+    if (!token) {
+      throw new BadRequestException('Thiếu mã xác thực (token)!');
+    }
+    console.log('🚀 HIT joinGroupByToken Controller:', { id, token, userId: req.user.userId });
+    return this.conversationsService.joinGroupByToken(id, token, req.user.userId);
+  }
 }

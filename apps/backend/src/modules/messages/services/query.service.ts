@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Message } from '../schemas/message.schema';
@@ -14,6 +14,10 @@ import { MessageResponse } from '../types/message-response.type';
 import { FileType } from 'src/common/types/enums/file-type';
 import { StorageService } from 'src/common/storage/storage.service';
 import { ConversationSetting } from 'src/modules/conversation-settings/schemas/conversation-setting.schema';
+import { SearchMessagesDto } from '../dto/search-messages.dto';
+import { Poll } from '../schemas/poll.schema';
+import { PollVote } from '../schemas/poll-vote.schema';
+import { MessageType } from 'src/common/enums/message-type.enum';
 
 @Injectable()
 export class MessagesQueryService {
@@ -28,7 +32,26 @@ export class MessagesQueryService {
     private readonly storageService: StorageService,
     @InjectModel(ConversationSetting.name)
     private readonly conversationSettingModel: Model<ConversationSetting>,
+    @InjectModel(Poll.name)
+    private readonly pollModel: Model<Poll>,
+    @InjectModel(PollVote.name)
+    private readonly pollVoteModel: Model<PollVote>,
   ) {}
+
+  private async enrichPollMessages(messages: any[]) {
+    return await Promise.all(
+      messages.map(async (msg) => {
+        if (msg.type === MessageType.POLL && msg.pollId) {
+          const pollId = msg.pollId._id?.toString() || msg.pollId.toString();
+          const stats = await this.getPollStatistics(pollId);
+          if (stats) {
+            return { ...msg, pollId: stats };
+          }
+        }
+        return msg;
+      }),
+    );
+  }
 
   async getMessagesFromConversation(
     conversationId: string,
@@ -71,6 +94,7 @@ export class MessagesQueryService {
       .sort({ _id: -1 })
       .limit(Number(limit))
       .populate('senderId', 'profile.name profile.avatarUrl')
+      .populate('pollId')
       .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
       .populate('reactions.userId', 'profile.name profile.avatarUrl')
       .populate({
@@ -82,7 +106,9 @@ export class MessagesQueryService {
       })
       .lean<MessageResponse[]>();
 
-    const transformedMessages = messages.map((message) =>
+    const enrichedMessages = await this.enrichPollMessages(messages);
+
+    const transformedMessages = enrichedMessages.map((message) =>
       this.transformService.transformMessage(message),
     );
 
@@ -138,7 +164,9 @@ export class MessagesQueryService {
       })
       .lean<MessageResponse[]>();
 
-    const transformedMessages = messages.map((message) =>
+    const enrichedMessages = await this.enrichPollMessages(messages);
+
+    const transformedMessages = enrichedMessages.map((message) =>
       this.transformService.transformMessage(message),
     );
 
@@ -240,7 +268,9 @@ export class MessagesQueryService {
       (m): m is NonNullable<typeof m> => m !== null,
     );
 
-    const transformed = messages.map((message) =>
+    const enrichedMessages = await this.enrichPollMessages(messages);
+
+    const transformed = enrichedMessages.map((message) =>
       this.transformService.transformMessage(message),
     );
 
@@ -284,7 +314,9 @@ export class MessagesQueryService {
       .populate('senderId', 'profile.name')
       .lean();
 
-    const transformedMessages = messages.map((message) =>
+    const enrichedMessages = await this.enrichPollMessages(messages);
+
+    const transformedMessages = enrichedMessages.map((message) =>
       this.transformService.transformMessage(message),
     );
 
@@ -514,4 +546,218 @@ export class MessagesQueryService {
       readReceipts: msg.readReceipts,
     }));
   }
+
+  async searchMessages(
+    conversationId: string,
+    searchDto: SearchMessagesDto,
+  ) {
+    const { userId, keyword, senderId, startDate, endDate, cursor, limit = '20' } = searchDto;
+
+    const conversationObjectId = new Types.ObjectId(conversationId);
+    const userObjectId = new Types.ObjectId(userId);
+
+    const member = await this.memberModel.findOne({
+      userId: userObjectId,
+      conversationId: conversationObjectId,
+      leftAt: null,
+    });
+
+    if (!member) {
+      throw new NotFoundException('User is not a participant in this conversation');
+    }
+
+    const query: Record<string, any> = {
+      conversationId: conversationObjectId,
+      deletedFor: { $ne: userObjectId },
+      recalled: false, 
+    };
+
+    if (keyword) {
+      query['content.text'] = { $regex: keyword, $options: 'i' };
+    }
+
+    if (senderId) {
+      query.senderId = new Types.ObjectId(senderId);
+    }
+
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        query.createdAt.$lte = end;
+      }
+    }
+
+    if (cursor) {
+      query._id = { $lt: new Types.ObjectId(cursor) };
+    }
+
+    const messages = await this.messageModel
+      .find(query)
+      .sort({ _id: -1 })
+      .limit(Number(limit))
+      .populate('senderId', 'profile.name profile.avatarUrl')
+      .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
+      .populate('reactions.userId', 'profile.name profile.avatarUrl')
+      .populate({
+        path: 'repliedId',
+        populate: {
+          path: 'senderId',
+          select: 'profile.name profile.avatarUrl',
+        },
+      })
+      .lean<MessageResponse[]>();
+
+    const enrichedMessages = await this.enrichPollMessages(messages);
+
+    const transformedMessages = enrichedMessages.map((message) =>
+      this.transformService.transformMessage(message),
+    );
+    return {
+      messages: transformedMessages,
+      nextCursor: transformedMessages.length > 0 ? transformedMessages[transformedMessages.length - 1]._id : null,
+    };
+  }
+
+  async getPollStatistics(pollId: string) {
+    const pollObjectId = new Types.ObjectId(pollId);
+
+    const stats = await this.pollModel.aggregate([
+      { $match: { _id: pollObjectId } },
+      // 1. Join với pollvotes để lấy các chỉ số tổng quát
+      {
+        $lookup: {
+          from: "pollvotes",
+          localField: "_id",
+          foreignField: "pollId",
+          as: "allVotes",
+        },
+      },
+      {
+        $addFields: {
+          totalParticipants: {
+            $size: { $setUnion: "$allVotes.userId" },
+          },
+        },
+      },
+      // 2. Xử lý từng option để lấy voteCount và Top 5 voters
+      { $unwind: "$options" },
+      {
+        $lookup: {
+          from: "pollvotes",
+          let: { pId: "$_id", oId: "$options._id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$pollId", "$$pId"] },
+                    { $eq: ["$optionId", "$$oId"] },
+                  ],
+                },
+              },
+            },
+            { $sort: { createdAt: -1 } },
+            { $limit: 5 },
+            {
+              $lookup: {
+                from: "users",
+                localField: "userId",
+                foreignField: "_id",
+                as: "userInfo",
+              },
+            },
+            { $unwind: "$userInfo" },
+            {
+              $project: {
+                _id: 0,
+                userId: 1,
+                name: "$userInfo.profile.name",
+                avatar: "$userInfo.profile.avatarUrl",
+              },
+            },
+          ],
+          as: "voters",
+        },
+      },
+      {
+        $addFields: {
+          "options.voters": {
+             $map: {
+                input: "$voters",
+                as: "v",
+                in: {
+                   userId: "$$v.userId",
+                   name: "$$v.name",
+                   avatar: "$$v.avatar"
+                }
+             }
+          },
+          "options.voteCount": {
+            $size: {
+              $filter: {
+                input: "$allVotes",
+                as: "av",
+                cond: { $eq: ["$$av.optionId", "$options._id"] },
+              },
+            },
+          },
+        },
+      },
+      // 3. Group lại thành document Poll hoàn chỉnh
+      {
+        $group: {
+          _id: "$_id",
+          title: { $first: "$title" },
+          isMultipleChoice: { $first: "$isMultipleChoice" },
+          allowAddOptions: { $first: "$allowAddOptions" },
+          isAnonymous: { $first: "$isAnonymous" },
+          hideResultsUntilVoted: { $first: "$hideResultsUntilVoted" },
+          expiresAt: { $first: "$expiresAt" },
+          totalParticipants: { $first: "$totalParticipants" },
+          options: { $push: "$options" },
+          createdAt: { $first: "$createdAt" },
+        },
+      },
+    ]);
+
+    return stats[0] || null;
+  }
+
+  async getPollMessagesFromConversation(conversationId: string, userId: string) {
+    const conversationObjectId = new Types.ObjectId(conversationId);
+    const userObjectId = new Types.ObjectId(userId);
+
+    // 1. Kiểm tra quyền
+    const member = await this.memberModel.exists({
+      userId: userObjectId,
+      conversationId: conversationObjectId,
+      leftAt: null,
+    });
+    if (!member) throw new ForbiddenException('Bạn không ở trong nhóm này');
+
+    // 2. Query tin nhắn loại POLL
+    const messages = await this.messageModel
+      .find({
+        conversationId: conversationObjectId,
+        type: MessageType.POLL,
+        deletedFor: { $ne: userObjectId },
+        recalled: false,
+      })
+      .sort({ createdAt: -1 })
+      .populate('senderId', 'profile.name profile.avatarUrl')
+      .populate('pollId')
+      .lean();
+
+    // 3. Transform & Filter
+    const enrichedMessages = await this.enrichPollMessages(messages);
+    const transformedMessages = enrichedMessages.map((msg) =>
+      this.transformService.transformMessage(msg),
+    );
+
+    return transformedMessages.filter(msg => msg.pollId);
+  }
 }
+
+

@@ -3,7 +3,7 @@ import { apiClient } from "./apiClient";
 export const userService = {
 
   searchFriend: async (key: string, userId: string) => {
-    
+
     const response = await apiClient.post("/api/users/search-friend", {
       userId: userId,
       key,
@@ -94,8 +94,13 @@ export const userService = {
     return response.data;
   },
 
+
   searchFriendByPhone : async (userId : string, phone : string) => {
     const response = await apiClient.post("/api/users/search-friend-phone", {userId, phone});
+    return response.data;
+  },
+  checkFriendStatus: async (targetUserId: string) => {
+    const response = await apiClient.get(`/api/users/friend-status/${targetUserId}`);
     return response.data;
   }
 };

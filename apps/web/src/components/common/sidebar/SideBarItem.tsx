@@ -3,7 +3,6 @@ import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
@@ -28,7 +27,7 @@ export default function SideBarItem({
         <div
           onClick={onClick}
           className={cn(
-            "group relative flex  w-full cursor-pointer items-center justify-center transition-all duration-200",
+            "rounded-md p-3 group relative flex  w-full cursor-pointer items-center justify-center transition-all duration-200",
             // Hiệu ứng background khi hover hoặc active
             isActive ? "bg-blue-700" : "hover:bg-blue-800/50",
             className,
@@ -36,7 +35,7 @@ export default function SideBarItem({
         >
           {/* Icon chính */}
           <Icon
-            size={24}
+            size={26}
             strokeWidth={1.5}
             className={cn(
               "transition-colors",
@@ -45,9 +44,7 @@ export default function SideBarItem({
           />
 
           {/* Vạch trắng nhỏ bên cạnh khi Active (giống Zalo gốc) */}
-          {isActive && (
-            <div className="absolute left-0 h-full w-[3px] bg-white" />
-          )}
+          {isActive && <div className="absolute left-0 h-full w-1 bg-white" />}
         </div>
       </TooltipTrigger>
 

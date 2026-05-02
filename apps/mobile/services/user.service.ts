@@ -108,4 +108,19 @@ export const userService = {
     const res = await api.get("/users/list-friends");
     return res;
   },
+
+  addFriend: async (targetUserId: string, requesterId: string) => {
+    const response = await api.post("/users/add-friend", { targetUserId, requesterId });
+    return response.data;
+  },
+
+  acceptFriend: async (targetUserId: string, requesterId: string) => {
+    const response = await api.post("/users/accept-friend", { targetUserId, requesterId });
+    return response.data;
+  },
+
+  checkFriendStatus: async (targetUserId: string) => {
+    const response = await api.get(`/users/friend-status/${targetUserId}`);
+    return response.data;
+  },
 };

@@ -2,8 +2,8 @@ import {
   Body,
   Controller,
   Get,
-  Param,
   Patch,
+  Param,
   Post,
   Request,
   UploadedFile,
@@ -11,10 +11,10 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { RequestFriendDto } from './dto/request-friend.dto';
+import { RequestFriendPhone } from './dto/request-friend-phone';
 import { SearchFriendDto } from './dto/search-friend.dto';
 import { InforUser } from './dto/infor-user.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import RequestFriendPhone from './dto/request-friend-phone';
 
 @Controller('users')
 export class UsersController {
@@ -88,5 +88,10 @@ export class UsersController {
   @Get('user-information/:userId')
   getUserInformation(@Param('userId') userId: string) {
     return this.usersService.getUserInformation(userId);
+  }
+
+  @Get('friend-status/:targetUserId')
+  getFriendStatus(@Request() req, @Param('targetUserId') targetUserId: string) {
+    return this.usersService.getFriendStatus(req.user.userId, targetUserId);
   }
 }

@@ -66,7 +66,7 @@ export const SidebarPrimary = () => {
   }, [socket, userId]);
 
   return (
-    <aside className="w-16 bg-[#005AE0] flex flex-col items-center py-4 shrink-0 z-[100]">
+    <aside className="w-16 bg-[#005AE0] flex flex-col items-center py-4 shrink-0 z-20">
       {/* User Avatar */}
       <div className="relative mb-6">
         <Tooltip>
@@ -132,8 +132,7 @@ export const SidebarPrimary = () => {
         })}
       </nav>
 
-      {/* Bottom Actions - Sử dụng Dropdown mới từ nhánh KhongVanTam */}
-      <div className="mt-auto flex flex-col items-center z-[10000]">
+      <div className="mt-auto flex flex-col items-center">
         <SettingDropdownSidebar />
       </div>
     </aside>

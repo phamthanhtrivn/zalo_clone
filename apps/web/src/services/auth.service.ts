@@ -48,4 +48,21 @@ export const authService = {
     const res = await apiClient.post("/api/auth/change-password", payload);
     return res.data.data;
   },
+  getSessions: async () => {
+    const res = await apiClient.get("/api/auth/sessions");
+    return res.data.data;
+  },
+  logOutDevice: async (deviceId: string) => {
+    const res = await apiClient.post("/api/auth/logout-device", { deviceId });
+    return res.data.data;
+  },
+  logOutDevices: async () => {
+    const res = await apiClient.post("/api/auth/logout-others");
+    return res.data.data;
+  },
+  // qr-login/exchange
+  exchangeToken: async (ticket: string) => {
+    const res = await apiClient.post("/api/auth/qr-login/exchange", { ticket });
+    return res.data.data;
+  },
 };

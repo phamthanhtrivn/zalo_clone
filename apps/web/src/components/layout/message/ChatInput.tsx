@@ -3,11 +3,14 @@ import {
   Paperclip,
   Image as ImageIcon,
   SendHorizontal,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
 import { RiShareForward2Fill } from "react-icons/ri";
+
+import CreatePollModal from "./CreatePollModal";
 
 import { conversationService } from "@/services/conversation.service";
 
@@ -45,6 +48,7 @@ const ChatInput = ({
 
   const [text, setText] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showPollModal, setShowPollModal] = useState(false);
   const [myRole, setMyRole] = useState<string>("MEMBER");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -270,6 +274,17 @@ const ChatInput = ({
         >
           <ImageIcon className="w-10 h-10" />
         </Button>
+
+        {isGroup && (
+          <Button
+            onClick={() => setShowPollModal(true)}
+            variant="ghost"
+            className="w-10 h-10 text-gray-500 cursor-pointer"
+            title="Tạo bình chọn"
+          >
+            <BarChart3 className="w-10 h-10" />
+          </Button>
+        )}
         <div className="flex-1"></div>
       </div>
       <div className="flex items-center gap-2 p-2">
@@ -304,6 +319,12 @@ const ChatInput = ({
           </span>
         </Button>
       </div>
+
+      <CreatePollModal
+        conversationId={conversationId}
+        isOpen={showPollModal}
+        onClose={() => setShowPollModal(false)}
+      />
     </div>
   );
 };

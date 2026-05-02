@@ -23,6 +23,9 @@ import {
   Settings2,
   Check,
   Pencil,
+  BarChart2,
+  X,
+  QrCode,
 } from "lucide-react";
 import {
   useFloating,
@@ -54,6 +57,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import CreateGroupModal from "@/components/layout/CreateGroupModal";
 import { Switch } from "@/components/ui/switch";
+import ShareGroupQRModal from "./ShareGroupQRModal";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
@@ -72,11 +76,15 @@ import {
   removeConversation,
   updateConversationSetting,
 } from "@/store/slices/conversationSlice";
+import { pollService } from "@/services/poll.service";
+import PollMessage from "./PollMessage";
 
 // Types & Utils
 import type { ConversationItemType } from "@/types/conversation-item.type";
 import { getFileIcon } from "@/utils/file-icon.util";
 import { getDateLabel } from "@/utils/format-message-time..util";
+import { getAvatarData, getColorByName } from "@/utils/avatar-utils";
+import { Users as UsersIcon } from "lucide-react";
 
 type ConversationMemberRow = {
   userId: string;
@@ -139,7 +147,11 @@ const ConversationInfoPanel = ({
     members: true,
     management: false,
     requests: true,
+    polls: false,
   });
+
+  const [polls, setPolls] = useState<any[]>([]);
+  const [selectedPollMsg, setSelectedPollMsg] = useState<any | null>(null);
 
   const [members, setMembers] = useState<ConversationMemberRow[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -164,6 +176,8 @@ const ConversationInfoPanel = ({
     index: 0,
   });
 
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(currentConversation?.name || "");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -179,6 +193,7 @@ const ConversationInfoPanel = ({
   const currentMember = members.find(
     (m) => String(m.userId) === String(currentUserId),
   );
+  const currentUserRole = currentMember?.role || (isGroup ? "MEMBER" : "OWNER");
   const canManageMembers =
     currentMember?.role === "OWNER" || currentMember?.role === "ADMIN";
 
@@ -514,9 +529,13 @@ const ConversationInfoPanel = ({
         currentConversation.conversationId,
         target.userId,
       );
-      if (res?.success) setMembersRefreshKey((k) => k + 1);
+      if (res?.success) {
+        toast.success("Đã chuyển quyền trưởng nhóm thành công");
+        setMemberPendingTransfer(null);
+        setMembersRefreshKey((k) => k + 1);
+      }
     } catch (error) {
-      console.error(error);
+      toast.error("Chuyển quyền trưởng nhóm thất bại");
     }
   };
 
@@ -558,11 +577,13 @@ const ConversationInfoPanel = ({
           conversationId: currentConversation.conversationId,
         }),
       );
+      toast.success("Đã rời nhóm thành công");
       navigate("/");
     } catch {
       setLeaveGroupErrorDialogOpen(true);
     } finally {
       setIsLeavingGroup(false);
+      setLeaveGroupDialogOpen(false);
     }
   };
 
@@ -579,10 +600,14 @@ const ConversationInfoPanel = ({
             conversationId: currentConversation.conversationId,
           }),
         );
+        toast.success("Đã giải tán nhóm thành công");
         navigate("/");
       }
+    } catch (error) {
+      toast.error("Giải tán nhóm thất bại");
     } finally {
       setIsDeletingGroup(false);
+      setDeleteGroupDialogOpen(false);
     }
   };
 
@@ -599,6 +624,22 @@ const ConversationInfoPanel = ({
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const handleTogglePolls = async () => {
+    const willExpand = !expandedSections.polls;
+    toggleSection("polls");
+    
+    if (willExpand && conversation?.conversationId) {
+      try {
+        const res = await pollService.getPolls(conversation.conversationId);
+        if (res.success) {
+          setPolls(res.data || []);
+        }
+      } catch (error) {
+        console.error("Lỗi lấy danh sách bình chọn:", error);
+      }
+    }
   };
 
   const handleSaveName = async () => {
@@ -673,8 +714,14 @@ const ConversationInfoPanel = ({
           <div className="relative group">
             <Avatar className="w-20 h-20 mb-3 border-2 border-white shadow-md">
               <AvatarImage src={currentConversation?.avatar} />
-              <AvatarFallback className="text-2xl bg-blue-100 text-blue-600 font-bold">
-                {currentConversation?.name?.charAt(0)}
+              <AvatarFallback 
+                className="text-2xl text-white font-bold"
+                style={{ backgroundColor: getColorByName(currentConversation?.name || "") }}
+              >
+                {(() => {
+                  const { initials, isGroupIcon } = getAvatarData(currentConversation?.name || "");
+                  return isGroupIcon ? <Users className="w-10 h-10" /> : initials;
+                })()}
               </AvatarFallback>
             </Avatar>
             {isGroup && canManageMembers && (
@@ -806,11 +853,24 @@ const ConversationInfoPanel = ({
               className="flex flex-col items-center gap-1.5 flex-1 group animate-in fade-in zoom-in duration-200 cursor-pointer"
             >
               <div className="w-10 h-10 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center group-hover:bg-gray-200 transition-colors">
-                <Users size={20} />
+                <UsersIcon size={20} />
               </div>
               <span className="text-[11px] font-medium text-gray-600">
                 Tạo nhóm
               </span>
+            </button>
+          )}
+
+          {/* Share QR Button */}
+          {isGroup && (
+            <button
+              onClick={() => setQrModalOpen(true)}
+              className="flex flex-col items-center gap-1.5 flex-1 group cursor-pointer"
+            >
+              <div className="w-10 h-10 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center group-hover:bg-gray-200 transition-colors">
+                <QrCode size={20} />
+              </div>
+              <span className="text-[11px] font-medium text-gray-600">Mã QR</span>
             </button>
           )}
         </div>
@@ -1161,6 +1221,54 @@ const ConversationInfoPanel = ({
           )}
         </div>
 
+        {/* POLL SECTION */}
+        <div className="bg-white border-t">
+          <button
+            onClick={handleTogglePolls}
+            className="h-12 w-full flex items-center justify-between px-4 hover:bg-gray-50 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <BarChart2 size={18} className="text-gray-600" />
+              <span className="text-[14px] font-medium text-gray-800">Bình chọn</span>
+            </div>
+            {expandedSections.polls ? (
+              <ChevronDown size={16} className="text-gray-500" />
+            ) : (
+              <ChevronRight size={16} className="text-gray-500" />
+            )}
+          </button>
+          
+          {expandedSections.polls && (
+            <div className="px-4 pb-4 space-y-2 animate-in fade-in duration-200">
+              {polls.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-2">
+                  Chưa có bình chọn nào
+                </p>
+              ) : (
+                polls.map((msg) => {
+                  const pollData = msg.poll;
+                  if (!pollData) return null;
+
+                  return (
+                    <div 
+                      key={msg._id} 
+                      onClick={() => setSelectedPollMsg(msg)}
+                      className="p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-all group/poll"
+                    >
+                      <p className="text-[13px] font-semibold text-gray-800 line-clamp-1 group-hover/poll:text-blue-700">
+                        {pollData.title || "Bình chọn không tiêu đề"}
+                      </p>
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        {pollData.totalParticipants || 0} người đã bình chọn
+                      </p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+
         {/* MEMBERS SECTION */}
         {isGroup && (
           <div className="bg-white border-t">
@@ -1189,36 +1297,44 @@ const ConversationInfoPanel = ({
                     key={m.userId}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 group"
                   >
-                    <Avatar className="w-10 h-10 border">
+                    <Avatar className="w-10 h-10 border-0 shadow-sm">
                       <AvatarImage src={m.avatarUrl ?? ""} />
-                      <AvatarFallback className="bg-gray-100 text-gray-600">
-                        {m.name.charAt(0)}
+                      <AvatarFallback 
+                        className="text-white font-bold"
+                        style={{ backgroundColor: getColorByName(m.name) }}
+                      >
+                        {(() => {
+                          const { initials, isGroupIcon } = getAvatarData(m.name);
+                          return isGroupIcon ? <Users className="w-5 h-5" /> : initials;
+                        })()}
                       </AvatarFallback>
                     </Avatar>
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[14px] font-medium text-gray-800 truncate">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <span className="text-[14px] font-semibold text-gray-800 truncate flex-shrink">
                           {m.name}
                           {String(m.userId) === String(currentUserId) &&
                             " (Bạn)"}
                         </span>
                         {m.role === "OWNER" && (
-                          <Badge className="bg-orange-50 text-orange-600 border-orange-100 text-[9px] h-4 px-1.5 shadow-none hover:bg-orange-50">
+                          <Badge className="bg-[#FFF2E5] text-[#E67E22] border-[#FFD9B3] text-[10px] font-extrabold h-5 px-3 shadow-none hover:bg-[#FFF2E5] uppercase tracking-widest whitespace-nowrap shrink-0 rounded-full">
                             Trưởng nhóm
                           </Badge>
                         )}
                         {m.role === "ADMIN" && (
-                          <Badge className="bg-blue-50 text-blue-600 border-blue-100 text-[9px] h-4 px-1.5 shadow-none hover:bg-blue-50">
+                          <Badge className="bg-[#E5F2FF] text-[#0068FF] border-[#C2E0FF] text-[10px] font-extrabold h-5 px-3 shadow-none hover:bg-[#E5F2FF] uppercase tracking-widest whitespace-nowrap shrink-0 rounded-full">
                             Phó nhóm
                           </Badge>
                         )}
                       </div>
                     </div>
 
-                    {/* Nút thao tác (Chỉ hiện cho Owner với người khác) */}
-                    {currentMember?.role === "OWNER" &&
-                      m.userId !== currentUserId && (
+                    {/* Nút thao tác (Hiện cho Owner hoặc Admin với Member) */}
+                    {m.userId !== currentUserId &&
+                      (currentMember?.role === "OWNER" ||
+                        (currentMember?.role === "ADMIN" &&
+                          m.role === "MEMBER")) && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button className="p-1 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
@@ -1226,26 +1342,30 @@ const ConversationInfoPanel = ({
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem
-                              className="text-[13px] cursor-pointer"
-                              onClick={() =>
-                                handleUpdateMemberRole(
-                                  m,
-                                  m.role === "ADMIN" ? "MEMBER" : "ADMIN",
-                                )
-                              }
-                            >
-                              {m.role === "ADMIN"
-                                ? "Gỡ chức Phó nhóm"
-                                : "Bổ nhiệm Phó nhóm"}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-[13px] cursor-pointer"
-                              onClick={() => setMemberPendingTransfer(m)}
-                            >
-                              Chuyển quyền trưởng nhóm
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
+                            {currentMember?.role === "OWNER" && (
+                              <>
+                                <DropdownMenuItem
+                                  className="text-[13px] cursor-pointer"
+                                  onClick={() =>
+                                    handleUpdateMemberRole(
+                                      m,
+                                      m.role === "ADMIN" ? "MEMBER" : "ADMIN",
+                                    )
+                                  }
+                                >
+                                  {m.role === "ADMIN"
+                                    ? "Gỡ chức Phó nhóm"
+                                    : "Bổ nhiệm Phó nhóm"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-[13px] cursor-pointer"
+                                  onClick={() => setMemberPendingTransfer(m)}
+                                >
+                                  Chuyển quyền trưởng nhóm
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
                             <DropdownMenuItem
                               className="text-red-600 text-[13px] cursor-pointer"
                               onClick={() => setMemberPendingRemove(m)}
@@ -1308,6 +1428,25 @@ const ConversationInfoPanel = ({
         excludeUserIds={members.map((m) => m.userId)}
         onMembersAdded={() => setMembersRefreshKey((k) => k + 1)}
       />
+
+      {isGroup && (
+        <ShareGroupQRModal
+          open={qrModalOpen}
+          onClose={() => setQrModalOpen(false)}
+          conversationId={currentConversation?.conversationId || ""}
+          conversationName={currentConversation?.name || ""}
+          initialJoinToken={currentConversation?.group?.joinToken || null}
+          myRole={currentUserRole as any}
+          onTokenRefreshed={(newToken) => {
+            dispatch(
+              updateConversationSetting({
+                conversationId: currentConversation!.conversationId,
+                group: { ...currentConversation!.group!, joinToken: newToken },
+              }),
+            );
+          }}
+        />
+      )}
 
       {/* Image Preview Overlay */}
       {preview.isOpen && (
@@ -1383,11 +1522,11 @@ const ConversationInfoPanel = ({
           <AlertDialogFooter>
             <AlertDialogCancel>Hủy</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-500 hover:bg-red-600 text-white"
+              className="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white min-w-[100px] transition-colors"
               onClick={handleLeaveGroup}
               disabled={isLeavingGroup}
             >
-              Rời nhóm
+              {isLeavingGroup ? "Đang xử lý..." : "Rời nhóm"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1402,17 +1541,16 @@ const ConversationInfoPanel = ({
             <AlertDialogTitle>Giải tán nhóm?</AlertDialogTitle>
           </AlertDialogHeader>
           <AlertDialogDescription>
-            Tất cả thành viên sẽ bị mời ra khỏi nhóm và tin nhắn sẽ bị xóa vĩnh
-            viễn.
+            Hành động này không thể hoàn tác. Tất cả thành viên sẽ bị mời ra khỏi nhóm và tin nhắn sẽ bị xóa vĩnh viễn. Bạn chắc chắn muốn giải tán nhóm?
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel>Hủy</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-500 hover:bg-red-600 text-white"
+              className="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white min-w-[100px] transition-colors"
               onClick={handleDeleteGroup}
               disabled={isDeletingGroup}
             >
-              Giải tán
+              {isDeletingGroup ? "Đang xử lý..." : "Giải tán"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1491,6 +1629,32 @@ const ConversationInfoPanel = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* MODAL XEM CHI TIẾT POLL */}
+      {selectedPollMsg &&
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 animate-in fade-in backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl relative max-w-[360px] w-full overflow-hidden transform animate-in zoom-in-95 duration-200">
+            {/* Header Modal */}
+            <div className="h-14 border-b flex items-center justify-between px-4 bg-gray-50/50">
+              <span className="text-[15px] font-bold text-gray-800">Chi tiết bình chọn</span>
+              <button 
+                onClick={() => setSelectedPollMsg(null)}
+                className="p-1.5 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
+              <PollMessage 
+                pollId={selectedPollMsg.pollId._id || selectedPollMsg.pollId} 
+                conversationId={currentConversation?.conversationId || conversation?.conversationId || ""} 
+                initialPoll={selectedPollMsg.poll}
+              />
+            </div>
+          </div>
+        </div>
+      }
     </div>
   );
 };

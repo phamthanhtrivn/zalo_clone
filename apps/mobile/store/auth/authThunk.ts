@@ -23,7 +23,6 @@ export const signIn = createAsyncThunk(
 
       return data.user;
     } catch (err: any) {
-
       if (!err.response) {
         return thunkAPI.rejectWithValue({
           message: "Không thể kết nối đến máy chủ!",
@@ -139,6 +138,12 @@ export const logOut = createAsyncThunk("auth/logOut", async (_, thunkApi) => {
   }
 });
 
+//cưỡng chế
+export const logout2 = createAsyncThunk("auth/logout", async () => {
+  await SecureStore.deleteItemAsync("access_token");
+  await SecureStore.deleteItemAsync("refresh_token");
+});
+
 export const verifyOtp = createAsyncThunk(
   "auth/verifyOtp",
   async (payload: OtpVerify, thunkAPI) => {
@@ -156,6 +161,30 @@ export const changePassword = createAsyncThunk(
   async (payload: ChangePassword, thunkAPI) => {
     try {
       const res = await authService.changePassword(payload);
+      return res;
+    } catch (err: any) {
+      return thunkAPI.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const scanQrLogin = createAsyncThunk(
+  "auth/scan-login-qr",
+  async (qrToken: string, thunkAPI) => {
+    try {
+      const res = await authService.scanQrLogin(qrToken);
+      return res;
+    } catch (err: any) {
+      return thunkAPI.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const confirmLogin = createAsyncThunk(
+  "auth/confirm-login-qr",
+  async (qrToken: string, thunkAPI) => {
+    try {
+      const res = await authService.confirmQrLogin(qrToken);
       return res;
     } catch (err: any) {
       return thunkAPI.rejectWithValue(err.response?.data);
