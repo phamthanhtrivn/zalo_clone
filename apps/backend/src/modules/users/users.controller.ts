@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Param,
-
   Patch,
   Post,
   Request,
@@ -15,11 +14,11 @@ import { RequestFriendDto } from './dto/request-friend.dto';
 import { SearchFriendDto } from './dto/search-friend.dto';
 import { InforUser } from './dto/infor-user.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AuthUser } from '../auth/types/auth.type';
+import RequestFriendPhone from './dto/request-friend-phone';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
   @Get()
   async findByPhone(phone: string) {
@@ -57,6 +56,10 @@ export class UsersController {
   searchFriend(@Body() body: SearchFriendDto) {
     return this.usersService.searchFriend(body);
   }
+  @Post('search-friend-phone')
+  searchFriendPhone(@Body() body: RequestFriendPhone) {
+    return this.usersService.searchFriendByPhone(body.userId, body.phone);
+  }
   @Patch('update-information-user')
   @UseInterceptors(FileInterceptor('avatar'))
   updateInformationUser(
@@ -82,8 +85,8 @@ export class UsersController {
   getSentFriendRequests(@Request() req) {
     return this.usersService.getSentFriendRequests(req.user.userId);
   }
-  @Get('user-information')
-  getUserInformation(@Request() req) {
-    return this.usersService.getUserInformation(req.user.userId);
+  @Get('user-information/:userId')
+  getUserInformation(@Param('userId') userId: string) {
+    return this.usersService.getUserInformation(userId);
   }
 }

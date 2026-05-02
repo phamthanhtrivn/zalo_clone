@@ -8,4 +8,4 @@ import { MessagesModule } from '../messages/messages.module';
   providers: [ChatGateway],
   exports: [ChatGateway],
 })
-export class ChatModule { }
+export class ChatModule {}

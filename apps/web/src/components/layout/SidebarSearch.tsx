@@ -3,9 +3,11 @@ import { useState } from "react";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import CreateGroupModal from "./CreateGroupModal";
+import AddFriendModal from "./AddFriendModal";
 
 export const SidebarSearch = () => {
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [isOpenModelAddFriend, setIsOpenAddFriend] = useState<boolean>(false);
 
   return (
     <>
@@ -20,6 +22,7 @@ export const SidebarSearch = () => {
             />
           </div>
           <Button
+            onClick={() => setIsOpenAddFriend(true)}
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-gray-600 hover:bg-[#f1f2f4] cursor-pointer"
@@ -38,6 +41,9 @@ export const SidebarSearch = () => {
           </Button>
         </div>
       </div>
+      {isOpenModelAddFriend && (
+        <AddFriendModal onClose={() => setIsOpenAddFriend(false)} />
+      )}
       <CreateGroupModal
         open={isCreateGroupOpen}
         onOpenChange={setIsCreateGroupOpen}

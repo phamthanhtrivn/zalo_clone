@@ -12,9 +12,6 @@ import {
   ConversationSchema,
 } from '../conversations/schemas/conversation.schema';
 import { StorageModule } from 'src/common/storage/storage.module';
-
-import { ChatGateway } from '../chat/chat.gateway';
-
 import { ChatModule } from '../chat/chat.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { ConversationSettingSchema } from '../conversation-settings/schemas/conversation-setting.schema';

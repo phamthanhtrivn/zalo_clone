@@ -20,12 +20,14 @@ import { format } from './helper/format.helper';
 import * as bcrypt from 'bcrypt';
 import { Gender } from 'src/common/types/enums/gender';
 import { FriendStatus } from 'src/common/types/enums/friend-status';
+import { ChatGateway } from '../chat/chat.gateway';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     private readonly storageService: StorageService,
+    private readonly chatGateway: ChatGateway,
   ) {}
 
   async findByPhone(phone: string) {
@@ -99,6 +101,22 @@ export class UsersService {
       friendId,
       FriendStatus.PENDING,
     );
+
+    const user = await this.userModel
+      .findById(userId)
+      .select('profile.name profile.avatarUrl') // Chỉ lấy những trường cần thiết
+      .lean();
+
+    const payload = {
+      friendId: user?._id.toString(),
+      name: user?.profile?.name,
+      avatarUrl:
+        this.storageService.signFileUrl(user?.profile?.avatarUrl ?? '') || '',
+    };
+
+    this.chatGateway.server
+      .to(body.friendId)
+      .emit('receive_friend_request', payload);
     // Gui yeu cau lai lan nua
     if (check) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
@@ -108,6 +126,7 @@ export class UsersService {
         userId,
         FriendStatus.REQUESTED,
       );
+
       return { userId, friendId };
     }
 
@@ -138,13 +157,27 @@ export class UsersService {
   // [POST] /api/users/accept-friend
   async acceptFriend(body: RequestFriendDto) {
     const { userId, friendId } = body;
-
     const check = await checkFriendStatus(
       this.userModel,
       userId,
       friendId,
       FriendStatus.REQUESTED,
     );
+
+    const user = await this.userModel
+      .findById(userId)
+      .select('profile.name profile.avatarUrl') // Chỉ lấy những trường cần thiết
+      .lean();
+
+    const payload = {
+      friendId: user?._id.toString(),
+      name: user?.profile?.name,
+      avatarUrl:
+        this.storageService.signFileUrl(user?.profile?.avatarUrl ?? '') || '',
+    };
+
+    this.chatGateway.server.to(body.friendId).emit('friend_accepted', payload);
+
     if (check) {
       // update status user
       await updateFriendStatus(
@@ -227,41 +260,36 @@ export class UsersService {
         },
       },
     );
+    this.chatGateway.server
+      .to(body.friendId)
+      .emit('cancel_friend_request', body.userId);
+
     return { userId, friendId };
   }
   // [POST] /api/users/search-friend
   async searchFriend(body: SearchFriendDto) {
     const { userId, key } = body;
-    const users = await this.userModel
-      .find({
-        $or: [
-          {
-            phone: key,
-          },
-          {
-            $and: [
-              { 'friends.friendId': userId },
-              { 'friends.status': FriendStatus.ACCEPTED },
-              { 'profile.name': { $regex: `${key}`, $options: 'i' } },
-            ],
-          },
-        ],
-      })
-      .select({ _id: true, profile: true });
+    const users = await getListUserForStatus(
+      this.userModel,
+      FriendStatus.ACCEPTED,
+      this.storageService,
+      userId,
+    );
+    let userFormat = format(users);
 
-    const userMap = users?.map((item) => {
-      return {
-        _id: item._id,
-        name: item.profile?.name,
-        avatarUrl: this.storageService.signFileUrl(
-          item.profile?.avatarUrl ? item.profile?.avatarUrl : '',
-        ),
-      };
-    });
-
-    const usersFormat = format(userMap);
-
-    return { users: usersFormat };
+    if (key && key.trim().length > 0) {
+      const searchKey = key.trim().toLowerCase();
+      userFormat = userFormat
+        .map((group) => ({
+          ...group,
+          friends: group.friends.filter((friend) =>
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+            friend.name.toLowerCase().includes(searchKey),
+          ),
+        }))
+        .filter((group) => group.friends.length > 0);
+    }
+    return { users: userFormat };
   }
   // [POST] /api/users/suggest-friend
   async suggestFriend(userId: string) {
@@ -369,6 +397,27 @@ export class UsersService {
       },
     };
 
+    const payload = {
+      userId: id,
+      name: record.profile?.name,
+      avatarUrl: imageUrl || '',
+      gender: record.profile?.gender,
+      birthday: record.profile?.birthday,
+    };
+
+    // Emit to friends
+    const friends = record.friends || [];
+    for (const friend of friends) {
+      if (friend.status === FriendStatus.ACCEPTED) {
+        this.chatGateway.server
+          .to(friend.friendId.toString())
+          .emit('update_profile', payload);
+      }
+    }
+
+    // Emit to self (other devices)
+    this.chatGateway.server.to(id!).emit('update_profile', payload);
+
     return record;
   }
 
@@ -420,5 +469,39 @@ export class UsersService {
     };
 
     return data;
+  }
+  async searchFriendByPhone(currentUserId: string, phone: string) {
+    const targetUser = await this.userModel
+      .findOne(
+        {
+          phone: phone,
+        },
+        {
+          _id: 1,
+          'profile.name': 1,
+          'profile.avatarUrl': 1,
+          friends: {
+            $elemMatch: { friendId: currentUserId },
+          },
+        },
+      )
+      .lean();
+
+    if (!targetUser) {
+      return null;
+    }
+
+    const relationship = targetUser.friends?.[0];
+
+    const user = {
+      friendId: targetUser._id.toString(),
+      name: targetUser.profile?.name || '',
+      avatarUrl: targetUser.profile?.avatarUrl
+        ? this.storageService.signFileUrl(targetUser.profile?.avatarUrl || '')
+        : '',
+      status: relationship ? relationship.status : 'NONE',
+    };
+
+    return user;
   }
 }

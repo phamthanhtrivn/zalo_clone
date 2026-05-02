@@ -7,7 +7,7 @@ import React, {
   useState,
 } from "react";
 import { io, Socket } from "socket.io-client";
-import { useAppDispatch, useAppSelector } from "@/store";
+import { useAppDispatch, useAppSelector, type RootState } from "@/store";
 import {
   addConversationToTop,
   fetchConversations,
@@ -30,6 +30,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { toast } from "react-toastify";
+import { clearAuth } from "@/store/auth/authSlice";
 
 interface SocketContextType {
   socket: Socket | null;
@@ -113,6 +115,19 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       window.dispatchEvent(new PopStateEvent("popstate"));
     } catch {
       window.location.href = "/";
+    }
+  };
+
+  // Tự động đăng xuất khi bị cưỡng ép
+  const handleForceLogout = (data: { message: string }) => {
+    toast.info(
+      data.message ||
+        "Phiên đăng nhập đã hết hạn hoặc bạn bị đăng xuất từ nơi khác.",
+    );
+    dispatch(clearAuth());
+
+    if (socketRef.current) {
+      socketRef.current.disconnect();
     }
   };
 
@@ -409,7 +424,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on("group_updated", handleGroupUpdated);
     socketInstance.on("member_updated", handleMemberUpdated);
     socketInstance.on("role_updated", handleMemberUpdated);
-
+    socketInstance.on("force_logout", handleForceLogout);
     return () => {
       // Hủy đăng ký listener khi unmount
       socketInstance.off("connect", onConnect);
@@ -457,6 +472,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.off("group_updated", handleGroupUpdated);
       socketInstance.off("member_updated", handleMemberUpdated);
       socketInstance.off("role_updated", handleMemberUpdated);
+      socketInstance.off("force_logout", handleForceLogout);
     };
   }, [apiUrl, dispatch, user?.userId]);
 
