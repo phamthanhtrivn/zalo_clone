@@ -25,6 +25,7 @@ import { MessagesQueryService } from './services/query.service';
 import { MessagesActionService } from './services/action.service';
 import { MessagesCallService } from './services/call.service';
 import { MessagesTransformService } from './services/transform.service';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { MessagesTransformService } from './services/transform.service';
     forwardRef(() => ConversationsModule),
     MembersModule,
     StorageModule,
+    AiModule,
   ],
   providers: [
     MessagesService,

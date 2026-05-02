@@ -38,6 +38,10 @@ import { ChatGateway } from '../chat/chat.gateway';
 import { StorageService } from 'src/common/storage/storage.service';
 import { MessageResponse } from './types/message-response.type';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { AiService } from '../ai/ai.service';
+import { RedisService } from 'src/common/redis/redis.service';
+import { REDIS_CHANNEL_SOCKET_EVENTS } from 'src/common/constants/redis.constant';
+import { ConversationType } from 'src/common/types/enums/conversation-type';
 
 @Injectable()
 export class MessagesService {
@@ -58,7 +62,9 @@ export class MessagesService {
     private readonly queryService: MessagesQueryService,
     private readonly actionService: MessagesActionService,
     private readonly callService: MessagesCallService,
-  ) { }
+    private readonly aiService: AiService,
+    private readonly redisService: RedisService,
+  ) {}
 
   async getMessagesFromConversation(
     conversationId: string,
@@ -125,12 +131,13 @@ export class MessagesService {
   }
 
   // --- Action Methods ---
-  async sendMessage(
-    sendMessageDto: SendMessageDto,
-    files?: Express.Multer.File[],
-  ) {
-    return this.actionService.sendMessage(sendMessageDto, files);
-  }
+  // async sendMessage(
+  //   sendMessageDto: SendMessageDto,
+  //   files?: Express.Multer.File[],
+  // ) {
+  //   return this.actionService.sendMessage(sendMessageDto, files);
+  // }
+
   async createCallMessage(callMessageDto: CallMessageDto) {
     return this.callService.createCallMessage(callMessageDto);
   }
@@ -176,19 +183,22 @@ export class MessagesService {
 
     if (!expiredMessages.length) return;
 
-    const ids = expiredMessages.map(m => m._id);
+    const ids = expiredMessages.map((m) => m._id);
 
     await this.messageModel.updateMany(
       { _id: { $in: ids } },
       { $set: { expired: true } },
     );
 
-    const grouped = expiredMessages.reduce((acc, m) => {
-      const key = m.conversationId.toString();
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(m._id.toString());
-      return acc;
-    }, {} as Record<string, string[]>);
+    const grouped = expiredMessages.reduce(
+      (acc, m) => {
+        const key = m.conversationId.toString();
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(m._id.toString());
+        return acc;
+      },
+      {} as Record<string, string[]>,
+    );
 
     for (const [convId, messageIds] of Object.entries(grouped)) {
       this.chatGateway.server
@@ -230,9 +240,9 @@ export class MessagesService {
       .lean();
 
     if (!conversation?.lastMessageId) {
-      return members.map(m => ({
+      return members.map((m) => ({
         userId: m.userId,
-        unreadCount: 0
+        unreadCount: 0,
       }));
     }
 
@@ -251,7 +261,7 @@ export class MessagesService {
           userId: member.userId,
           unreadCount,
         };
-      })
+      }),
     );
 
     return membersWithUnread;
@@ -278,13 +288,24 @@ export class MessagesService {
     });
 
     if (!member) {
-      throw new NotFoundException('User is not a participant in this conversation');
+      throw new NotFoundException(
+        'User is not a participant in this conversation',
+      );
     }
 
-    const conversation = await this.conversationModel.findById(objectConversationId, { lastMessageId: 1 });
+    const conversation = await this.conversationModel.findById(
+      objectConversationId,
+      { lastMessageId: 1 },
+    );
 
     if (!conversation?.lastMessageId) {
-      return { success: true, message: 'No messages', lastReadMessageId: null, unreadCount: 0, messagesToUpdate: [] };
+      return {
+        success: true,
+        message: 'No messages',
+        lastReadMessageId: null,
+        unreadCount: 0,
+        messagesToUpdate: [],
+      };
     }
 
     const messages = await this.messageModel
@@ -306,24 +327,23 @@ export class MessagesService {
     // 2️⃣ Xóa readReceipts của user từ các messages sau prevMessage
     const findFilter: any = {
       conversationId: objectConversationId,
-      readReceipts: { $elemMatch: { userId: objectUserId } }
+      readReceipts: { $elemMatch: { userId: objectUserId } },
     };
 
     if (prevMessage) {
       findFilter._id = { $gt: prevMessage._id };
     }
 
-    await this.messageModel.updateMany(
-      findFilter,
-      {
-        $pull: {
-          readReceipts: { userId: objectUserId }
-        }
-      }
-    );
+    await this.messageModel.updateMany(findFilter, {
+      $pull: {
+        readReceipts: { userId: objectUserId },
+      },
+    });
 
     // 3️⃣ Lấy danh sách messages cần cập nhật UI
-    const messagesToUpdateFilter: any = { conversationId: objectConversationId };
+    const messagesToUpdateFilter: any = {
+      conversationId: objectConversationId,
+    };
     if (prevMessage) {
       messagesToUpdateFilter._id = { $gt: prevMessage._id };
     }
@@ -332,7 +352,7 @@ export class MessagesService {
       .find(messagesToUpdateFilter)
       .populate({
         path: 'readReceipts.userId',
-        model: 'User',  // ✅ Đảm bảo đúng model name
+        model: 'User', // ✅ Đảm bảo đúng model name
         select: '_id profile.name profile.avatarUrl',
       })
       .lean();
@@ -350,10 +370,111 @@ export class MessagesService {
       unreadCount: 1,
       lastReadMessageId: prevMessage?._id ?? null,
       lastMessageId: conversation.lastMessageId,
-      messagesToUpdate: messagesToUpdate.map(m => ({
+      messagesToUpdate: messagesToUpdate.map((m) => ({
         _id: m._id,
-        readReceipts: m.readReceipts
-      }))
+        readReceipts: m.readReceipts,
+      })),
     };
+  }
+
+  //HaThanhTuan
+  // gọi đến api send message là gọi đến hàm này
+  async handleIncomingMessage(
+    dto: SendMessageDto,
+    files?: Express.Multer.File[],
+  ) {
+    const { conversationId } = dto;
+    const cacheKey = `is_ai_conv:${conversationId}`;
+
+    let isAi = await this.redisService.get(cacheKey);
+
+    // kiểm tra xem có phải là đoạn chat với Ai không
+    // dùng redis để tiết kiệm query đến db.
+    if (isAi === null) {
+      const conversation = await this.conversationModel
+        .findById(conversationId)
+        .lean();
+      isAi = conversation?.type === ConversationType.AI ? 'true' : 'false';
+      await this.redisService.set(cacheKey, isAi, 'EX', 86400);
+    }
+
+    if (isAi === 'true') {
+      return this.processMessageWithAiStream(dto, files);
+    }
+
+    return this.actionService.sendMessage(dto, files);
+  }
+
+  //chat with AI
+  async processMessageWithAiStream(
+    sendMessageDto: SendMessageDto,
+    files?: Express.Multer.File[],
+  ) {
+    const userMessage = await this.actionService.sendMessage(
+      sendMessageDto,
+      files,
+    );
+
+    const { conversationId, content } = sendMessageDto;
+
+    await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+      room: conversationId,
+      event: 'ai_status',
+      data: { conversationId, status: 'thinking' },
+    });
+
+    const userText =
+      typeof content === 'string' ? JSON.parse(content).text : content?.text;
+
+    const stream = await this.aiService.chatStream(userText);
+    let isFirstChunk = true;
+    let fullAiResponse = '';
+
+    // vừa lưu chuỗi vừa gửi sự kiện về fe
+    for await (const chunk of stream) {
+      if (isFirstChunk) {
+        await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+          room: conversationId,
+          event: 'ai_status',
+          data: { conversationId, status: 'typing' },
+        });
+        isFirstChunk = false;
+      }
+      const contentChunk = chunk.choices[0]?.delta?.content || '';
+      if (!contentChunk) continue;
+
+      fullAiResponse += contentChunk;
+
+      await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+        room: conversationId,
+        event: 'ai_typing_chunk',
+        data: {
+          conversationId,
+          text: contentChunk,
+          isFinished: false,
+        },
+      });
+    }
+
+    // Gửi sự kiện báo kết thúc stream
+    await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+      room: conversationId,
+      event: 'ai_typing_chunk',
+      data: {
+        conversationId,
+        text: '',
+        isFinished: true,
+      },
+    });
+
+    // AI trả lời xong lưu vào message collection
+    const botDto: SendMessageDto = {
+      senderId: '69f438929cf8b39d88abd220',
+      conversationId: conversationId,
+      content: { text: fullAiResponse }, // Sửa lại để không bị double-wrap JSON
+    };
+    await this.actionService.sendMessage(botDto);
+
+    return userMessage;
   }
 }

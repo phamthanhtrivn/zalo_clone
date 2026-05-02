@@ -133,7 +133,7 @@ export class MessagesController {
     @Body() sendMessageDto: SendMessageDto,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    return this.messagesService.sendMessage(sendMessageDto, files);
+    return this.messagesService.handleIncomingMessage(sendMessageDto, files);
   }
 
   @Post('call')
