@@ -108,19 +108,29 @@ export const conversationService = {
     return response;
   },
   search: async (
-    userId: string,
-    keyword: string,
-    scope: "all" | "contacts" | "messages" | "files" | "groups" = "all",
-    limit = 8,
+    params: {
+      userId: string;
+      keyword: string;
+      scope?: "all" | "contacts" | "messages" | "files" | "groups";
+      limit?: number;
+    }
   ) => {
     const response = await api.get("/conversations/search", {
       params: {
-        userId,
-        keyword,
-        scope,
-        limit,
+        userId: params.userId,
+        keyword: params.keyword,
+        scope: params.scope || "all",
+        limit: params.limit || 8,
       },
     });
     return response;
   },
+  refreshGroupJoinToken: (id: string) =>
+    api.patch(`/conversations/${id}/qr-token`),
+
+  getGroupInfoByToken: (id: string, token: string) =>
+    api.get(`/conversations/${id}/qr-info/${token}`),
+
+  joinViaQR: (id: string, token: string) =>
+    api.post(`/conversations/${id}/join-via-qr`, { token }),
 };

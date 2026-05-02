@@ -3,12 +3,24 @@ import { Text, ScrollView, Image, View, TouchableOpacity } from "react-native";
 import Header from "@/components/common/Header";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useAppSelector } from "@/store/store";
-import formatBirthday from "@/helper/formatBirthday";
+import { useEffect } from "react";
+import { useAppDispatch, useAppSelector } from "@/store/store";
+import { fetchUserById } from "@/store/auth/userInfoSlice";
+import { useSocket } from "@/contexts/SocketContext";
+import formatBirthday from "@/utils/formatBirthday";
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const { userInfo } = useAppSelector((state) => state.userInfo);
+  const { user } = useAppSelector((state) => state.auth);
+  const { profileRefreshKey } = useSocket();
+
+  useEffect(() => {
+    if (user?.userId) {
+      dispatch(fetchUserById(user.userId));
+    }
+  }, [dispatch, user?.userId, profileRefreshKey]);
 
   const editEditProfile = () => {
     router.push("/private/update-profile");

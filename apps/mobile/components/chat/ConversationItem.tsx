@@ -31,7 +31,7 @@ import {
   removeConversation,
   setUnreadCount,
 } from "@/store/slices/conversationSlice";
-import { Avatar } from "../common/ui/Avatar";
+import GroupAvatar from "../ui/GroupAvatar";
 import { useSocket } from "@/contexts/SocketContext";
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
@@ -421,9 +421,10 @@ const ConversationItem: React.FC<Props> = ({
           </View>
         )}
 
-        <Image
-          source={{ uri: conversation.avatar }}
-          style={{ width: 48, height: 48, borderRadius: 24 }}
+        <GroupAvatar
+          uri={conversation.avatar}
+          name={conversation.name}
+          size={48}
         />
 
         <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
@@ -608,14 +609,10 @@ const ConversationItem: React.FC<Props> = ({
               borderBottomColor: "#f0f0f0",
             }}
           >
-            <Image
-              source={{ uri: conversation.avatar }}
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 19,
-                marginRight: 12,
-              }}
+            <GroupAvatar
+              uri={conversation.avatar}
+              name={conversation.name}
+              size={38}
             />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text

@@ -12,13 +12,15 @@ import {
   ConversationSchema,
 } from '../conversations/schemas/conversation.schema';
 import { StorageModule } from 'src/common/storage/storage.module';
-
-import { ChatGateway } from '../chat/chat.gateway';
-
 import { ChatModule } from '../chat/chat.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { ConversationSettingSchema } from '../conversation-settings/schemas/conversation-setting.schema';
 import { ConversationSetting } from '../conversation-settings/schemas/conversation-setting.schema';
+
+import { Poll, PollSchema } from './schemas/poll.schema';
+import { PollVote, PollVoteSchema } from './schemas/poll-vote.schema';
+import { PollService } from './services/poll.service';
+
 import { MessagesQueryService } from './services/query.service';
 import { MessagesActionService } from './services/action.service';
 import { MessagesCallService } from './services/call.service';
@@ -26,14 +28,16 @@ import { MessagesTransformService } from './services/transform.service';
 
 @Module({
   imports: [
-    forwardRef(() => ChatModule),
     MongooseModule.forFeature([
       { name: Message.name, schema: MessageSchema },
       { name: Member.name, schema: MemberSchema },
       { name: Conversation.name, schema: ConversationSchema },
       { name: ConversationSetting.name, schema: ConversationSettingSchema },
+      
+      { name: Poll.name, schema: PollSchema },
+      { name: PollVote.name, schema: PollVoteSchema },
     ]),
-    forwardRef(() => ChatModule),
+    forwardRef(() => ChatModule), 
     forwardRef(() => ConversationsModule),
     MembersModule,
     StorageModule,
@@ -44,8 +48,11 @@ import { MessagesTransformService } from './services/transform.service';
     MessagesActionService,
     MessagesCallService,
     MessagesTransformService,
+    
+    PollService,
   ],
   controllers: [MessagesController],
-  exports: [MessagesService],
+  
+  exports: [MessagesService, PollService],
 })
 export class MessagesModule {}

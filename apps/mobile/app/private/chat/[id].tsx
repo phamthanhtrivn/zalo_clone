@@ -8,8 +8,9 @@ import {
   Alert,
   Text,
   TouchableOpacity,
+  StyleSheet
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSocket } from "@/contexts/SocketContext";
 import { messageService } from "@/services/message.service";
@@ -22,6 +23,7 @@ import {
 } from "@/constants/emoji.constant";
 import Container from "@/components/common/Container";
 import MessageBubble from "@/components/chat/MessageBubble";
+import SystemMessage from "@/components/chat/SystemMessage";
 import ChatInput from "@/components/chat/ChatInput";
 import PinnedMessagesBar from "@/components/chat/PinnedMessagesBar";
 import ReactionPicker from "@/components/chat/ReactionPicker";
@@ -35,32 +37,56 @@ import {
 } from "@/utils/format-message-time..util";
 import { Image } from "expo-image";
 import MenuItem from "@/components/chat/MenuItem";
-import { conversationService } from "@/services/conversation.service";
-import {
-  setConversations,
-  setReplyingMessage,
-  clearReplyingMessage,
-} from "@/store/slices/conversationSlice";
+import { clearReplyingMessage, setConversations, setReplyingMessage } from "@/store/slices/conversationSlice";
 import { useVideoCall } from "@/contexts/VideoCallContext";
+import { userService } from "@/services/user.service";
+import GroupAvatar from "@/components/ui/GroupAvatar";
 
 export default function ChatWindow() {
   const conversations = useAppSelector(
     (state) => state.conversation.conversations,
   );
-  const { id, messageId } = useLocalSearchParams<{
+  const { id, messageId, otherUserId: paramOtherUserId } = useLocalSearchParams<{
     id: string;
     messageId?: string;
+    otherUserId?: string;
   }>();
   const { socket } = useSocket();
   const user = useAppSelector((state) => state.auth.user);
   const router = useRouter();
+  const navigation = useNavigation();
   const dispatch = useAppDispatch();
 
   const conversation = conversations.find((c) => c.conversationId === id);
+  const lastSetTitle = useRef<string | null>(null);
+
+  useEffect(() => {
+    const title = conversation?.name || "Chat";
+    if (title !== lastSetTitle.current) {
+      navigation.setOptions({
+        headerTitle: () => (
+          <View style={styles.headerContainer}>
+            <GroupAvatar
+              uri={conversation?.avatar}
+              name={conversation?.name || "Chat"}
+              size={36}
+            />
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {title}
+            </Text>
+          </View>
+        ),
+      });
+      lastSetTitle.current = title;
+    }
+  }, [conversation?.name, conversation?.avatar, navigation]);
   const isGroup = conversation?.type === "GROUP";
   const [contextMenuMsg, setContextMenuMsg] = useState<MessagesType | null>(
     null,
   );
+  const [isFriend, setIsFriend] = useState<boolean | null>(null);
+  const [friendStatus, setFriendStatus] = useState<string | null>(null);
+  const effectiveOtherMemberId = (conversation as any)?.otherMemberId || paramOtherUserId;
 
   const { startCall } = useVideoCall();
 
@@ -111,6 +137,19 @@ export default function ChatWindow() {
 
   const isPinned =
     contextMenuMsg && pinnedMessages.some((m) => m._id === contextMenuMsg._id);
+
+  const userMember = isGroup
+    ? conversation?.group?.members?.find((m: any) => m.userId === user?.userId)
+    : null;
+  const userRole = userMember?.role || (isGroup ? "MEMBER" : "OWNER");
+  const isOwner = userRole === "OWNER";
+  const isAdmin = userRole === "ADMIN";
+
+  const canChat =
+    !isGroup ||
+    conversation?.group?.allowMembersSendMessages ||
+    isOwner ||
+    isAdmin;
 
   const scrollToBottom = (animated = true) => {
     flatListRef.current?.scrollToEnd({ animated });
@@ -368,13 +407,34 @@ export default function ChatWindow() {
     }
   };
 
+  const handleAddFriend = async () => {
+    if (!effectiveOtherMemberId || !user?.userId) return;
+    try {
+      await userService.addFriend(effectiveOtherMemberId, user.userId);
+      setFriendStatus("PENDING");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAcceptFriend = async () => {
+    if (!effectiveOtherMemberId || !user?.userId) return;
+    try {
+      await userService.acceptFriend(effectiveOtherMemberId, user.userId);
+      setIsFriend(true);
+      setFriendStatus("ACCEPTED");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleDeleteForMe = async (messageId: string) => {
     if (!id || !user?.userId) return;
     try {
       await messageService.deleteMessageForMe(user.userId, messageId, id);
       setMessages((prev) => prev.filter((m) => m._id !== messageId));
 
-      const res: any = await conversationService.getConversationsFromUserId(
+      const res: any = await (messageService as any).getConversationsFromUserId(
         user?.userId || "",
       );
 
@@ -515,7 +575,7 @@ export default function ChatWindow() {
 
   useEffect(() => {
     const expiringMessages = messages.filter(
-      (message) => !message.expired && message.expiresAt,
+      (message) => !(message as any).expired && message.expiresAt,
     );
 
     if (!expiringMessages.length) return;
@@ -531,7 +591,7 @@ export default function ChatWindow() {
     const syncExpiredMessages = () => {
       setMessages((prev) =>
         prev.map((message) => {
-          if (message.expired || !message.expiresAt) return message;
+          if ((message as any).expired || !message.expiresAt) return message;
 
           const expiresAtMs = new Date(message.expiresAt).getTime();
           if (Number.isNaN(expiresAtMs) || expiresAtMs > Date.now()) {
@@ -552,6 +612,34 @@ export default function ChatWindow() {
     const timeoutId = setTimeout(syncExpiredMessages, delay + 50);
     return () => clearTimeout(timeoutId);
   }, [messages]);
+
+  // --- FRIEND STATUS CHECK ---
+  useEffect(() => {
+    if (isGroup || !effectiveOtherMemberId || !user?.userId) {
+      setIsFriend(null);
+      setFriendStatus(null);
+      return;
+    }
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await userService.checkFriendStatus(effectiveOtherMemberId);
+        // Handle double nested response if necessary, similar to web
+        const friendData = res?.data?.data ?? res?.data;
+        if (!cancelled && friendData) {
+          setIsFriend(!!friendData.isFriend);
+          setFriendStatus(friendData.status ?? null);
+        }
+      } catch (err) {
+        console.error("Check friend status failed:", err);
+        if (!cancelled) setIsFriend(false);
+      }
+    };
+    check();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, effectiveOtherMemberId, isGroup, user?.userId]);
 
   // ===== SOCKET =====
   useEffect(() => {
@@ -630,12 +718,26 @@ export default function ChatWindow() {
         });
       }
     };
+    const handleUpdatePoll = (data: any) => {
+      if (data.conversationId !== id) return;
+      setMessages((prev) =>
+        prev.map((m) => {
+          const mPollId = typeof m.pollId === "string" ? m.pollId : m.pollId?._id;
+          if (String(mPollId) === String(data._id)) {
+            return { ...m, poll: data };
+          }
+          return m;
+        }),
+      );
+    };
+
     socket.on("read_receipt", handleReadReceipt);
     socket.on("messages_expired", handleMessagesExpired);
     socket.on("new_message", handleNewMessage);
     socket.on("message_reacted", handleMessageReacted);
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
+    socket.on("update_poll", handleUpdatePoll);
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -644,6 +746,7 @@ export default function ChatWindow() {
       socket.off("message_pinned", handleMessagePinned);
       socket.off("read_receipt", handleReadReceipt);
       socket.off("messages_expired", handleMessagesExpired);
+      socket.off("update_poll", handleUpdatePoll);
 
       socket.emit("leave_room", id);
     };
@@ -655,7 +758,12 @@ export default function ChatWindow() {
     const older = messages[index - 1];
     const newer = messages[index + 1];
 
-    const isMe = item.senderId?._id === user?.userId;
+    const isSystem = item.type === "SYSTEM";
+    const isMe =
+      !isSystem &&
+      (typeof item.senderId === "string" ? item.senderId : item.senderId?._id) ===
+        user?.userId;
+
     const sameSenderOlder = older && older.senderId?._id === item.senderId?._id;
     const sameMinuteOlder =
       older && isSameHourAndMinute(older.createdAt, item.createdAt);
@@ -666,25 +774,23 @@ export default function ChatWindow() {
       newer && isSameHourAndMinute(newer.createdAt, item.createdAt);
     const isLastInCluster = !(sameSenderNewer && sameMinuteNewer);
 
-    const showAvatar = !isMe && isFirstInCluster;
-    const showName = !isMe && isFirstInCluster;
-    const showTime = isLastInCluster;
+    const showAvatar = !isMe && !isSystem && isFirstInCluster;
+    const showName = !isMe && !isSystem && isFirstInCluster;
+    const showTime = !isSystem && isLastInCluster;
     const showDivider =
       !older ||
       new Date(older.createdAt).toDateString() !==
         new Date(item.createdAt).toDateString();
 
     const isSelected = selectedMessages.includes(item._id);
-
     const isLastReadMessage = index === messages.length - 1;
-
-    const addSpacing = isFirstInCluster && !showDivider;
+    const addSpacing = isFirstInCluster && !showDivider && !isSystem;
 
     return (
       <View
         style={{
-          marginTop: addSpacing ? 12 : 2, // 2px within cluster, 12px between clusters
-          marginBottom: item.reactions?.length > 0 ? 14 : 0, // Space for reaction bar
+          marginTop: addSpacing ? 12 : 2,
+          marginBottom: item.reactions?.length > 0 ? 14 : 0,
         }}
       >
         {showDivider && (
@@ -709,28 +815,28 @@ export default function ChatWindow() {
             </View>
           </View>
         )}
-        <MessageBubble
-          message={item}
-          isMe={
-            (typeof item.senderId === "string"
-              ? item.senderId
-              : item.senderId?._id) === user?.userId
-          }
-          showAvatar={showAvatar}
-          showName={showName}
-          showTime={showTime}
-          isSelected={isSelected}
-          isSelectMode={isSelectMode}
-          isHighlighted={highlightedMessageId === item._id}
-          onLongPress={() => setContextMenuMsg(item)}
-          onPress={() => {
-            if (isSelectMode) toggleSelectMessage(item._id);
-          }}
-          onOpenReactionModal={(reactions) => setReactionModalData(reactions)}
-          renderReadReceipts={isLastReadMessage}
-          onReplyPress={handleJumpToMessage}
-          isGroup={isGroup}
-        />
+        {isSystem ? (
+          <SystemMessage message={item} />
+        ) : (
+          <MessageBubble
+            message={item}
+            isMe={isMe}
+            showAvatar={showAvatar}
+            showName={showName}
+            showTime={showTime}
+            isSelected={isSelected}
+            isSelectMode={isSelectMode}
+            isHighlighted={highlightedMessageId === item._id}
+            onLongPress={() => setContextMenuMsg(item)}
+            onPress={() => {
+              if (isSelectMode) toggleSelectMessage(item._id);
+            }}
+            onOpenReactionModal={(reactions) => setReactionModalData(reactions)}
+            renderReadReceipts={isLastReadMessage}
+            onReplyPress={handleJumpToMessage}
+            isGroup={isGroup}
+          />
+        )}
       </View>
     );
   };
@@ -768,7 +874,7 @@ export default function ChatWindow() {
           />
         </View>
 
-        {/* Name */}
+        {/* Name and Badge */}
         <View style={{ flex: 1 }}>
           <Text
             style={{ color: "white", fontSize: 16, fontWeight: "700" }}
@@ -776,6 +882,22 @@ export default function ChatWindow() {
           >
             {conversation?.name}
           </Text>
+          {isFriend === false && (
+            <View style={{ flexDirection: "row", marginTop: 2 }}>
+              <View
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.2)",
+                  paddingHorizontal: 6,
+                  paddingVertical: 1,
+                  borderRadius: 10,
+                }}
+              >
+                <Text style={{ color: "white", fontSize: 10, fontWeight: "600" }}>
+                  Người lạ
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Actions */}
@@ -785,7 +907,15 @@ export default function ChatWindow() {
         <TouchableOpacity style={{ padding: 4 }} onPress={handleVideoCall}>
           <Ionicons name="videocam-outline" size={24} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity style={{ padding: 4 }}>
+        <TouchableOpacity
+          style={{ padding: 4 }}
+          onPress={() =>
+            router.push({
+              pathname: "/private/search",
+              params: { conversationId: id },
+            })
+          }
+        >
           <Ionicons name="search-outline" size={24} color="white" />
         </TouchableOpacity>
         <TouchableOpacity
@@ -806,6 +936,38 @@ export default function ChatWindow() {
           onUnpin={handleTogglePin}
           onJumpToMessage={handleJumpToMessage}
         />
+
+        {/* Friend Request Banner (Screenshot 2) */}
+        {isFriend === false && (
+          <View
+            style={{
+              backgroundColor: "white",
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              borderBottomWidth: 1,
+              borderBottomColor: "#f3f4f6",
+            }}
+          >
+            <TouchableOpacity 
+              onPress={friendStatus === "PENDING" ? undefined : (friendStatus === "REQUESTED" ? handleAcceptFriend : handleAddFriend)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <Ionicons 
+                name={friendStatus === "PENDING" ? "time-outline" : "person-add-outline"} 
+                size={20} 
+                color="#0068ff" 
+              />
+              <Text style={{ color: "#0068ff", fontWeight: "600", fontSize: 14 }}>
+                {friendStatus === "PENDING" 
+                  ? "Đã gửi lời mời" 
+                  : (friendStatus === "REQUESTED" ? "Chấp nhận lời mời" : "Kết bạn")}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={{ flex: 1, backgroundColor: "#F1F2F4" }}>
           {isLoading ? (
@@ -874,10 +1036,59 @@ export default function ChatWindow() {
                 paddingBottom: 90, // space for input
               }}
               ListEmptyComponent={() => (
-                <View style={{ alignItems: "center", paddingVertical: 40 }}>
-                  <Text style={{ color: "#9ca3af", fontSize: 13 }}>
-                    Chưa có tin nhắn nào
-                  </Text>
+                <View style={{ alignItems: "center", paddingVertical: 10 }}>
+                  {isFriend === false && (
+                    <View
+                      style={{
+                        backgroundColor: "white",
+                        borderRadius: 12,
+                        marginHorizontal: 16,
+                        marginTop: 10,
+                        overflow: "hidden",
+                        width: "90%",
+                        elevation: 2,
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 2,
+                      }}
+                    >
+                      {/* Cover Photo Placeholder */}
+                      <View style={{ height: 120, backgroundColor: "#e5e7eb" }}>
+                         <Image
+                           source={{ uri: "https://picsum.photos/seed/zalo/800/400" }}
+                           style={{ width: "100%", height: 120 }}
+                         />
+                      </View>
+                      
+                      <View style={{ padding: 16, alignItems: "center", position: "relative" }}>
+                        {/* Avatar */}
+                        <View 
+                          style={styles.avatarContainer}
+                        >
+                          <GroupAvatar
+                            uri={conversation?.avatar}
+                            name={conversation?.name || "Group"}
+                            size={80}
+                          />
+                        </View>
+                        
+                        <View style={{ marginTop: 45, alignItems: "center" }}>
+                          <Text style={{ fontSize: 18, fontWeight: "700", color: "#111827" }}>
+                            {conversation?.name}
+                          </Text>
+                          <Text style={{ marginTop: 8, fontSize: 13, color: "#6b7280", textAlign: "center", paddingHorizontal: 20 }}>
+                            Người này chưa được thêm vào danh sách bạn bè. Hãy lưu ý khi gửi tin nhắn.
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                  {messages.length === 0 && !isFriend && (
+                    <Text style={{ color: "#9ca3af", fontSize: 13, marginTop: 20 }}>
+                      Chưa có tin nhắn nào
+                    </Text>
+                  )}
                 </View>
               )}
             />
@@ -931,18 +1142,38 @@ export default function ChatWindow() {
             </View>
           )}
 
-          <ChatInput
-            chatName={conversation?.name}
-            onSendMessage={handleSendMessage}
-            onSendFiles={handleSendFile}
-            isSelectMode={isSelectMode}
-            selectedMessages={selectedMessages}
-            onOpenForwardModal={() => setShowForwardModal(true)}
-            onCancelSelect={() => {
-              setIsSelectMode(false);
-              setSelectedMessages([]);
-            }}
-          />
+          {!canChat && !isSelectMode ? (
+            <View
+              style={{
+                padding: 16,
+                backgroundColor: "#f9fafb",
+                borderTopWidth: 1,
+                borderTopColor: "#e5e7eb",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{ color: "#6b7280", fontSize: 13, fontStyle: "italic" }}
+              >
+                Chỉ Trưởng/Phó nhóm mới được gửi tin nhắn
+              </Text>
+            </View>
+          ) : (
+            <ChatInput
+              chatName={conversation?.name}
+              onSendMessage={handleSendMessage}
+              onSendFiles={handleSendFile}
+              isSelectMode={isSelectMode}
+              selectedMessages={selectedMessages}
+              onOpenForwardModal={() => setShowForwardModal(true)}
+              onCancelSelect={() => {
+                setIsSelectMode(false);
+                setSelectedMessages([]);
+              }}
+              isGroup={isGroup}
+              conversationId={id}
+            />
+          )}
 
           {/* Floating Jump to Newest Button */}
           {showScrollToBottom && (
@@ -1160,3 +1391,25 @@ export default function ChatWindow() {
     </Container>
   );
 }
+
+const styles = StyleSheet.create({
+  headerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#000",
+    maxWidth: 200,
+  },
+  avatarContainer: {
+    position: "absolute",
+    top: -40,
+    borderWidth: 3,
+    borderColor: "white",
+    borderRadius: 43,
+    overflow: "hidden",
+  },
+});

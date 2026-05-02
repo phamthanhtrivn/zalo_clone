@@ -21,6 +21,9 @@ export class Group {
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   ownerId: Types.ObjectId;
+
+  @Prop({ type: String, default: null })
+  joinToken: string | null;
 }
 
 @Schema({ timestamps: true })

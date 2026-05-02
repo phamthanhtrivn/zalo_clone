@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import { userService } from "../../services/user.service";
 import ProfileModal from "./ProfileModal";
 import SettingDropdownSidebar from "../common/sidebar/SettingDropdown";
+import { useSelector } from "react-redux";
+import { useSocket } from "../../contexts/SocketContext";
 
 interface NavItem {
   icon: any;
@@ -23,11 +25,12 @@ export const SidebarPrimary = () => {
   const location = useLocation();
   const [user, setUser] = useState<any>();
   const [open, setOpen] = useState<boolean>(false);
+  const userId = useSelector((item: any) => item.auth.user.userId);
 
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const data = await userService.getProfile();
+        const data = await userService.getProfile(userId);
         if (data.success) {
           setUser(data.data);
         }
@@ -38,8 +41,32 @@ export const SidebarPrimary = () => {
     fetchUser();
   }, []);
 
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUpdateProfile = (data: any) => {
+      if (data.userId === userId) {
+        setUser((prev: any) => ({
+          ...prev,
+          profile: {
+            ...prev?.profile,
+            ...data,
+          },
+        }));
+      }
+    };
+
+    socket.on("update_profile", handleUpdateProfile);
+
+    return () => {
+      socket.off("update_profile", handleUpdateProfile);
+    };
+  }, [socket, userId]);
+
   return (
-    <aside className="w-16 bg-[#005AE0] flex flex-col items-center py-4 shrink-0 z-[100]">
+    <aside className="w-16 bg-[#005AE0] flex flex-col items-center py-4 shrink-0 z-20">
       {/* User Avatar */}
       <div className="relative mb-6">
         <Tooltip>
@@ -105,8 +132,7 @@ export const SidebarPrimary = () => {
         })}
       </nav>
 
-      {/* Bottom Actions - Sử dụng Dropdown mới từ nhánh KhongVanTam */}
-      <div className="mt-auto flex flex-col items-center z-[10000]">
+      <div className="mt-auto flex flex-col items-center">
         <SettingDropdownSidebar />
       </div>
     </aside>

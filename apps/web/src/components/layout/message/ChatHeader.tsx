@@ -10,6 +10,8 @@ import { useCall } from "@/contexts/VideoCallContext";
 import { useAppSelector } from "@/store";
 import { messageService } from "@/services/message.service";
 import { CallType } from "@/constants/types";
+import { getAvatarData, getColorByName } from "@/utils/avatar-utils";
+import { Users } from "lucide-react";
 
 type ChatHeaderProps = {
   conversation: ConversationItemType;
@@ -18,6 +20,8 @@ type ChatHeaderProps = {
   pinnedMessages: MessagesType[];
   handlePinnedMessage: (messageId: string) => void;
   handleJumpToMessage: (messageId: string) => void;
+  isSearchOpen: boolean;
+  toggleSearch: () => void;
 };
 
 const ChatHeader = ({
@@ -27,6 +31,8 @@ const ChatHeader = ({
   pinnedMessages,
   handlePinnedMessage,
   handleJumpToMessage,
+  isSearchOpen,
+  toggleSearch,
 }: ChatHeaderProps) => {
   const { callUser } = useCall();
   const currentUserId = useAppSelector((state) => state.auth.user?.userId);
@@ -78,13 +84,23 @@ const ChatHeader = ({
     <>
       <header className="h-16 bg-white border-b flex items-center justify-between px-4 shrink-0">
         <div className="flex items-center gap-3">
-          <Avatar className="w-10 h-10">
+          <Avatar className="w-10 h-10 border-0 shadow-sm">
             <AvatarImage src={conversation?.avatar} />
-            <AvatarFallback>{conversation.name.charAt(0)}</AvatarFallback>
+            <AvatarFallback 
+              className="text-white font-bold"
+              style={{ backgroundColor: getColorByName(conversation.name) }}
+            >
+              {(() => {
+                const { initials, isGroupIcon } = getAvatarData(conversation.name);
+                return isGroupIcon ? <Users className="w-5 h-5" /> : initials;
+              })()}
+            </AvatarFallback>
           </Avatar>
 
-          <div>
-            <h3 className="text-[16px] font-semibold">{conversation.name}</h3>
+          <div className="min-w-0">
+            <h3 className="text-[16px] font-semibold text-gray-800 truncate">
+              {conversation.name}
+            </h3>
             <span className="text-[12px] text-gray-400"></span>
           </div>
         </div>
@@ -98,8 +114,12 @@ const ChatHeader = ({
             <Video />
           </Button>
 
-          <Button variant="ghost" size="icon">
-            <Search />
+          <Button 
+            variant={isSearchOpen ? "default" : "ghost"} 
+            size="icon" 
+            onClick={toggleSearch}
+          >
+            <Search color={isSearchOpen ? "white" : "currentColor"} />
           </Button>
 
           <Button

@@ -4,15 +4,17 @@ import { userService } from "@/services/user.service";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { conversationService } from "@/services/conversation.service";
+import { toast } from "react-toastify";
 
 export const FriendItem = ({ item, setFriends }: any) => {
   const [openId, setOpenId] = useState<string>("");
   const navigate = useNavigate();
-  const userId = useSelector((item : any) => item.auth.user.userId);
+  const userId = useSelector((item: any) => item.auth.user.userId);
 
   const handleStartConversation = async (targetUserId: string) => {
     try {
-      const response = await conversationService.getOrCreateDirect(targetUserId);
+      const response =
+        await conversationService.getOrCreateDirect(targetUserId);
       const conversationId =
         response?.data?._id || response?.data?.conversationId || response?._id;
 
@@ -31,13 +33,16 @@ export const FriendItem = ({ item, setFriends }: any) => {
         const data = await userService.blockFriend(id, userId);
         if (data.data) {
           setFriends((prev: any) =>
-            prev.map((group: any) => ({
-              ...group,
-              friends: group.friends.filter(
-                (friend: any) => friend.friendId !== id,
-              ),
-            })),
+            prev
+              .map((group: any) => ({
+                ...group,
+                friends: group.friends.filter(
+                  (friend: any) => friend.friendId !== id,
+                ),
+              }))
+              .filter((group: any) => group.friends.length > 0),
           );
+          toast.success("Chặn bạn thành công !");
         }
       } catch (err) {
         console.log(err);
@@ -48,20 +53,22 @@ export const FriendItem = ({ item, setFriends }: any) => {
 
   const handelDeleteFriend = (id: string) => {
     const deleteFriend = async () => {
-      try{
+      try {
         const data = await userService.cancelFriend(id, userId);
         if (data.data) {
           setFriends((prev: any) =>
-            prev.map((group: any) => ({
-              ...group,
-              friends: group.friends.filter(
-                (friend: any) => friend.friendId !== id,
-              ),
-            })),
+            prev
+              .map((group: any) => ({
+                ...group,
+                friends: group.friends.filter(
+                  (friend: any) => friend.friendId !== id,
+                ),
+              }))
+              .filter((group: any) => group.friends.length > 0),
           );
+          toast.success("Xóa bạn thành công !");
         }
-      }
-      catch(err){
+      } catch (err) {
         console.log(err);
       }
     };
@@ -94,7 +101,9 @@ export const FriendItem = ({ item, setFriends }: any) => {
           </div>
 
           <div className="relative">
-            <button onClick={() => setOpenId(openId == f.friendId ? "" : f.friendId)}>
+            <button
+              onClick={() => setOpenId(openId == f.friendId ? "" : f.friendId)}
+            >
               <MoreHorizontal className="text-gray-500" />
             </button>
             {openId === f.friendId && (
@@ -119,7 +128,9 @@ export const FriendItem = ({ item, setFriends }: any) => {
                   </button>
                 </div>
                 <div className="p-3 text-red-500 hover:bg-gray-50 cursor-pointer">
-                  <button onClick={() => handelDeleteFriend(f.friendId)}>Xóa bạn</button>
+                  <button onClick={() => handelDeleteFriend(f.friendId)}>
+                    Xóa bạn
+                  </button>
                 </div>
               </div>
             )}

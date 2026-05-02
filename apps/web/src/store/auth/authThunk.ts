@@ -19,6 +19,7 @@ export const signIn = createAsyncThunk(
 
       return data;
     } catch (err: any) {
+      console.log(err);
       return thunkAPI.rejectWithValue(err.response?.data);
     }
   },
@@ -99,9 +100,8 @@ export const restoreSession = createAsyncThunk(
       store.dispatch(updateToken(res.data.data.accessToken));
 
       const user = await authService.getMe();
-
       return {
-        user: user,
+        user,
       };
     } catch (err: any) {
       const errorData = err.response?.data || {
@@ -141,7 +141,57 @@ export const changePassword = createAsyncThunk(
       const res = await authService.changePassword(payload);
       return res;
     } catch (err: any) {
+      console.log(err.response.data);
       return thunkAPI.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const getSessions = createAsyncThunk(
+  "auth/sessions",
+  async (_, thunkAPI) => {
+    try {
+      const res = await authService.getSessions();
+      return res;
+    } catch (err: any) {
+      return thunkAPI.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const logOutDevice = createAsyncThunk(
+  "auth/logout-device",
+  async (deviceId: string, thunkApi) => {
+    try {
+      const res = await authService.logOutDevice(deviceId);
+      return res;
+    } catch (err: any) {
+      return thunkApi.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const logOutOther = createAsyncThunk(
+  "auth/logout-others",
+  async (_, thunkApi) => {
+    try {
+      const res = await authService.logOutDevices();
+      return res;
+    } catch (err: any) {
+      return thunkApi.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const exchangeToken = createAsyncThunk(
+  "auth/exchange-token",
+  async (ticket: string, thunkApi) => {
+    try {
+      const res = await authService.exchangeToken(ticket);
+      console.log(res);
+      return res;
+    } catch (err: any) {
+      return thunkApi.rejectWithValue(err.response?.data);
     }
   },
 );

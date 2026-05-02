@@ -14,11 +14,10 @@ export class ConversationItemDto {
   type: string | undefined;
   name: string | undefined;
   avatar?: string;
+  isStranger?: boolean;
 
-  // Dữ liệu phục vụ Video Call
   otherMemberId?: string;
 
-  // Dữ liệu phục vụ quản lý hội thoại
   mutedUntil: Date | null | undefined;
   pinned: boolean | undefined;
   hidden: boolean | undefined;
@@ -31,6 +30,12 @@ export class ConversationItemDto {
     senderName: string;
     content: Content;
     recalled: boolean;
+    type?: string;
+    call?: {
+      type?: string;
+      status?: string;
+      duration?: number | null;
+    };
     expired?: boolean;
     expiresAt?: Date | null;
   };

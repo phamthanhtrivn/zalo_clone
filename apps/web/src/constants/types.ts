@@ -1,8 +1,4 @@
-export enum Gender {
-  MALE = "male",
-  FEMALE = "female",
-  OTHER = "other",
-}
+import type { Gender } from "@/types/enums/gender";
 
 export interface UserLogin {
   phone: string;

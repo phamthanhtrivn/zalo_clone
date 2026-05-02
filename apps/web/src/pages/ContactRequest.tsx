@@ -5,12 +5,16 @@ import UserRequestCart from "@/components/layout/UserRequestCard";
 import UserSendCart from "@/components/layout/UserSendCart";
 import UserSuggestCart from "@/components/layout/UserSuggestCart";
 import { useSelector } from "react-redux";
+import { useSocket } from "@/contexts/SocketContext";
+import { toast } from "react-toastify";
 
 const ContactRequest = () => {
   const [receivedUsers, setReceivedUsers] = useState<any>([]);
   const [sendUsers, setSendUsers] = useState<any>([]);
   const [suggestUsers, setSuggestUsers] = useState<any>([]);
-  const userId = useSelector((item : any) => item.auth.user.userId);
+  const userId = useSelector((item: any) => item.auth.user.userId);
+
+  const { socket } = useSocket();
 
   useEffect(() => {
     const getUsers = async () => {
@@ -34,20 +38,60 @@ const ContactRequest = () => {
     getUsers();
   }, []);
 
+  useEffect(() => {
+    if (!socket) return;
+
+    // 1. Xử lý khi có người khác gửi lời mời cho mình
+    function handleReceiveRequest(data: any) {
+      setReceivedUsers((prev: any) => [data, ...prev]);
+      toast.info(`Bạn có lời mời kết bạn mới từ ${data.name}!`);
+    }
+
+    // 2. Xử lý khi lời mời mình gửi đi được đối phương chấp nhận
+    const handleFriendAccepted = (data: any) => {
+      setSendUsers((prev: any) =>
+        prev.filter((user: any) => user.friendId !== data.friendId),
+      );
+      toast.success(`${data.name} đã chấp nhận lời mời kết bạn!`);
+    };
+
+    // 3. Xử lý khi lời mời mình gửi đi bị hủy
+    const handleCancelFriendRequest = (friendId: string) => {
+      console.log("Cancel friend request:", friendId);
+      setReceivedUsers((prev: any) =>
+        prev.filter((user: any) => user.friendId !== friendId),
+      );
+      toast.info("Lời mời kết bạn đã bị hủy!");
+    };
+
+    // Đăng ký các sự kiện
+    socket.on("receive_friend_request", handleReceiveRequest);
+    socket.on("friend_accepted", handleFriendAccepted);
+    socket.on("cancel_friend_request", handleCancelFriendRequest);
+
+    // Hàm cleanup
+    return () => {
+      socket.off("receive_friend_request", handleReceiveRequest);
+      socket.off("friend_accepted", handleFriendAccepted);
+      socket.off("cancel_friend_request", handleCancelFriendRequest);
+    };
+  }, [socket]);
+
   const handelAccept = (id: string) => {
     const acceptFriend = async () => {
       try {
         const data = await userService.acceptFriend(id, userId);
-        console.log(data);
         if (data.data) {
           setReceivedUsers((prev: any) =>
             prev.filter((item: any) => item.friendId != id),
           );
+          toast.success("Kết bạn thành công");
         }
       } catch (err) {
         console.log(err);
       }
     };
+
     acceptFriend();
   };
 
@@ -59,6 +103,7 @@ const ContactRequest = () => {
           setReceivedUsers((prev: any) =>
             prev.filter((item: any) => item.friendId != id),
           );
+          toast.success("Từ chối thành công");
         }
       } catch (err) {
         console.log(err);
@@ -75,6 +120,7 @@ const ContactRequest = () => {
           setSendUsers((prev: any) =>
             prev.filter((item: any) => item.friendId != id),
           );
+          toast.success("Thu hồi thành công");
         }
       } catch (err) {
         console.log(err);
@@ -93,6 +139,7 @@ const ContactRequest = () => {
             prev.filter((item: any) => item.friendId != id),
           );
           setSendUsers([...sendUsers, item]);
+          toast.success("Thêm bạn thành công");
         }
       } catch (err) {
         console.log(err);
@@ -102,6 +149,7 @@ const ContactRequest = () => {
   };
 
   const handelSkip = (id: string) => {
+    toast.success("Bỏ qua thành công");
     setSuggestUsers((prev: any) =>
       prev.filter((item: any) => item.friendId != id),
     );
@@ -132,7 +180,7 @@ const ContactRequest = () => {
                   <UserRequestCart
                     key={item.friendId}
                     item={item}
-                    handelAccept={handelAccept}
+                    handelAccept={() => handelAccept(item.friendId)}
                     handelReject={handelReject}
                   />
                 ))}

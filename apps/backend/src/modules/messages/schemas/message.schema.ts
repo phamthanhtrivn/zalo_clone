@@ -110,12 +110,17 @@ export class Message {
   @Prop({ type: Call })
   call?: Call;
 
+ @Prop({ type: Types.ObjectId, ref: 'Poll', required: false })
+  pollId?: Types.ObjectId;
+
   // Tính năng tin nhắn tự hủy (từ PhamThanhTri)
   @Prop({ type: Date, default: null })
   expiresAt: Date | null;
 
   @Prop({ default: false })
   expired: boolean;
+
+
 
   // Khai báo để sửa lỗi TypeScript 
   createdAt: Date;

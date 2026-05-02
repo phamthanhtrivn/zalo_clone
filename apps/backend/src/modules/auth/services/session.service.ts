@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Session } from '../schemas/session.schem';
 import { Model, Types } from 'mongoose';
-import * as bcrypt from 'bcrypt';
+import { SessionResponseDTO } from '../dto/session-response.dto';
+import { plainToInstance } from 'class-transformer';
+import crypto from 'crypto';
 
 @Injectable()
 export class SessionService {
@@ -14,48 +16,81 @@ export class SessionService {
     userId: string,
     refreshToken: string,
     expiresAt: Date,
-    device?: string,
+    deviceId: string,
+    deviceName: string,
+    deviceType: string,
+    ip: string,
+    location: string,
   ) {
     const userObjectId = new Types.ObjectId(userId);
     return await this.sessionModel.create({
       userId: userObjectId,
       refreshToken,
       expiresAt,
-      device,
+      deviceId,
+      deviceName,
+      deviceType,
+      ip,
+      location,
     });
   }
 
   async findValidSession(userId: string, refreshToken: string) {
     const userObjectId = new Types.ObjectId(userId);
-    const sessions = await this.sessionModel.find({
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
+
+    const session = await this.sessionModel.findOne({
       userId: userObjectId,
+      refreshToken: hashedToken,
     });
 
-    for (const session of sessions) {
-      console.log(session.refreshToken);
-      const match = await bcrypt.compare(refreshToken, session.refreshToken);
-      if (match) {
-        return session;
-      }
-    }
-    return null;
+    return session;
   }
 
   async remove(userId: string, refreshToken: string) {
+    const session = await this.findValidSession(userId, refreshToken);
+
+    if (session) {
+      await this.sessionModel.deleteOne({ _id: session._id });
+      return true;
+    }
+    return false;
+  }
+
+  async removeByDevice(userId: string, deviceId: string) {
+    const userObjectId = new Types.ObjectId(userId);
+    const result = await this.sessionModel
+      .deleteMany({ userId: userObjectId, deviceId })
+      .lean();
+    return result.deletedCount > 0;
+  }
+
+  async findOtherSessions(userId: string, currentDeviceId: string) {
+    // Tìm tất cả session của user này, NGOẠI TRỪ máy đang dùng
+    return this.sessionModel.find({
+      userId: new Types.ObjectId(userId),
+      deviceId: { $ne: currentDeviceId },
+    });
+  }
+
+  async removeAllOtherDevices(userId: string, currentDeviceId: string) {
+    const result = await this.sessionModel.deleteMany({
+      userId: new Types.ObjectId(userId),
+      deviceId: { $ne: currentDeviceId }, // $ne = Not Equal (không bằng id hiện tại)
+    });
+    return result;
+  }
+
+  async getAll(userId: string): Promise<SessionResponseDTO[]> {
     const sessions = await this.sessionModel.find({
       userId: new Types.ObjectId(userId),
     });
 
-    for (const session of sessions) {
-      if (await bcrypt.compare(refreshToken, session.refreshToken)) {
-        await this.sessionModel.deleteOne({ _id: session._id });
-        return true;
-      }
-    }
-    return false;
-  }
-  async removeByDevice(userId: string, device: string) {
-    const userObjectId = new Types.ObjectId(userId);
-    await this.sessionModel.deleteMany({ userId: userObjectId, device });
+    return plainToInstance(SessionResponseDTO, sessions, {
+      excludeExtraneousValues: true,
+    });
   }
 }

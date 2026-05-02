@@ -4,7 +4,7 @@ export default function UserSuggestCart({ item, handelAddFriend, handelSkip }: a
     <div className="w-full mb-5 p-4 bg-white rounded-xl shadow-sm hover:bg-gray-50 transition">
       <UserInfoItem
         name={item?.name}
-        avartaUrl={item?.avartaUrl}
+        avartaUrl={item?.avatarUrl}
         desc={"Bạn có thể biết"}
       />
 

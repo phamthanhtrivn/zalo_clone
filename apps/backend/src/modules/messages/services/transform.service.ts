@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { StorageService } from '../../../common/storage/storage.service';
 import { RedisService } from 'src/common/redis/redis.service';
 import { REDIS_CHANNEL_SOCKET_EVENTS } from 'src/common/constants/redis.constant';
+import { Types } from 'mongoose';
 
 @Injectable()
 export class MessagesTransformService {
@@ -58,6 +59,8 @@ export class MessagesTransformService {
           senderId: this.signUser(message.repliedId.senderId),
         }
         : null,
+      pollId: message.pollId?._id?.toString() || message.pollId?.toString(),
+      poll: this.transformPoll(message.pollId),
     };
   }
 
@@ -121,5 +124,35 @@ export class MessagesTransformService {
         data: { type: event.type, data: event.data },
       });
     }
+  }
+
+  transformPoll(poll: any) {
+    if (!poll || poll instanceof Types.ObjectId || typeof poll === 'string') return null;
+
+    const transformedPoll = { ...poll };
+    
+    // Nếu là bình chọn ẨN DANH, ép toàn bộ mảng voters thành rỗng []
+    if (transformedPoll.isAnonymous) {
+      if (transformedPoll.options) {
+        transformedPoll.options = transformedPoll.options.map(option => ({
+          ...option,
+          voters: [] // Ép rỗng hoàn toàn để bảo mật
+        }));
+      }
+      return transformedPoll;
+    }
+
+    if (transformedPoll.options) {
+      transformedPoll.options = transformedPoll.options.map(option => {
+        if (option.voters) {
+          option.voters = option.voters.map(voter => ({
+            ...voter,
+            avatar: voter.avatar ? this.storageService.signFileUrl(voter.avatar) : null
+          }));
+        }
+        return option;
+      });
+    }
+    return transformedPoll;
   }
 }

@@ -4,6 +4,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   InternalServerErrorException,
   Post,
   Request,
@@ -18,14 +19,21 @@ import { RequestOtpDTO } from './dto/request-otp.dto';
 import { AuthUser } from './types/auth.type';
 import { JwtAuthGuard } from './passport/jwt-auth.guard';
 import { LocalAuthGuard } from './passport/local-auth.guard';
-import { RequireTempPurpose } from 'src/common/decorator/temp_purpose.decorator';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDTO } from './dto/change-password.dto';
 import type { Response } from 'express';
-
+import { RedisService } from 'src/common/redis/redis.service';
+import { SessionService } from './services/session.service';
+import { RequireTempPurpose } from './decorator/temp_purpose.decorator';
+import { ClientContext } from './decorator/client-info.decorator';
+import type { IClientInfo } from './decorator/client-info.decorator';
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private redisService: RedisService,
+    private sessionService: SessionService,
+  ) {}
 
   @Post('sign-up')
   @Public()
@@ -47,20 +55,28 @@ export class AuthController {
   @Public()
   @RequireTempPurpose(Purpose.SignUp)
   @UseGuards(TempVerifyGuard)
-  async completeSignUp(@Request() req, @Body() signUpDto: SignUpDto) {
+  async completeSignUp(
+    @Request() req: any,
+    @ClientContext() client: IClientInfo,
+    @Body() signUpDto: SignUpDto,
+    @Headers('authorization') authHeader: string,
+  ) {
     if (signUpDto.password !== signUpDto.repassword) {
       throw new BadRequestException('Mật khẩu xác nhận không khớp !');
     }
-    const device = req.headers['user-agent'] as string;
     try {
-      return await this.authService.completeSignUp(
+      const session = await this.authService.completeSignUp(
         req.user.phone,
         signUpDto.name,
         signUpDto.gender,
         signUpDto.birthDay,
         signUpDto.password,
-        device,
+        client,
       );
+      await this.redisService.del(
+        `tmp_token_valid:${authHeader.split(' ')[1]}`,
+      );
+      return session;
     } catch (err) {
       console.log(`Lỗi khi sign up: ${err}`);
       throw new InternalServerErrorException('Lỗi sign up');
@@ -78,42 +94,58 @@ export class AuthController {
   @Public()
   @RequireTempPurpose(Purpose.ForgotPassword)
   @UseGuards(TempVerifyGuard)
-  resetPassword(@Request() req, @Body() resetPasswordDto: ResetPasswordDto) {
+  async resetPassword(
+    @Request() req,
+    @Body() resetPasswordDto: ResetPasswordDto,
+    @ClientContext() client: IClientInfo,
+    @Headers('authorization') authHeader: string,
+  ) {
     if (resetPasswordDto.confirmPassword !== resetPasswordDto.newPassword) {
       throw new BadRequestException('Mật khẩu xác nhận không khớp !');
     }
-    const device = req.headers['user-agent'] as string;
-    return this.authService.resetPassword(
+
+    const session = await this.authService.resetPassword(
       req.user,
       resetPasswordDto.newPassword,
-      device,
+      client,
     );
+    await this.redisService.del(`tmp_token_valid:${authHeader.split(' ')[1]}`);
+
+    return session;
   }
 
   @Post('signin-with-temp')
   @Public()
   @RequireTempPurpose(Purpose.ForgotPassword)
   @UseGuards(TempVerifyGuard)
-  loginWithTemp(@Request() req) {
-    const device = req.headers['user-agent'] as string;
-
-    return this.authService.signIn(
+  async loginWithTemp(
+    @Request() req,
+    @ClientContext() client: IClientInfo,
+    @Headers('authorization') authHeader: string,
+  ) {
+    const session = this.authService.signIn(
       {
         userId: req.user.userId as string,
         phone: req.user.phone as string,
         name: req.user.name as string,
       },
-      device,
+      client,
     );
+
+    await this.redisService.del(`tmp_token_valid:${authHeader.split(' ')[1]}`);
+
+    return session;
   }
 
   @Post('sign-in')
   @Public()
   @UseGuards(LocalAuthGuard)
-  async logIn(@Request() req, @Res({ passthrough: true }) res: Response) {
-    const device = req.headers['user-agent'] as string;
-
-    const result = await this.authService.signIn(req.user, device);
+  async logIn(
+    @Request() req: any,
+    @ClientContext() client: IClientInfo,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.signIn(req.user, client);
 
     // Set Cookie cho Web (Mobile sẽ lờ đi cái này)
     res.cookie('refreshToken', result.refreshToken, {
@@ -178,10 +210,97 @@ export class AuthController {
     return this.authService.refresh(token);
   }
 
+  @Get('sessions')
+  getSessions(@Request() req: any) {
+    return this.sessionService.getAll(req.user?.userId);
+  }
+
   // api này chỉ để test
   @Get('profile')
-  @UseGuards(JwtAuthGuard)
   profile(@Request() req) {
     return req.user as AuthUser;
+  }
+
+  @Post('logout-others')
+  async logoutOthers(
+    @Request() req: any,
+    @ClientContext() client: IClientInfo,
+  ) {
+    return this.authService.signOutOtherDevices(
+      req.user.userId,
+      client.deviceId,
+    );
+  }
+
+  // API: Đăng xuất một máy cụ thể (truyền deviceId vào body)
+  @Post('logout-device')
+  async logoutDevice(
+    @Request() req: any,
+    @Body('deviceId') targetDeviceId: string,
+  ) {
+    return this.authService.signOutSpecificDevice(
+      req.user.userId,
+      targetDeviceId,
+    );
+  }
+
+  //khi người dùng mobile quét qr sẽ kích hoạt api này
+  @Post('qr-login/scan')
+  async scanQrCode(
+    @Request() req: { user: AuthUser },
+    @Body() body: { qrToken: string },
+  ) {
+    const clientInfo = await this.authService.scanLoginQRCode(
+      req.user,
+      body.qrToken,
+    );
+
+    if (!clientInfo)
+      throw new BadRequestException('Mã QR hết hạn hoặc không hợp lệ');
+
+    return {
+      message: 'Quét mã thành công',
+      device: clientInfo, // Chứa deviceName, ip, location, deviceType...
+    };
+  }
+
+  @Post('qr-login/confirm')
+  async confirmQrLogin(
+    @Request() req: { user: AuthUser },
+    @Body() body: { qrToken: string },
+  ) {
+    const { qrToken } = body;
+
+    if (!qrToken) {
+      throw new BadRequestException('Thiếu thông tin xác nhận');
+    }
+    await this.authService.confirmLoginQr(req.user, qrToken);
+
+    return { message: 'Xác nhận đăng nhập thành công' };
+  }
+
+  @Post('qr-login/exchange')
+  @Public()
+  async exchangeTicket(
+    @Body() body: { ticket: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    try {
+      console.log('do');
+      console.log(body.ticket);
+      const rs = await this.authService.exchangeTicket(body.ticket);
+
+      res.cookie('refreshToken', rs.refreshToken, {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'strict',
+        path: '/',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      });
+
+      return rs;
+    } catch (err) {
+      console.log(err);
+    }
   }
 }

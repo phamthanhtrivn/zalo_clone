@@ -14,6 +14,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import EmojiPicker from "rn-emoji-keyboard";
 import { COLORS } from "@/constants/colors";
+import CreatePollModal from "./CreatePollModal";
 
 interface SelectedFile {
   uri: string;
@@ -29,6 +30,8 @@ interface ChatInputProps {
   selectedMessages?: string[];
   onOpenForwardModal?: () => void;
   onCancelSelect?: () => void;
+  isGroup?: boolean;
+  conversationId?: string;
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
@@ -39,8 +42,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
   selectedMessages = [],
   onOpenForwardModal,
   onCancelSelect,
+  isGroup = false,
+  conversationId = "",
 }) => {
   const [text, setText] = useState("");
+  const [showPollModal, setShowPollModal] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const inputRef = useRef<TextInput>(null);
@@ -328,6 +334,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
           <Ionicons name="attach-outline" size={26} color="#6b7280" />
         </TouchableOpacity>
 
+        {/* Poll (Group only) */}
+        {isGroup && (
+          <TouchableOpacity 
+            onPress={() => setShowPollModal(true)} 
+            style={{ padding: 6 }}
+          >
+            <Ionicons name="bar-chart-outline" size={26} color="#6b7280" />
+          </TouchableOpacity>
+        )}
+
         {/* Send */}
         <TouchableOpacity
           onPress={handleSend}
@@ -354,6 +370,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
         onClose={() => setShowEmoji(false)}
         onEmojiSelected={handleEmojiSelect}
       />
+
+      {/* Create Poll Modal */}
+      {isGroup && (
+        <CreatePollModal
+          visible={showPollModal}
+          onClose={() => setShowPollModal(false)}
+          conversationId={conversationId}
+        />
+      )}
     </View>
   );
 };

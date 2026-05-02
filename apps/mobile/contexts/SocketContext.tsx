@@ -6,7 +6,10 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { Alert, ToastAndroid } from "react-native";
 import { io, Socket } from "socket.io-client";
+import * as SecureStore from "expo-secure-store";
+import { useRouter } from "expo-router";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { config } from "@/constants/config";
 import {
@@ -17,11 +20,16 @@ import {
   removeExpiredMessages,
   setUnreadCount,
   addConversationToTop,
+  fetchConversations,
 } from "@/store/slices/conversationSlice";
+import { logout2 } from "@/store/auth/authThunk";
+import { getDeviceId } from "@/utils/device.util";
 
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
+  friendRefreshKey: number;
+  profileRefreshKey: number;
   markAsRead: (data: {
     userId: string;
     conversationId: string;
@@ -35,6 +43,8 @@ interface SocketContextType {
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
+  friendRefreshKey: 0,
+  profileRefreshKey: 0,
   markAsRead: async () => ({}),
   markAsUnread: async () => ({}),
 });
@@ -47,20 +57,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const apiUrl = config.apiUrl;
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [friendRefreshKey, setFriendRefreshKey] = useState(0);
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const user = useAppSelector((state) => state.auth.user);
   const socketRef = useRef<Socket | null>(null);
 
-  const handleNewMessageSidebar = (data: any) => {
-    dispatch(updateConversation(data));
-  };
+  // Track current route để biết có đang ở màn hình bị kick không
+  const currentConversationIdRef = useRef<string | null>(null);
 
-  const handleRecallMessageSidebar = (data: {
-    conversationId: string;
-    messageId: string;
-  }) => {
-    dispatch(updateRecallMessageInConversation(data));
-  };
   const markAsRead = useCallback(
     async (data: { userId: string; conversationId: string }) => {
       if (!socketRef.current)
@@ -79,7 +85,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
-  // ✅ Thêm markAsUnread
   const markAsUnread = useCallback(
     async (data: { userId: string; conversationId: string }) => {
       if (!socketRef.current)
@@ -97,189 +102,126 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     },
     [],
   );
+
+  // Tự động đăng xuất khi bị cưỡng ép
+  const handleForceLogout = (data: { message: string }) => {
+    dispatch(logout2());
+    ToastAndroid.show(
+      data.message ||
+        "Phiên đăng nhập đã hết hạn hoặc bạn bị đăng xuất từ nơi khác.",
+      ToastAndroid.LONG,
+    );
+
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+  };
+
   useEffect(() => {
     if (!user?.userId || !apiUrl) return;
 
-    if (!socketRef.current) {
-      socketRef.current = io(apiUrl, {
-        auth: {
-          userId: user.userId,
-        },
-      });
-    }
+    const initSocket = async () => {
+      if (!socketRef.current) {
+        const deviceId = await getDeviceId();
+        // Mobile lưu token trong SecureStore (không phải Redux state)
+        const accessToken =
+          (await SecureStore.getItemAsync("access_token")) ?? "";
 
-    const socketInstance = socketRef.current;
-    setSocket(socketInstance);
-
-    socketInstance.on("connect", () => {
-      console.log("Connected:", socketInstance.id);
-      setIsConnected(true);
-    });
-
-    socketInstance.on("disconnect", () => {
-      console.log("Disconnected");
-      setIsConnected(false);
-    });
-
-    const handleNewMessageSidebar = (data: any) => {
-      dispatch(updateConversation(data));
-    };
-
-    const handleRecallMessageSidebar = (data: any) => {
-      dispatch(updateRecallMessageInConversation(data));
-    };
-    const handleMessagesExpired = (data: {
-      conversationId: string;
-      messageIds: string[];
-    }) => {
-      dispatch(removeExpiredMessages(data.messageIds));
-    };
-    // ✅ Lắng nghe mark_as_read:success
-    const handleMarkAsReadSuccess = (data: {
-      conversationId: string;
-      unreadCount: number;
-    }) => {
-      console.log("✅ mark_as_read:success", data);
-      dispatch(
-        setUnreadCount({
-          conversationId: data.conversationId,
-          unreadCount: data.unreadCount,
-        }),
-      );
-    };
-
-    // ✅ Lắng nghe mark_as_unread:success
-    const handleMarkAsUnreadSuccess = (data: {
-      conversationId: string;
-      unreadCount: number;
-    }) => {
-      console.log("✅ mark_as_unread:success", data);
-      dispatch(
-        setUnreadCount({
-          conversationId: data.conversationId,
-          unreadCount: data.unreadCount,
-        }),
-      );
-    };
-
-    // ✅ Lắng nghe broadcast từ các tab khác
-    const handleMarkAsReadBroadcast = (data: {
-      conversationId: string;
-      unreadCount: number;
-    }) => {
-      console.log("📢 mark_as_read:broadcast", data);
-      dispatch(
-        setUnreadCount({
-          conversationId: data.conversationId,
-          unreadCount: data.unreadCount,
-        }),
-      );
-    };
-
-    const handleMarkAsUnreadBroadcast = (data: {
-      conversationId: string;
-      unreadCount: number;
-    }) => {
-      console.log("📢 mark_as_unread:broadcast", data);
-      dispatch(
-        setUnreadCount({
-          conversationId: data.conversationId,
-          unreadCount: data.unreadCount,
-        }),
-      );
-    };
-
-    const handleConversationUpdate = (data: any) => {
-      console.log("📢 conversation:update received:", data);
-
-      const patch: any = { conversationId: data.conversationId };
-
-      if ("pinned" in data) patch.pinned = data.pinned;
-      if ("hidden" in data) patch.hidden = data.hidden;
-      if ("mutedUntil" in data) {
-        patch.muted =
-          data.mutedUntil != null &&
-          new Date(data.mutedUntil).getTime() > Date.now();
-        patch.mutedUntil = data.mutedUntil;
-      }
-      if ("category" in data) patch.category = data.category;
-      if ("expireDuration" in data) patch.expireDuration = data.expireDuration;
-      if ("unreadCount" in data) {
-        console.log("📢 unreadCount from broadcast:", data.unreadCount);
-        patch.unreadCount = data.unreadCount;
+        socketRef.current = io(apiUrl, {
+          auth: {
+            token: accessToken,
+            deviceId,
+          },
+        });
       }
 
-      dispatch(updateConversationSetting(patch));
-    };
+      const socketInstance = socketRef.current;
+      setSocket(socketInstance);
 
-    const handleConversationDelete = (data: any) => {
-      dispatch(removeConversation(data.conversationId));
-    };
+      // --- CONNECTION ---
+      const onConnect = () => {
+        console.log("Connected:", socketInstance.id);
+        setIsConnected(true);
+      };
 
-    const handleRemoveFromConversation = (data: {
-      conversationId?: string;
-    }) => {
-      if (!data?.conversationId) return;
-      dispatch(removeConversation(data.conversationId));
-    };
+      const onDisconnect = () => {
+        console.log("Disconnected");
+        setIsConnected(false);
+      };
 
-    const handleNewConversation = (conversation: any) => {
-      if (!conversation?.conversationId) return;
+      // --- HANDLERS (mỗi handler có tên rõ ràng để off() chính xác) ---
 
-      socketRef.current?.emit("join_room", conversation.conversationId);
+      const handleNewMessageSidebar = (data: any) => {
+        dispatch(updateConversation(data));
+      };
 
-      dispatch(addConversationToTop(conversation));
-    };
+      const handleRecallMessageSidebar = (data: any) => {
+        dispatch(updateRecallMessageInConversation(data));
+      };
 
-    const handleGroupDisbanded = (payload: any) => {
-      const convId = payload?.conversationId || payload?.id;
-      if (convId) {
-        dispatch(removeConversation(convId));
-      }
-    };
+      const handleMessagesExpired = (data: {
+        conversationId: string;
+        messageIds: string[];
+      }) => {
+        dispatch(removeExpiredMessages(data.messageIds));
+      };
 
-    const handleGroupSettingsUpdate = (data: any) => {
-      dispatch(
-        updateConversationSetting({
-          conversationId: data.conversationId,
-          group: data.group,
-        }),
-      );
-    };
+      const handleMarkAsReadSuccess = (data: {
+        conversationId: string;
+        unreadCount: number;
+      }) => {
+        console.log("✅ mark_as_read:success", data);
+        dispatch(
+          setUnreadCount({
+            conversationId: data.conversationId,
+            unreadCount: data.unreadCount,
+          }),
+        );
+      };
 
-    const handleGroupUpdate = (data: any) => {
-      dispatch(
-        updateConversationSetting({
-          conversationId: data.conversationId,
-          name: data.name,
-          avatar: data.avatar,
-          group: data.group,
-        }),
-      );
-    };
-    socketInstance.on("mark_as_read:success", (data) => {
-      console.log("[SOCKET] mark_as_read:success received:", data);
-      handleMarkAsReadSuccess(data);
-    });
+      const handleMarkAsUnreadSuccess = (data: {
+        conversationId: string;
+        unreadCount: number;
+      }) => {
+        console.log("✅ mark_as_unread:success", data);
+        dispatch(
+          setUnreadCount({
+            conversationId: data.conversationId,
+            unreadCount: data.unreadCount,
+          }),
+        );
+      };
 
-    socketInstance.on("mark_as_unread:success", (data) => {
-      console.log(" [SOCKET] mark_as_unread:success received:", data);
-      handleMarkAsUnreadSuccess(data);
-    });
+      const handleMarkAsReadBroadcast = (data: {
+        conversationId: string;
+        unreadCount: number;
+      }) => {
+        console.log("📢 mark_as_read:broadcast", data);
+        dispatch(
+          setUnreadCount({
+            conversationId: data.conversationId,
+            unreadCount: data.unreadCount,
+          }),
+        );
+      };
 
-    socketInstance.on("mark_as_read:broadcast", (data) => {
-      console.log(" [SOCKET] mark_as_read:broadcast received:", data);
-      handleMarkAsReadBroadcast(data);
-    });
+      const handleMarkAsUnreadBroadcast = (data: {
+        conversationId: string;
+        unreadCount: number;
+      }) => {
+        console.log("📢 mark_as_unread:broadcast", data);
+        dispatch(
+          setUnreadCount({
+            conversationId: data.conversationId,
+            unreadCount: data.unreadCount,
+          }),
+        );
+      };
 
-    socketInstance.on("mark_as_unread:broadcast", (data) => {
-      console.log(" [SOCKET] mark_as_unread:broadcast received:", data);
-      handleMarkAsUnreadBroadcast(data);
-    });
-    // ✅ Backend emit 'conversation:update' khi mark_as_read/unread cho các member khác
-    socketInstance.on(
-      "conversation:update",
-      (data: { conversationId: string; unreadCount: number }) => {
+      const handleConversationUnreadUpdate = (data: {
+        conversationId: string;
+        unreadCount: number;
+      }) => {
         console.log("[SOCKET] conversation:update received:", data);
         if (data.unreadCount !== undefined) {
           dispatch(
@@ -289,64 +231,283 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
             }),
           );
         }
-      },
-    );
-    socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
-    socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
-    socketInstance.on("conversation_setting:update", handleConversationUpdate);
-    socketInstance.on("conversation_setting:delete", handleConversationDelete);
-    socketInstance.on("messages_expired", handleMessagesExpired);
+      };
 
-    socketInstance.on("conversation_setting:delete", (data) =>
-      dispatch(removeConversation(data.conversationId)),
-    );
-    socketInstance.on(
-      "removed_from_conversation",
-      handleRemoveFromConversation,
-    );
-    socketInstance.on("new_conversation", handleNewConversation);
-    socketInstance.on("group_disbanded", handleGroupDisbanded);
-    socketInstance.on("group_settings_updated", handleGroupSettingsUpdate);
-    socketInstance.on("group_updated", handleGroupUpdate);
+      const handleConversationUpdate = (data: any) => {
+        console.log("📢 conversation_setting:update received:", data);
+        const patch: any = { conversationId: data.conversationId };
+        if ("pinned" in data) patch.pinned = data.pinned;
+        if ("hidden" in data) patch.hidden = data.hidden;
+        if ("mutedUntil" in data) {
+          patch.muted =
+            data.mutedUntil != null &&
+            new Date(data.mutedUntil).getTime() > Date.now();
+          patch.mutedUntil = data.mutedUntil;
+        }
+        if ("category" in data) patch.category = data.category;
+        if ("expireDuration" in data) patch.expireDuration = data.expireDuration;
+        if ("unreadCount" in data) {
+          console.log("📢 unreadCount from broadcast:", data.unreadCount);
+          patch.unreadCount = data.unreadCount;
+        }
+        dispatch(updateConversationSetting(patch));
+      };
+
+      const handleConversationDelete = (data: any) => {
+        dispatch(removeConversation(data.conversationId));
+      };
+
+      const handleNewConversation = (conversation: any) => {
+        if (!conversation?.conversationId) return;
+        socketRef.current?.emit("join_room", conversation.conversationId);
+        dispatch(addConversationToTop(conversation));
+      };
+
+      // BUG-8 fix: removed_from_conversation → navigate + Alert
+      const handleRemoveFromConversation = (data: {
+        conversationId?: string;
+      }) => {
+        const convId = data?.conversationId;
+        if (!convId) return;
+
+        dispatch(removeConversation(convId));
+
+        // Nếu đang ở màn hình chat của nhóm bị kick → Hard reset navigation
+        if (currentConversationIdRef.current === convId) {
+          Alert.alert(
+            "Thông báo",
+            "Bạn đã bị xóa khỏi nhóm này.",
+            [
+              {
+                text: "OK",
+                onPress: () => router.replace("/private/(tabs)"),
+              },
+            ],
+          );
+        }
+      };
+
+      // BUG-9 fix: member_removed → reload member list trong màn hình chat
+      const handleMemberRemoved = (data: {
+        conversationId: string;
+        removedUserId: string;
+      }) => {
+        // Trigger refetch conversations để sidebar cập nhật
+        dispatch(fetchConversations());
+      };
+
+      // BUG-9 fix: member_updated → reload toàn bộ conversation list
+      const handleMemberUpdated = () => {
+        dispatch(fetchConversations());
+      };
+
+      // BUG-9 fix: role_updated → cập nhật quyền realtime
+      const handleRoleUpdated = () => {
+        dispatch(fetchConversations());
+      };
+
+      // BUG-9 fix: new_approval_request → thông báo cho admin
+      const handleNewApprovalRequest = (data: {
+        conversationId: string;
+        count: number;
+      }) => {
+        ToastAndroid.show(
+          `Có ${data.count} yêu cầu tham gia nhóm mới`,
+          ToastAndroid.SHORT,
+        );
+        dispatch(fetchConversations());
+      };
+
+      // BUG-10 fix: group_disbanded → Alert + Hard reset navigation
+      const handleGroupDisbanded = (payload: any) => {
+        const convId = payload?.conversationId || payload?.id;
+        if (!convId) return;
+
+        dispatch(removeConversation(convId));
+
+        if (currentConversationIdRef.current === convId) {
+          Alert.alert(
+            "Thông báo",
+            "Nhóm này đã bị giải tán bởi trưởng nhóm.",
+            [
+              {
+                text: "OK",
+                onPress: () => router.replace("/private/(tabs)"),
+              },
+            ],
+          );
+        }
+      };
+
+      const handleGroupSettingsUpdate = (data: any) => {
+        dispatch(
+          updateConversationSetting({
+            conversationId: data.conversationId,
+            group: data.group,
+          }),
+        );
+      };
+
+      const handleGroupUpdate = (data: any) => {
+        dispatch(
+          updateConversationSetting({
+            conversationId: data.conversationId,
+            name: data.name,
+            avatar: data.avatar,
+            group: data.group,
+          }),
+        );
+      };
+
+      const handleReceiveFriendRequest = (data: {
+        friendId: string;
+        name: string;
+        avatarUrl: string;
+      }) => {
+        ToastAndroid.show(
+          `${data.name} đã gửi cho bạn một lời mời kết bạn`,
+          ToastAndroid.SHORT,
+        );
+        setFriendRefreshKey((value) => value + 1);
+      };
+
+      const handleFriendAccepted = (data: {
+        friendId: string;
+        name: string;
+        avatarUrl: string;
+      }) => {
+        ToastAndroid.show(
+          `${data.name} đã chấp nhận lời mời kết bạn`,
+          ToastAndroid.SHORT,
+        );
+        setFriendRefreshKey((value) => value + 1);
+      };
+
+      const handleCancelFriendRequest = () => {
+        ToastAndroid.show("Lời mời kết bạn đã bị hủy", ToastAndroid.SHORT);
+        setFriendRefreshKey((value) => value + 1);
+      };
+
+      const handleUpdateProfile = (data: {
+        userId: string;
+        name?: string;
+        avatarUrl?: string;
+        gender?: string;
+        birthday?: string;
+      }) => {
+        if (data.userId === user?.userId) {
+          ToastAndroid.show(
+            "Thông tin cá nhân đã được cập nhật",
+            ToastAndroid.SHORT,
+          );
+          setProfileRefreshKey((value) => value + 1);
+          return;
+        }
+
+        ToastAndroid.show("Bạn bè vừa cập nhật thông tin", ToastAndroid.SHORT);
+        setFriendRefreshKey((value) => value + 1);
+      };
+
+      // --- ĐĂNG KÝ LISTENERS (mỗi event 1 lần, truyền đầy đủ callback ref) ---
+      socketInstance.on("connect", onConnect);
+      socketInstance.on("disconnect", onDisconnect);
+
+      socketInstance.on("mark_as_read:success", handleMarkAsReadSuccess);
+      socketInstance.on("mark_as_unread:success", handleMarkAsUnreadSuccess);
+      socketInstance.on("mark_as_read:broadcast", handleMarkAsReadBroadcast);
+      socketInstance.on("mark_as_unread:broadcast", handleMarkAsUnreadBroadcast);
+      socketInstance.on("conversation:update", handleConversationUnreadUpdate);
+
+      socketInstance.on("new_message_sidebar", handleNewMessageSidebar);
+      socketInstance.on("message_recalled_sidebar", handleRecallMessageSidebar);
+      socketInstance.on("conversation_setting:update", handleConversationUpdate);
+      socketInstance.on("conversation_setting:delete", handleConversationDelete);
+      socketInstance.on("messages_expired", handleMessagesExpired);
+
+      socketInstance.on("removed_from_conversation", handleRemoveFromConversation);
+      socketInstance.on("new_conversation", handleNewConversation);
+      socketInstance.on("group_disbanded", handleGroupDisbanded);
+      socketInstance.on("group_settings_updated", handleGroupSettingsUpdate);
+      socketInstance.on("group_updated", handleGroupUpdate);
+      socketInstance.on("force_logout", handleForceLogout);
+      socketInstance.on("receive_friend_request", handleReceiveFriendRequest);
+      socketInstance.on("friend_accepted", handleFriendAccepted);
+      socketInstance.on("cancel_friend_request", handleCancelFriendRequest);
+      socketInstance.on("update_profile", handleUpdateProfile);
+
+      const handleUpdatePoll = (data: any) => {
+        console.log("🚀 [Mobile Socket] Nhận update_poll:", data);
+        if (data.conversationId) {
+          dispatch(updateConversation(data));
+        } else {
+          console.error("❌ [Mobile Socket] payload update_poll thiếu conversationId", data);
+        }
+      };
+      socketInstance.on("update_poll", handleUpdatePoll);
+
+      // BUG-9 fix: Đăng ký 4 events còn thiếu
+      socketInstance.on("member_removed", handleMemberRemoved);
+      socketInstance.on("member_updated", handleMemberUpdated);
+      socketInstance.on("role_updated", handleRoleUpdated);
+      socketInstance.on("new_approval_request", handleNewApprovalRequest);
+
+      // SMELL fix: Cleanup truyền đúng callback reference cho tất cả events
+      return () => {
+        socketInstance.off("connect", onConnect);
+        socketInstance.off("disconnect", onDisconnect);
+
+        socketInstance.off("mark_as_read:success", handleMarkAsReadSuccess);
+        socketInstance.off("mark_as_unread:success", handleMarkAsUnreadSuccess);
+        socketInstance.off("mark_as_read:broadcast", handleMarkAsReadBroadcast);
+        socketInstance.off("mark_as_unread:broadcast", handleMarkAsUnreadBroadcast);
+        socketInstance.off("conversation:update", handleConversationUnreadUpdate);
+
+        socketInstance.off("new_message_sidebar", handleNewMessageSidebar);
+        socketInstance.off("message_recalled_sidebar", handleRecallMessageSidebar);
+        socketInstance.off("conversation_setting:update", handleConversationUpdate);
+        socketInstance.off("conversation_setting:delete", handleConversationDelete);
+        socketInstance.off("messages_expired", handleMessagesExpired);
+
+        socketInstance.off("removed_from_conversation", handleRemoveFromConversation);
+        socketInstance.off("new_conversation", handleNewConversation);
+        socketInstance.off("group_disbanded", handleGroupDisbanded);
+        socketInstance.off("group_settings_updated", handleGroupSettingsUpdate);
+        socketInstance.off("group_updated", handleGroupUpdate);
+        socketInstance.off("force_logout", handleForceLogout);
+        socketInstance.off("receive_friend_request", handleReceiveFriendRequest);
+        socketInstance.off("friend_accepted", handleFriendAccepted);
+        socketInstance.off("cancel_friend_request", handleCancelFriendRequest);
+        socketInstance.off("update_profile", handleUpdateProfile);
+        socketInstance.off("update_poll", handleUpdatePoll);
+
+        socketInstance.off("member_removed", handleMemberRemoved);
+        socketInstance.off("member_updated", handleMemberUpdated);
+        socketInstance.off("role_updated", handleRoleUpdated);
+        socketInstance.off("new_approval_request", handleNewApprovalRequest);
+      };
+    };
+
+    const cleanupPromise = initSocket();
 
     return () => {
-      socketInstance.off("mark_as_read:success", handleMarkAsReadSuccess);
-      socketInstance.off("mark_as_unread:success", handleMarkAsUnreadSuccess);
-      socketInstance.off("mark_as_read:broadcast", handleMarkAsReadBroadcast);
-      socketInstance.off(
-        "mark_as_unread:broadcast",
-        handleMarkAsUnreadBroadcast,
-      );
-      socketInstance.off("conversation:update");
-      socketInstance.off("new_message_sidebar", handleNewMessageSidebar);
-      socketInstance.off(
-        "message_recalled_sidebar",
-        handleRecallMessageSidebar,
-      );
-      socketInstance.off(
-        "conversation_setting:update",
-        handleConversationUpdate,
-      );
-      socketInstance.off(
-        "conversation_setting:delete",
-        handleConversationDelete,
-      );
-      socketInstance.off("messages_expired", handleMessagesExpired);
-
-      socketInstance.off("conversation_setting:delete");
-      socketInstance.off("removed_from_conversation");
-      socketInstance.off("new_conversation");
-      socketInstance.off("group_disbanded");
-      socketInstance.off("group_settings_updated", handleGroupSettingsUpdate);
-      socketInstance.off("group_updated", handleGroupUpdate);
+      cleanupPromise.then((cleanup) => cleanup?.());
     };
-  }, [apiUrl, user?.userId, dispatch]);
+  }, [apiUrl, user?.userId, dispatch, router]);
 
   return (
     <SocketContext.Provider
-      value={{ socket, isConnected, markAsRead, markAsUnread }}
+      value={{
+        socket,
+        isConnected,
+        friendRefreshKey,
+        profileRefreshKey,
+        markAsRead,
+        markAsUnread,
+      }}
     >
       {children}
     </SocketContext.Provider>
   );
 };
+
+export { SocketContext };
