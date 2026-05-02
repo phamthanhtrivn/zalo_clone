@@ -2,9 +2,11 @@ import { View, Text, Image, TouchableOpacity, ToastAndroid } from "react-native"
 import { useEffect, useState } from "react";
 import { userService } from "@/services/user.service";
 import { useSelector } from "react-redux";
+import { useSocket } from "@/contexts/SocketContext";
 
 export default function ReceivedTab() {
   const [receivedUsers, setReceivedUsers] = useState<any>([]);
+  const { friendRefreshKey } = useSocket();
   useEffect(() => {
     const fetchReceivedRequests = async () => {
       try {
@@ -17,7 +19,7 @@ export default function ReceivedTab() {
       }
     };
     fetchReceivedRequests();
-  }, []);
+  }, [friendRefreshKey]);
 
   return (
     <View className="flex-1">
@@ -63,6 +65,7 @@ function ReceivedItem({ item, message, setReceivedUsers }: ReceivedItemProps) {
           );
         }
       } catch (err) {
+        console.log(err);
         ToastAndroid.show(
           (err as any)?.response?.data?.message ||
             "Không thể chấp nhận lời mời kết bạn",

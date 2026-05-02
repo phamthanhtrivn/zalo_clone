@@ -17,14 +17,22 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { scale } from "@/utils/responsive";
 import { useRouter } from "expo-router";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { use, useEffect, useState } from "react";
-import { userService } from "@/services/user.service";
+import { useEffect } from "react";
+import { fetchUserById } from "@/store/auth/userInfoSlice";
+import { useSocket } from "@/contexts/SocketContext";
 
 export default function SettingScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { user, loading, error } = useAppSelector((state) => state.auth);
   const { userInfo } = useAppSelector((state) => state.userInfo);
+  const { profileRefreshKey } = useSocket();
+
+  useEffect(() => {
+    if (user?.userId) {
+      dispatch(fetchUserById(user.userId));
+    }
+  }, [dispatch, user?.userId, profileRefreshKey]);
 
   console.log("userInfo : ", userInfo);
 

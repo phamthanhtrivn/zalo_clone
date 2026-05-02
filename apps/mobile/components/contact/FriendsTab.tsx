@@ -4,9 +4,11 @@ import FriendItem from "./FriendItem";
 import { useEffect, useState } from "react";
 import { userService } from "@/services/user.service";
 import { router } from "expo-router";
+import { useSocket } from "@/contexts/SocketContext";
 
 export default function FriendsTab() {
   const [friends, setFriends] = useState([]);
+  const { friendRefreshKey } = useSocket();
 
   useEffect(() => {
     const fetchFriends = async () => {
@@ -19,7 +21,7 @@ export default function FriendsTab() {
     };
 
     fetchFriends();
-  }, []);
+  }, [friendRefreshKey]);
 
   return (
     <ScrollView className="flex-1 bg-white">

@@ -8,9 +8,11 @@ import {
 import { userService } from "@/services/user.service";
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
+import { useSocket } from "@/contexts/SocketContext";
 
 export default function SentTab() {
   const [sentUsers, setSentUsers] = useState<any>([]);
+  const { friendRefreshKey } = useSocket();
   useEffect(() => {
     const fetchSentRequests = async () => {
       try {
@@ -23,7 +25,7 @@ export default function SentTab() {
       }
     };
     fetchSentRequests();
-  }, []);
+  }, [friendRefreshKey]);
 
   return (
     <View className="flex-1">
