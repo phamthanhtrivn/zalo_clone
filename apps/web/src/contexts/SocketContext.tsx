@@ -53,6 +53,9 @@ interface SocketContextType {
     conversationId: string;
   }) => Promise<any>;
   setActiveConversationId: (id: string | null) => void;
+  aiStatus: "thinking" | "typing" | null;
+  aiStreamingText: string;
+  streamingTargetId: string | null;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -76,6 +79,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const apiUrl = import.meta.env.VITE_API_URL;
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [aiStatus, setAiStatus] = useState<"thinking" | "typing" | null>(null);
+  const [aiStreamingText, setAiStreamingText] = useState("");
+  const [streamingTargetId, setStreamingTargetId] = useState<string | null>(null);
 
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
@@ -239,6 +245,26 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     setGroupDisbandedDialogOpen(true);
   }, [dispatch]);
 
+  // AI Stream message
+  const handleAiStatus = useCallback((data: { targetId: string; status: "thinking" | "typing" | null }) => {
+    setStreamingTargetId(data.targetId);
+    setAiStatus(data.status);
+    if (data.status === "thinking") setAiStreamingText("");
+    if (data.status === null) setStreamingTargetId(null);
+  }, []);
+
+  const handleAiTypingChunk = useCallback((data: { targetId: string; text: string; isFinished: boolean }) => {
+    setStreamingTargetId(data.targetId);
+    if (data.isFinished) {
+      setAiStatus(null);
+      setAiStreamingText("");
+      setStreamingTargetId(null);
+    } else {
+      setAiStatus("typing");
+      setAiStreamingText((prev) => prev + data.text);
+    }
+  }, []);
+
   // --- INITIALIZE SOCKET & ATTACH LISTENERS ---
   useEffect(() => {
     if (!user?.userId || !accessToken) return;
@@ -292,6 +318,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on("group_disbanded", handleGroupDisbanded);
     socketInstance.on("group_updated", handleGroupUpdated);
     socketInstance.on("force_logout", handleForceLogout);
+    socketInstance.on("ai_status", handleAiStatus);
+    socketInstance.on("ai_typing_chunk", handleAiTypingChunk);
 
     return () => {
       socketInstance.off("connect", onConnect);
@@ -308,8 +336,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.off("group_disbanded", handleGroupDisbanded);
       socketInstance.off("group_updated", handleGroupUpdated);
       socketInstance.off("force_logout", handleForceLogout);
+      socketInstance.off("ai_status", handleAiStatus);
+      socketInstance.off("ai_typing_chunk", handleAiTypingChunk);
     };
-  }, [apiUrl, user?.userId, accessToken, handleNewMessage, handleMessageReacted, handleMessageRecalled, handleMessagePinned, handleReadReceipt, handleMessagesExpired, handleUpdatePoll, handlePollOptionAdded, handleGroupDisbanded, handleForceLogout]);
+  }, [apiUrl, user?.userId, accessToken, handleNewMessage, handleMessageReacted, handleMessageRecalled, handleMessagePinned, handleReadReceipt, handleMessagesExpired, handleUpdatePoll, handlePollOptionAdded, handleGroupDisbanded, handleForceLogout, handleAiStatus, handleAiTypingChunk]);
 
   return (
     <SocketContext.Provider
@@ -319,6 +349,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         markAsRead,
         markAsUnread,
         setActiveConversationId,
+        aiStatus,
+        aiStreamingText,
+        streamingTargetId,
       }}
     >
       {children}

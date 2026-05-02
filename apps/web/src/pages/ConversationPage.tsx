@@ -58,8 +58,9 @@ const ConversationPage = () => {
   const [friendStatus, setFriendStatus] = useState<string | null>(null);
 
   const lastMessageId = messages[messages.length - 1]?._id;
-  const { setActiveConversationId } = useSocket();
+  const { setActiveConversationId, socket, aiStatus, aiStreamingText, streamingTargetId } = useSocket();
   const selectedMessageId = new URLSearchParams(location.search).get("messageId");
+
 
   useEffect(() => {
     setActiveConversationId(id || null);
@@ -180,6 +181,14 @@ const ConversationPage = () => {
     setTimeout(() => { handleJumpToMessage(targetMessageId); }, 250);
   }, [messages.length]);
 
+
+  // Xử lý scroll khi nhận stream message AI
+  useEffect(() => {
+    if (aiStatus && streamingTargetId === id && containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [aiStatus, aiStreamingText, streamingTargetId, id]);
+
   useEffect(() => {
     if (containerRef.current && isFirstLoad.current && messages.length) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
@@ -217,7 +226,7 @@ const ConversationPage = () => {
   };
 
   const handlePinnedMessage = async (messageId: string) => {
-    try { await messageService.pinnedMessage(currentUserId, messageId, id!); } 
+    try { await messageService.pinnedMessage(currentUserId, messageId, id!); }
     catch (err) { toast.error("Bạn chỉ có thể ghim tối đa 3 tin nhắn"); }
   };
 
@@ -262,6 +271,9 @@ const ConversationPage = () => {
           lastMessageId={lastMessageId || ""}
           isGroup={isGroup}
           onJumpToMessage={handleJumpToMessage}
+          aiStatus={(streamingTargetId === id || streamingTargetId === currentUserId) ? aiStatus : null}
+          aiStreamingText={(streamingTargetId === id || streamingTargetId === currentUserId) ? aiStreamingText : ""}
+          aiAvatar={conversation?.type === "AI" ? conversation?.avatar : "https://res.cloudinary.com/dmv766v92/image/upload/v1711111111/ai_avatar_placeholder.png"}
         />
 
         <ChatInput

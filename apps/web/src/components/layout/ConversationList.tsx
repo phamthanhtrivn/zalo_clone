@@ -24,13 +24,13 @@ const CATEGORY_FILTERS: Array<{
   label: string;
   color: string;
 }> = [
-  { value: "customer", label: "Khách hàng", color: "bg-red-500" },
-  { value: "family", label: "Gia đình", color: "bg-green-500" },
-  { value: "work", label: "Công việc", color: "bg-orange-500" },
-  { value: "friends", label: "Bạn bè", color: "bg-purple-500" },
-  { value: "later", label: "Trả lời sau", color: "bg-yellow-500" },
-  { value: "colleague", label: "Đồng nghiệp", color: "bg-blue-500" },
-];
+    { value: "customer", label: "Khách hàng", color: "bg-red-500" },
+    { value: "family", label: "Gia đình", color: "bg-green-500" },
+    { value: "work", label: "Công việc", color: "bg-orange-500" },
+    { value: "friends", label: "Bạn bè", color: "bg-purple-500" },
+    { value: "later", label: "Trả lời sau", color: "bg-yellow-500" },
+    { value: "colleague", label: "Đồng nghiệp", color: "bg-blue-500" },
+  ];
 
 const ConversationList = () => {
   const { id } = useParams();

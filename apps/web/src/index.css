@@ -43,14 +43,17 @@
     from {
       height: 0;
     }
+
     to {
       height: var(--radix-accordion-content-height);
     }
   }
+
   @keyframes accordion-up {
     from {
       height: var(--radix-accordion-content-height);
     }
+
     to {
       height: 0;
     }
@@ -89,9 +92,12 @@
 
     --radius: 0.5rem;
 
-    --zalo-blue: 215 100% 50%; /* #0068ff */
-    --zalo-light: 213 100% 95%; /* #E5F1FF */
-    --zalo-selected: 213 52% 80%; /* #B4CBE7 approx */
+    --zalo-blue: 215 100% 50%;
+    /* #0068ff */
+    --zalo-light: 213 100% 95%;
+    /* #E5F1FF */
+    --zalo-selected: 213 52% 80%;
+    /* #B4CBE7 approx */
   }
 
   .dark {
@@ -134,6 +140,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
     height: 100%;
@@ -154,9 +161,64 @@ body,
 
 @keyframes highlightFade {
   0% {
-    background-color: rgba(59, 130, 246, 0.6); /* blue-500 */
+    background-color: rgba(59, 130, 246, 0.6);
+    /* blue-500 */
   }
+
   100% {
     background-color: transparent;
   }
+}
+
+/* AI Markdown Styling */
+.markdown-content p {
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content ul {
+  list-style-type: disc;
+}
+
+.markdown-content ol {
+  list-style-type: decimal;
+}
+
+.markdown-content li {
+  margin-bottom: 0.25rem;
+}
+
+.markdown-content strong {
+  font-weight: 600;
+  color: inherit;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid #e5e7eb;
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-content th {
+  background-color: #f9fafb;
+  font-weight: 600;
 }

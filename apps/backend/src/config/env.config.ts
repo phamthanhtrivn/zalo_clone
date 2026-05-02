@@ -24,5 +24,6 @@ export default () => ({
     api_key: process.env.OPENROUTER_API_KEY,
     model: process.env.OPENROUTER_MODEL,
     base_url: process.env.OPENROUTER_BASE_URL,
+    botId: process.env.BOT_ID,
   },
 });
