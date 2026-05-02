@@ -1,4 +1,5 @@
-import { Video, Search } from "lucide-react";
+import { Video, Search, Loader2 } from "lucide-react";
+import React, { useState } from "react";
 import { MdGroupAdd } from "react-icons/md";
 import { LuPanelRight, LuPanelRightClose } from "react-icons/lu";
 import type { ConversationItemType } from "@/types/conversation-item.type";
@@ -36,6 +37,7 @@ const ChatHeader = ({
 }: ChatHeaderProps) => {
   const { callUser } = useCall();
   const currentUserId = useAppSelector((state) => state.auth.user?.userId);
+  const [isInitializingCall, setIsInitializingCall] = useState(false);
 
   const otherMemberId =
     conversation?.participants?.find((id: string) => id !== currentUserId) ||
@@ -45,10 +47,17 @@ const ChatHeader = ({
   console.log("CHECK: otherMemberId =", otherMemberId);
 
   const handleVideoCall = async () => {
-    if (!conversation.conversationId || !otherMemberId || !currentUserId) {
-      console.log("Không đủ thông tin để thực hiện cuộc gọi");
+    if (
+      !conversation.conversationId ||
+      !otherMemberId ||
+      !currentUserId ||
+      isInitializingCall
+    ) {
+      console.log("Không đủ thông tin hoặc đang khởi tạo cuộc gọi");
       return;
     }
+
+    setIsInitializingCall(true);
     try {
       console.log("1. Đang tạo bản ghi cuộc gọi trong DB");
 
@@ -77,6 +86,8 @@ const ChatHeader = ({
       );
     } catch (error) {
       console.log("Lỗi khi khởi tạo cuộc gọi:", error);
+    } finally {
+      setIsInitializingCall(false);
     }
   };
 
@@ -110,8 +121,17 @@ const ChatHeader = ({
             <MdGroupAdd />
           </Button>
 
-          <Button variant="ghost" size="icon" onClick={handleVideoCall}>
-            <Video />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleVideoCall}
+            disabled={isInitializingCall}
+          >
+            {isInitializingCall ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Video />
+            )}
           </Button>
 
           <Button 

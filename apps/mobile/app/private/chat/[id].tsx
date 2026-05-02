@@ -540,9 +540,9 @@ export default function ChatWindow() {
     // 4. Kích hoạt cuộc gọi
     startCall(
       partnerId,
-      conversation.name || "Người dùng",
-      id, // conversationId
-      "VIDEO",
+      id, // conversationId (Mã ID của phòng chat)
+      "VIDEO", // Loại cuộc gọi
+      conversation.name || "Người dùng", // Tên hiển thị đối phương
     );
   };
 
@@ -731,6 +731,18 @@ export default function ChatWindow() {
       );
     };
 
+    const handleCallUpdated = (data: { messageId: string, status: string, duration?: number }) => {
+      console.log("🚀 [Mobile Socket] Call Updated:", data);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId
+            ? { ...m, call: { ...m.call!, status: data.status, duration: data.duration ?? m.call?.duration ?? null } }
+            : m,
+        ),
+      );
+    };
+
+    socket.on("call_updated", handleCallUpdated);
     socket.on("read_receipt", handleReadReceipt);
     socket.on("messages_expired", handleMessagesExpired);
     socket.on("new_message", handleNewMessage);
@@ -747,6 +759,7 @@ export default function ChatWindow() {
       socket.off("read_receipt", handleReadReceipt);
       socket.off("messages_expired", handleMessagesExpired);
       socket.off("update_poll", handleUpdatePoll);
+      socket.off("call_updated", handleCallUpdated);
 
       socket.emit("leave_room", id);
     };
