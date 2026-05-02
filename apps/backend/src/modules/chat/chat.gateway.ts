@@ -99,6 +99,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
 
+      if (event === 'ai_status' || event === 'ai_typing_chunk') {
+        this.server.to(room).emit(event, data);
+        return;
+      }
+
       if (event && room) {
         this.server.to(room).emit(event, data);
       }
@@ -307,7 +312,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // --- WebRTC Signaling Handlers ---
 
   @SubscribeMessage('call:signal')
-  async handleCallSignal(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+  async handleCallSignal(
+    @MessageBody() data: any,
+    @ConnectedSocket() client: Socket,
+  ) {
     // Phase 3: Check for answer signal to update DB status
     if (data.signal?.type === 'answer' && data.messageId) {
       try {
@@ -317,7 +325,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           status: CallStatus.ACCEPTED,
         });
       } catch (err) {
-        console.warn('[Socket] Failed to update call to ACCEPTED:', err.message);
+        console.warn(
+          '[Socket] Failed to update call to ACCEPTED:',
+          err.message,
+        );
       }
     }
 
@@ -328,7 +339,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('call:reject')
-  async handleCallReject(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+  async handleCallReject(
+    @MessageBody() data: any,
+    @ConnectedSocket() client: Socket,
+  ) {
     // Phase 1: Update DB on reject
     if (data.messageId) {
       try {
@@ -338,7 +352,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           status: CallStatus.REJECTED,
         });
       } catch (err) {
-        console.warn('[Socket] Failed to update call to REJECTED:', err.message);
+        console.warn(
+          '[Socket] Failed to update call to REJECTED:',
+          err.message,
+        );
       }
     }
 
@@ -349,7 +366,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('call:end')
-  async handleCallEnd(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+  async handleCallEnd(
+    @MessageBody() data: any,
+    @ConnectedSocket() client: Socket,
+  ) {
     // Phase 1: Update DB on end
     if (data.messageId) {
       try {
@@ -374,10 +394,45 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: any,
     @ConnectedSocket() client: Socket,
   ) {
-    console.log(`[Socket] Forwarding call:respond_status from ${client.data.userId} to ${data.to}`);
+    console.log(
+      `[Socket] Forwarding call:respond_status from ${client.data.userId} to ${data.to}`,
+    );
     this.server.to(data.to).emit('call:signal', {
       ...data,
       from: client.data.userId,
+    });
+  }
+  //AI event
+  //Dùng để ngắt AI trả lời
+  @SubscribeMessage('stop_ai_generation')
+  handleStopAi(socket: Socket, payload: { conversationId: string }) {
+    this.eventEmitter.emit('ai.stop_generation', {
+      conversationId: payload.conversationId,
+      userId: socket.data.userId as string,
+    });
+  }
+
+  async emitAiChunk(targetId: string, text: string, isFinished: boolean) {
+    return this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+      room: targetId,
+      event: 'ai_typing_chunk',
+      data: { targetId, text, isFinished },
+    });
+  }
+
+  async emitAiStatus(targetId: string, status: 'thinking' | 'typing' | null) {
+    return this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+      room: targetId,
+      event: 'ai_status',
+      data: { targetId, status },
+    });
+  }
+
+  async emitNewMessage(targetId: string, message: any) {
+    return this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+      room: targetId,
+      event: 'new_message',
+      data: message,
     });
   }
 }

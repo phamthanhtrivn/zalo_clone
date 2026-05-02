@@ -58,19 +58,10 @@ const ConversationPage = () => {
 
   const [isFriend, setIsFriend] = useState<boolean | null>(null);
   const [friendStatus, setFriendStatus] = useState<string | null>(null);
-  const { socket } = useSocket();
   const lastMessageId = messages[messages.length - 1]?._id;
-  const { setActiveConversationId } = useSocket();
+  const { setActiveConversationId, socket, aiStatus, aiStreamingText, streamingTargetId } = useSocket();
   const selectedMessageId = new URLSearchParams(location.search).get("messageId");
-  const toastAlert = useCallback((noti: string) => {
-    toast(noti, {
-      position: "top-center",
-      autoClose: 3000,
-      hideProgressBar: true,
-      theme: "dark",
-      transition: Zoom,
-    });
-  }, []);
+
   useEffect(() => {
     setActiveConversationId(id || null);
     return () => setActiveConversationId(null);
@@ -286,6 +277,14 @@ const ConversationPage = () => {
     setTimeout(() => { handleJumpToMessage(targetMessageId); }, 250);
   }, [messages.length]);
 
+
+  // Xử lý scroll khi nhận stream message AI
+  useEffect(() => {
+    if (aiStatus && streamingTargetId === id && containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [aiStatus, aiStreamingText, streamingTargetId, id]);
+
   useEffect(() => {
     if (containerRef.current && isFirstLoad.current && messages.length) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
@@ -498,6 +497,9 @@ const ConversationPage = () => {
           lastMessageId={lastMessageId || ""}
           isGroup={isGroup}
           onJumpToMessage={handleJumpToMessage}
+          aiStatus={(streamingTargetId === id || streamingTargetId === currentUserId) ? aiStatus : null}
+          aiStreamingText={(streamingTargetId === id || streamingTargetId === currentUserId) ? aiStreamingText : ""}
+          aiAvatar={conversation?.type === "AI" ? conversation?.avatar : "https://res.cloudinary.com/dmv766v92/image/upload/v1711111111/ai_avatar_placeholder.png"}
         />
 
         <ChatInput

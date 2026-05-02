@@ -42,9 +42,14 @@ import { AiService } from '../ai/ai.service';
 import { RedisService } from 'src/common/redis/redis.service';
 import { REDIS_CHANNEL_SOCKET_EVENTS } from 'src/common/constants/redis.constant';
 import { ConversationType } from 'src/common/types/enums/conversation-type';
+import { MessageType } from 'src/common/enums/message-type.enum';
+import { parseMessageText } from './helpers/parseMessageText';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class MessagesService {
+  private BOT_ID: string;
+
   constructor(
     @InjectModel(Message.name)
     private readonly messageModel: Model<Message>,
@@ -64,7 +69,10 @@ export class MessagesService {
     private readonly callService: MessagesCallService,
     private readonly aiService: AiService,
     private readonly redisService: RedisService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.BOT_ID = configService.get<string>('ai.botId')!;
+  }
 
   async getMessagesFromConversation(
     conversationId: string,
@@ -126,8 +134,14 @@ export class MessagesService {
     return this.queryService.searchMessages(conversationId, searchDto);
   }
 
-  async getPollMessagesFromConversation(conversationId: string, userId: string) {
-    return this.queryService.getPollMessagesFromConversation(conversationId, userId);
+  async getPollMessagesFromConversation(
+    conversationId: string,
+    userId: string,
+  ) {
+    return this.queryService.getPollMessagesFromConversation(
+      conversationId,
+      userId,
+    );
   }
 
   // --- Action Methods ---
@@ -383,18 +397,20 @@ export class MessagesService {
     dto: SendMessageDto,
     files?: Express.Multer.File[],
   ) {
-    const { conversationId } = dto;
-    const cacheKey = `is_ai_conv:${conversationId}`;
+    const userText = parseMessageText(dto.content);
+    if (userText.startsWith('@Zola AI')) {
+      return this.processMessageWithAiStream(dto, files, '10', true);
+    }
 
+    // Kiểm tra hội thoại AI 1-1 qua Cache
+    const cacheKey = `is_ai_conv:${dto.conversationId}`;
     let isAi = await this.redisService.get(cacheKey);
 
-    // kiểm tra xem có phải là đoạn chat với Ai không
-    // dùng redis để tiết kiệm query đến db.
     if (isAi === null) {
-      const conversation = await this.conversationModel
-        .findById(conversationId)
+      const conv = await this.conversationModel
+        .findById(dto.conversationId)
         .lean();
-      isAi = conversation?.type === ConversationType.AI ? 'true' : 'false';
+      isAi = conv?.type === ConversationType.AI ? 'true' : 'false';
       await this.redisService.set(cacheKey, isAi, 'EX', 86400);
     }
 
@@ -402,79 +418,121 @@ export class MessagesService {
       return this.processMessageWithAiStream(dto, files);
     }
 
+    //Tin nhắn bình thường
     return this.actionService.sendMessage(dto, files);
   }
 
   //chat with AI
   async processMessageWithAiStream(
-    sendMessageDto: SendMessageDto,
+    dto: SendMessageDto,
     files?: Express.Multer.File[],
+    limit: string = '10',
+    isPrivate: boolean = false,
   ) {
-    const userMessage = await this.actionService.sendMessage(
-      sendMessageDto,
-      files,
-    );
+    const { conversationId, senderId } = dto;
+    const userText = parseMessageText(dto.content);
 
-    const { conversationId, content } = sendMessageDto;
+    // Xác định đích đến của Socket: Cá nhân hoặc Cả nhóm
+    const targetId = isPrivate ? senderId : conversationId;
 
-    await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
-      room: conversationId,
-      event: 'ai_status',
-      data: { conversationId, status: 'thinking' },
-    });
-
-    const userText =
-      typeof content === 'string' ? JSON.parse(content).text : content?.text;
-
-    const stream = await this.aiService.chatStream(userText);
-    let isFirstChunk = true;
-    let fullAiResponse = '';
-
-    // vừa lưu chuỗi vừa gửi sự kiện về fe
-    for await (const chunk of stream) {
-      if (isFirstChunk) {
-        await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
-          room: conversationId,
-          event: 'ai_status',
-          data: { conversationId, status: 'typing' },
-        });
-        isFirstChunk = false;
-      }
-      const contentChunk = chunk.choices[0]?.delta?.content || '';
-      if (!contentChunk) continue;
-
-      fullAiResponse += contentChunk;
-
-      await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
-        room: conversationId,
-        event: 'ai_typing_chunk',
-        data: {
+    // 1. Lưu tin nhắn gửi của User (Thầm lặng hoặc Công khai)
+    const userMessage = isPrivate
+      ? await this.sendPrivateAiSummary(
           conversationId,
-          text: contentChunk,
-          isFinished: false,
-        },
-      });
+          senderId,
+          userText,
+          MessageType.PRIVATE,
+          senderId,
+        )
+      : await this.actionService.sendMessage(dto, files);
+
+    try {
+      await this.chatGateway.emitAiStatus(targetId, 'thinking');
+
+      // Lấy và map lịch sử hội thoại
+      const rawHistory = await this.getMessagesFromConversation(
+        conversationId,
+        { userId: senderId, limit },
+      );
+      const mappedHistory = rawHistory.messages
+        .filter((msg) => !msg.recalled && !msg.deletedFor.includes(senderId))
+        .map((msg) => ({
+          role: (msg.senderId.toString() === this.BOT_ID
+            ? 'assistant'
+            : 'user') as 'assistant' | 'user',
+          content: parseMessageText(msg.content),
+        }))
+        .filter((m) => m.content !== '');
+
+      if (mappedHistory.length > 0) mappedHistory.pop();
+
+      // Gọi AI Service
+      const aiResponse = await this.aiService.chatStreamAndEmit(
+        userText,
+        targetId, // Truyền đúng targetId đã sửa để bắn socket
+        mappedHistory,
+      );
+
+      // 2. Lưu phản hồi của AI
+      if (isPrivate) {
+        await this.sendPrivateAiSummary(
+          conversationId,
+          this.BOT_ID,
+          aiResponse,
+          MessageType.AI_SUMMARY,
+          senderId,
+        );
+      } else {
+        const botMessage = await this.messageModel.create({
+          senderId: new Types.ObjectId(this.BOT_ID),
+          conversationId: new Types.ObjectId(conversationId),
+          content: { text: aiResponse },
+          type: MessageType.USER_MESSAGE,
+        });
+
+        await this.conversationModel.findByIdAndUpdate(conversationId, {
+          lastMessageId: botMessage._id,
+          lastMessageAt: (botMessage as any).createdAt,
+        });
+
+        // Phải populate để FE có avatar[cite: 6]
+        const populatedBotMsg = await this.messageModel
+          .findById(botMessage._id)
+          .populate('senderId', 'profile.name profile.avatarUrl')
+          .lean();
+
+        await this.chatGateway.emitNewMessage(conversationId, populatedBotMsg);
+      }
+    } catch (error) {
+      console.error('AI Processing Error:', error);
+      await this.chatGateway.emitAiStatus(targetId, null);
     }
 
-    // Gửi sự kiện báo kết thúc stream
-    await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
-      room: conversationId,
-      event: 'ai_typing_chunk',
-      data: {
-        conversationId,
-        text: '',
-        isFinished: true,
-      },
+    return userMessage;
+  }
+
+  async sendPrivateAiSummary(
+    conversationId: string,
+    senderId: string,
+    text: string,
+    type: MessageType = MessageType.AI_SUMMARY,
+    targetUserId: string,
+  ) {
+    const message = await this.messageModel.create({
+      senderId: new Types.ObjectId(senderId),
+      conversationId: new Types.ObjectId(conversationId),
+      type,
+      content: { text },
+      targetUserId: new Types.ObjectId(targetUserId),
     });
 
-    // AI trả lời xong lưu vào message collection
-    const botDto: SendMessageDto = {
-      senderId: '69f438929cf8b39d88abd220',
-      conversationId: conversationId,
-      content: { text: fullAiResponse }, // Sửa lại để không bị double-wrap JSON
-    };
-    await this.actionService.sendMessage(botDto);
+    // populate senderId để FE lấy được Avatar/Name
+    const populatedMessage = await this.messageModel
+      .findById(message._id)
+      .populate('senderId', 'profile.name profile.avatarUrl')
+      .lean();
 
-    return userMessage;
+    await this.chatGateway.emitNewMessage(targetUserId, populatedMessage);
+    return populatedMessage;
   }
 }
