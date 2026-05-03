@@ -2091,7 +2091,7 @@ export class ConversationsService {
     if (!groupName || groupName.trim() === '') {
       const participantNames = (conversation.participants || [])
         .filter((p: any) => p && p.profile && p.profile.name)
-        .slice(0, 3) 
+        .slice(0, 3)
         .map((p: any) => p.profile.name);
 
       groupName = participantNames.join(', ');
@@ -2180,7 +2180,7 @@ export class ConversationsService {
           admins.forEach(admin => {
             this.chatGateway.server.to(admin.userId.toString()).emit('new_approval_request', {
               conversationId: convIdStr,
-              count: 1, 
+              count: 1,
             });
           });
         }
@@ -2189,7 +2189,7 @@ export class ConversationsService {
       }
 
       // --- TRƯỜNG HỢP 2: VÀO THẲNG NHÓM (KHÔNG CẦN DUYỆT) ---
-      
+
       // Tìm xem ngày xưa có từng ở trong nhóm không 
       const oldMember = await this.memberModel.findOne({
         conversationId: convObjectId,
@@ -2200,7 +2200,7 @@ export class ConversationsService {
         oldMember.leftAt = null as any;
         oldMember.joinedAt = new Date();
         oldMember.role = MemberRole.MEMBER;
-        oldMember.unreadCount = 1; 
+        oldMember.unreadCount = 1;
         await oldMember.save({ session });
       } else {
         await this.memberModel.create([{
@@ -2241,7 +2241,7 @@ export class ConversationsService {
           this.chatGateway.server.to(userId).emit('new_conversation', formattedConv);
         }
         this.chatGateway.handleUserJoinRoom(userId, convIdStr);
-        
+
         this.chatGateway.server.to(convIdStr).emit('member_updated', {
           conversationId: convIdStr,
           type: 'ADD',

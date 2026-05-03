@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { getFileIcon } from "@/utils/file-icon.util";
 import { saveAs } from "file-saver";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { truncateFileName } from "@/utils/render-file";
 import PollMessage from "./PollMessage";
 import CallContent from "./sub-components/CallContent";
@@ -69,6 +69,34 @@ export const MessageBubble = ({
   );
 
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [isExpired, setIsExpired] = useState(() => {
+    if (message.expired) return true;
+    // Ưu tiên dùng expiredAt (hoặc expiresAt nếu có)
+    const exp = message.expiredAt || (message as any).expiresAt;
+    if (exp) return new Date(exp).getTime() <= Date.now();
+    return false;
+  });
+  useEffect(() => {
+    // Nếu đã hết hạn qua Redux, đồng bộ luôn
+    if (message.expired) {
+      setIsExpired(true);
+      return;
+    }
+
+    // Lấy thời gian hết hạn từ cả hai tên trường (phòng trường hợp chưa đồng nhất)
+    const exp = message.expiredAt || (message as any).expiresAt;
+    if (!exp) return;
+
+    const expireTime = new Date(exp).getTime();
+    const remaining = expireTime - Date.now();
+
+    if (remaining <= 0) {
+      setIsExpired(true);
+    } else {
+      const timer = setTimeout(() => setIsExpired(true), remaining + 50);
+      return () => clearTimeout(timer);
+    }
+  }, [message.expired, message.expiredAt, (message as any).expiresAt]);
 
   const dispatchMediaLoaded = () => {
     requestAnimationFrame(() => {
@@ -86,7 +114,7 @@ export const MessageBubble = ({
     }
   };
 
-  if (message.expired) {
+  if (isExpired) {
     return (
       <div className="flex items-center gap-1.5 bg-[#f0f0f0] rounded-xl px-3 py-2 max-w-xs">
         <svg
@@ -114,9 +142,8 @@ export const MessageBubble = ({
   if (message.recalled) {
     return (
       <div
-        className={`rounded-lg px-3 py-2 max-w-md border shadow-sm text-gray-500 ${
-          isMe ? "bg-zalo-light" : "bg-white"
-        }`}
+        className={`rounded-lg px-3 py-2 max-w-md border shadow-sm text-gray-500 ${isMe ? "bg-zalo-light" : "bg-white"
+          }`}
       >
         <p>Tin nhắn đã được thu hồi</p>
         {showTime && (
@@ -133,17 +160,15 @@ export const MessageBubble = ({
       onClick={() => {
         if (isSelected) toggleSelectMessage(message._id);
       }}
-      className={`rounded-lg px-3 py-2 max-w-md border shadow-sm transition-colors ${
-        isSelected ? "cursor-pointer" : ""
-      } ${
-        isMe
+      className={`rounded-lg px-3 py-2 max-w-md border shadow-sm transition-colors ${isSelected ? "cursor-pointer" : ""
+        } ${isMe
           ? selectedMessages.includes(message._id)
             ? "bg-zalo-selected"
             : "bg-zalo-light"
           : selectedMessages.includes(message._id)
             ? "bg-zalo-selected"
             : "bg-white"
-      }`}
+        }`}
     >
       <div className="space-y-2 wrap-break-word">
         {/* REPLY BLOCK */}
@@ -171,11 +196,11 @@ export const MessageBubble = ({
 
         {/* MAIN CONTENT */}
         {message.call ? (
-          <CallContent 
-            type={message.call.type} 
-            status={message.call.status} 
-            duration={message.call.duration} 
-            isMe={isMe} 
+          <CallContent
+            type={message.call.type}
+            status={message.call.status}
+            duration={message.call.duration}
+            isMe={isMe}
           />
         ) : (
           <>
@@ -214,9 +239,8 @@ export const MessageBubble = ({
       {/* TIME */}
       {showTime && (
         <div
-          className={`text-[10px] mt-1 text-right ${
-            isMe ? "text-blue-500/80" : "text-gray-400"
-          }`}
+          className={`text-[10px] mt-1 text-right ${isMe ? "text-blue-500/80" : "text-gray-400"
+            }`}
         >
           {formatTime(message.createdAt)}
         </div>

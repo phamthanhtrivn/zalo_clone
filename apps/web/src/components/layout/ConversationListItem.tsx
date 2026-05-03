@@ -97,14 +97,12 @@ const CATEGORY_VALUES: Exclude<ConversationCategory, null>[] = [
   "colleague",
 ];
 
-const getIsExpired = (expired?: boolean, expiresAt?: string | null) => {
+const getIsExpired = (expired?: boolean, expiredAt?: string | null) => {
   if (expired) return true;
-  if (!expiresAt) return false;
-
-  const expiresAtMs = new Date(expiresAt).getTime();
-  if (Number.isNaN(expiresAtMs)) return Boolean(expired);
-
-  return expiresAtMs <= Date.now();
+  if (!expiredAt) return false;
+  const ms = new Date(expiredAt).getTime();
+  if (Number.isNaN(ms)) return Boolean(expired);
+  return ms <= Date.now();
 };
 
 const ConversationListItem = ({
@@ -227,13 +225,13 @@ const ConversationListItem = ({
       return;
     }
 
-    const expiresAtMs = new Date(lastMessage.expiresAt).getTime();
-    if (Number.isNaN(expiresAtMs)) {
+    const expiredAtMs = new Date(lastMessage.expiresAt).getTime();
+    if (Number.isNaN(expiredAtMs)) {
       setIsLastMessageExpired(Boolean(lastMessage.expired));
       return;
     }
 
-    const remainingMs = expiresAtMs - Date.now();
+    const remainingMs = expiredAtMs - Date.now();
     if (remainingMs <= 0) {
       setIsLastMessageExpired(true);
       return;
@@ -430,10 +428,10 @@ const ConversationListItem = ({
       duration === 0
         ? await unmuteConversation(user?.userId, conversation.conversationId)
         : await muteConversation(
-            user?.userId,
-            conversation.conversationId,
-            duration,
-          );
+          user?.userId,
+          conversation.conversationId,
+          duration,
+        );
     } catch (error) {
       dispatch(
         updateConversationSetting({
@@ -793,8 +791,8 @@ const ConversationListItem = ({
             <span className="shrink-0">
               {!previewData.showSender
                 ? ""
-                : conversation.type === "PRIVATE" &&
-                    conversation.lastMessage?.senderName !== "Bạn"
+                : conversation.type === "DIRECT" &&
+                  conversation.lastMessage?.senderName !== "Bạn"
                   ? ""
                   : `${conversation.lastMessage?.senderName ?? ""}: `}
             </span>
