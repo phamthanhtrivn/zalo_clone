@@ -25,7 +25,12 @@
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_AUDIO",
+        "ACCESS_MEDIA_LOCATION",
+        "RECORD_AUDIO"
       ]
     },
     "web": {
@@ -34,6 +39,8 @@
     },
     "plugins": [
       "expo-router",
+      "expo-media-library",
+      "expo-location",
       [
         "expo-image-picker",
         {
