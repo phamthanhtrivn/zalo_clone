@@ -6,7 +6,7 @@ import {
   isSameHourAndMinute,
 } from "@/utils/format-message-time..util";
 import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
-import type { MessagesType } from "@/types/messages..type";
+import type { MessagesType } from "@/types/messages.type";
 import type { RefObject } from "react";
 import { useSocket } from "@/contexts/SocketContext";
 import { setMessages } from "@/store/slices/messageSlice";

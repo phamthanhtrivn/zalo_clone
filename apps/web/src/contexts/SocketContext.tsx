@@ -25,7 +25,8 @@ import {
     updateMessageReaction, 
     updateRecallMessage, 
     updateMessagePinned, 
-    updateMessagesExpired 
+    updateMessagesExpired,
+    updateCallStatus
 } from "@/store/slices/messageSlice";
 import {
   AlertDialog,
@@ -218,6 +219,18 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [dispatch]);
 
+  const handleCallUpdated = useCallback((data: { messageId: string; status: string; duration?: number; conversationId?: string }) => {
+    console.log("🚀 Nhận call_updated từ Socket:", data);
+    if (data.conversationId) {
+      dispatch(updateCallStatus({
+        conversationId: data.conversationId,
+        messageId: data.messageId,
+        status: data.status,
+        duration: data.duration
+      }));
+    }
+  }, [dispatch]);
+
   const handleGroupDisbanded = useCallback((payload: any) => {
     const conversationId = payload?.conversationId || payload?.id;
     if (!conversationId) return;
@@ -275,6 +288,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on("messages_expired", handleMessagesExpired);
     socketInstance.on("update_poll", handleUpdatePoll);
     socketInstance.on("poll_option_added", handlePollOptionAdded);
+    socketInstance.on("call_updated", handleCallUpdated);
     socketInstance.on("group_disbanded", handleGroupDisbanded);
     socketInstance.on("group_updated", handleGroupUpdated);
     socketInstance.on("force_logout", handleForceLogout);
@@ -290,6 +304,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.off("messages_expired", handleMessagesExpired);
       socketInstance.off("update_poll", handleUpdatePoll);
       socketInstance.off("poll_option_added", handlePollOptionAdded);
+      socketInstance.off("call_updated", handleCallUpdated);
       socketInstance.off("group_disbanded", handleGroupDisbanded);
       socketInstance.off("group_updated", handleGroupUpdated);
       socketInstance.off("force_logout", handleForceLogout);

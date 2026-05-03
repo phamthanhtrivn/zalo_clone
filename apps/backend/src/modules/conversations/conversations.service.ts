@@ -45,6 +45,7 @@ export class ConversationsService {
     @InjectConnection() private connection: Connection,
     private readonly storageService: StorageService,
 
+    @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
     @Inject(forwardRef(() => MessagesService))
     private readonly messagesService: MessagesService,

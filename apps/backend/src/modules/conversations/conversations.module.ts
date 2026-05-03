@@ -11,7 +11,7 @@ import {
 import { Member, MemberSchema } from '../members/schemas/member.schema';
 import { Message, MessageSchema } from '../messages/schemas/message.schema';
 
-import { User, UserSchema } from '../users/schemas/user.schema';
+import { UserSchema } from '../users/schemas/user.schema';
 
 import { StorageModule } from 'src/common/storage/storage.module';
 import { ChatModule } from '../chat/chat.module';
@@ -19,7 +19,7 @@ import { MessagesModule } from '../messages/messages.module';
 
 @Module({
   imports: [
-    ChatModule,
+    forwardRef(() => ChatModule),
     MongooseModule.forFeature([
       { name: Conversation.name, schema: ConversationSchema },
       { name: Member.name, schema: MemberSchema },

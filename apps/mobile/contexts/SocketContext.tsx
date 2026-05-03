@@ -6,8 +6,8 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { Alert, ToastAndroid } from "react-native";
 import { io, Socket } from "socket.io-client";
-import { Alert } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { useRouter } from "expo-router";
 import { useAppDispatch, useAppSelector } from "@/store/store";
@@ -23,12 +23,13 @@ import {
   fetchConversations,
 } from "@/store/slices/conversationSlice";
 import { logout2 } from "@/store/auth/authThunk";
-import { ToastAndroid } from "react-native";
 import { getDeviceId } from "@/utils/device.util";
 
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
+  friendRefreshKey: number;
+  profileRefreshKey: number;
   markAsRead: (data: {
     userId: string;
     conversationId: string;
@@ -42,6 +43,8 @@ interface SocketContextType {
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
+  friendRefreshKey: 0,
+  profileRefreshKey: 0,
   markAsRead: async () => ({}),
   markAsUnread: async () => ({}),
 });
@@ -54,6 +57,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const apiUrl = config.apiUrl;
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [friendRefreshKey, setFriendRefreshKey] = useState(0);
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const dispatch = useAppDispatch();
   const router = useRouter();
   const user = useAppSelector((state) => state.auth.user);
@@ -354,6 +359,55 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         );
       };
 
+      const handleReceiveFriendRequest = (data: {
+        friendId: string;
+        name: string;
+        avatarUrl: string;
+      }) => {
+        ToastAndroid.show(
+          `${data.name} đã gửi cho bạn một lời mời kết bạn`,
+          ToastAndroid.SHORT,
+        );
+        setFriendRefreshKey((value) => value + 1);
+      };
+
+      const handleFriendAccepted = (data: {
+        friendId: string;
+        name: string;
+        avatarUrl: string;
+      }) => {
+        ToastAndroid.show(
+          `${data.name} đã chấp nhận lời mời kết bạn`,
+          ToastAndroid.SHORT,
+        );
+        setFriendRefreshKey((value) => value + 1);
+      };
+
+      const handleCancelFriendRequest = () => {
+        ToastAndroid.show("Lời mời kết bạn đã bị hủy", ToastAndroid.SHORT);
+        setFriendRefreshKey((value) => value + 1);
+      };
+
+      const handleUpdateProfile = (data: {
+        userId: string;
+        name?: string;
+        avatarUrl?: string;
+        gender?: string;
+        birthday?: string;
+      }) => {
+        if (data.userId === user?.userId) {
+          ToastAndroid.show(
+            "Thông tin cá nhân đã được cập nhật",
+            ToastAndroid.SHORT,
+          );
+          setProfileRefreshKey((value) => value + 1);
+          return;
+        }
+
+        ToastAndroid.show("Bạn bè vừa cập nhật thông tin", ToastAndroid.SHORT);
+        setFriendRefreshKey((value) => value + 1);
+      };
+
       // --- ĐĂNG KÝ LISTENERS (mỗi event 1 lần, truyền đầy đủ callback ref) ---
       socketInstance.on("connect", onConnect);
       socketInstance.on("disconnect", onDisconnect);
@@ -376,6 +430,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.on("group_settings_updated", handleGroupSettingsUpdate);
       socketInstance.on("group_updated", handleGroupUpdate);
       socketInstance.on("force_logout", handleForceLogout);
+      socketInstance.on("receive_friend_request", handleReceiveFriendRequest);
+      socketInstance.on("friend_accepted", handleFriendAccepted);
+      socketInstance.on("cancel_friend_request", handleCancelFriendRequest);
+      socketInstance.on("update_profile", handleUpdateProfile);
 
       const handleUpdatePoll = (data: any) => {
         console.log("🚀 [Mobile Socket] Nhận update_poll:", data);
@@ -416,6 +474,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         socketInstance.off("group_settings_updated", handleGroupSettingsUpdate);
         socketInstance.off("group_updated", handleGroupUpdate);
         socketInstance.off("force_logout", handleForceLogout);
+        socketInstance.off("receive_friend_request", handleReceiveFriendRequest);
+        socketInstance.off("friend_accepted", handleFriendAccepted);
+        socketInstance.off("cancel_friend_request", handleCancelFriendRequest);
+        socketInstance.off("update_profile", handleUpdateProfile);
         socketInstance.off("update_poll", handleUpdatePoll);
 
         socketInstance.off("member_removed", handleMemberRemoved);
@@ -433,7 +495,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [apiUrl, user?.userId, dispatch, router]);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected, markAsRead, markAsUnread }}>
+    <SocketContext.Provider
+      value={{
+        socket,
+        isConnected,
+        friendRefreshKey,
+        profileRefreshKey,
+        markAsRead,
+        markAsUnread,
+      }}
+    >
       {children}
     </SocketContext.Provider>
   );

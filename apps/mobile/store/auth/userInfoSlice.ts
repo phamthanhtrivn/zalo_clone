@@ -17,9 +17,11 @@ export const fetchUserById = createAsyncThunk(
   "user/fetchUserById",
   async (userId: string, thunkAPI) => {
     try {
-      const res = await userService.getProfile();
+      const res = await userService.getProfile(userId);
+      console.log("fetchUserById result : ", res);
       return res;
     } catch (err: any) {
+      console.error("Error fetching user by ID:", err);
       return thunkAPI.rejectWithValue(err.response?.data || err.message);
     }
   },
