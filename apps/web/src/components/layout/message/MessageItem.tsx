@@ -59,11 +59,11 @@ export const MessageItem = ({
   const [showDetailModal, setShowDetailModal] = useState(false);
 
 
-  const liveMessage = useAppSelector((state) =>
-    state.message.messagesByConversation[message.conversationId]?.find(
-      (m) => m._id === message._id
-    )
-  );
+  // const liveMessage = useAppSelector((state) =>
+  //   state.message.messagesByConversation[message.conversationId]?.find(
+  //     (m) => m._id === message._id
+  //   )
+  // );
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
     window.addEventListener("click", handleClickOutside);
@@ -238,7 +238,7 @@ export const MessageItem = ({
 
       {showDetailModal && (
         <ViewDetailMessageModal
-          selectedMessage={liveMessage || message}
+          selectedMessage={message}
           setShowDetailModal={() => setShowDetailModal(false)}
         />
       )}

@@ -155,18 +155,22 @@ const messageSlice = createSlice({
             if (msg) msg.pinned = pinned;
         },
 
-        updateMessagesExpired(
-            state,
-            action: PayloadAction<{
-                conversationId: string;
-                messageIds: string[];
-            }>
-        ) {
+
+        updateMessagesExpired(state, action) {
             const { conversationId, messageIds } = action.payload;
             const messages = state.messagesByConversation[conversationId];
             if (!messages) return;
-            messages.forEach((m) => {
-                if (messageIds.includes(m._id)) m.expired = true;
+
+            const messageIdSet = new Set(messageIds);
+
+            state.messagesByConversation[conversationId] = messages.map((msg) => {
+                if (messageIdSet.has(msg._id)) {
+                    return {
+                        ...msg,
+                        expired: true,
+                    };
+                }
+                return msg;
             });
         },
 
@@ -243,6 +247,33 @@ const messageSlice = createSlice({
                 if (duration !== undefined) msg.call.duration = duration;
             }
         },
+        // messageSlice.ts
+        clearReadReceiptsAfter(
+            state,
+            action: PayloadAction<{
+                conversationId: string;
+                userId: string;
+                lastReadMessageId: string | null;
+            }>
+        ) {
+            const { conversationId, userId, lastReadMessageId } = action.payload;
+            const messages = state.messagesByConversation[conversationId];
+            if (!messages) return;
+
+            messages.forEach((msg) => {
+                if (!lastReadMessageId || msg._id > lastReadMessageId) {
+                    if (!msg.readReceipts) return;
+                    msg.readReceipts = msg.readReceipts.filter((r) => {
+                        // r.userId có thể là object { _id: string } hoặc string thuần
+                        const rid =
+                            typeof r.userId === "string"
+                                ? r.userId
+                                : (r.userId as any)?._id;
+                        return rid !== userId;
+                    });
+                }
+            });
+        },
     },
 });
 
@@ -259,6 +290,7 @@ export const {
     updatePoll,
     addPollOption,
     updateCallStatus,
+    clearReadReceiptsAfter
 } = messageSlice.actions;
 
 export default messageSlice.reducer;

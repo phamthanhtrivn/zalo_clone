@@ -11,7 +11,7 @@
     "lint": "expo lint"
   },
   "dependencies": {
-    "@config-plugins/react-native-webrtc": "13.0.0",
+    "@config-plugins/react-native-webrtc": "^13.0.0",
     "@expo/vector-icons": "^15.1.1",
     "@gorhom/bottom-sheet": "^5.2.8",
     "@react-native-community/datetimepicker": "8.4.4",
@@ -31,9 +31,10 @@
     "expo-font": "~14.0.11",
     "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
-    "expo-image-picker": "^55.0.16",
+    "expo-image-picker": "~17.0.11",
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.11",
+    "expo-location": "~19.0.8",
     "expo-media-library": "~18.2.1",
     "expo-router": "~6.0.22",
     "expo-secure-store": "^55.0.8",

@@ -134,78 +134,32 @@ const MessageList = ({
     }
   }, [targetMessageId, messages, setSearchParams]);
 
+  // Logic tự động render lại khi có tin nhắn hết hạn trong danh sách hiện tại
+  const [, setTick] = useState(0);
   useEffect(() => {
-    if (!socket || !id) return;
+    const now = Date.now();
+    // Tìm các tin nhắn chưa hết hạn nhưng có thời gian hết hạn trong tương lai
+    const expiringMessages = messages.filter((m) =>
+      m.expiredAt && !m.expired && new Date(m.expiredAt).getTime() > now
+    );
 
-    // ... existing socket listeners ...
+    if (expiringMessages.length === 0) return;
 
-    // Cập nhật read_receipt cho messages
-    const handleReadReceipt = (data: {
-      conversationId: string;
-      messages: MessagesType[];
-    }) => {
-      if (data.conversationId === id) {
-        setMessages((prev) => {
-          const updatedMap = new Map(
-            data.messages.map((m) => [m._id, m.readReceipts])
-          );
+    // Tìm thời điểm hết hạn gần nhất
+    const nextExpiryTime = Math.min(
+      ...expiringMessages.map((m) => new Date(m.expiredAt!).getTime())
+    );
 
-          return prev.map((m) => {
-            const newReadReceipts = updatedMap.get(m._id);
-            if (!newReadReceipts) return m;
-            return {
-              ...m,
-              readReceipts: newReadReceipts,
-            };
-          });
-        });
-      }
-    };
+    const delay = nextExpiryTime - now;
 
-    // Xử lý messages_unread_updated
-    const handleUnreadUpdated = (data: {
-      conversationId: string;
-      userId: string;
-      lastReadMessageId: string | null;
-      unreadCount?: number;
-    }) => {
-      if (data.conversationId === id) {
-        // Cập nhật lại messages để xóa/hiện readReceipts
-        setMessages((prev) => {
-          if (!data.lastReadMessageId) {
-            // Nếu không có lastReadMessageId, xóa tất cả readReceipts của user này
-            return prev.map((msg) => ({
-              ...msg,
-              readReceipts: msg.readReceipts?.filter(
-                (r) => r.userId._id !== data.userId
-              ),
-            }));
-          }
+    // Đặt timer để render lại component ngay khi tin nhắn đó hết hạn
+    const timer = setTimeout(() => {
+      setTick((t) => t + 1);
+    }, delay + 100); // Thêm 100ms để đảm bảo điều kiện < new Date() thỏa mãn
 
-          return prev.map((msg) => {
-            if (msg._id > data.lastReadMessageId!) {
-              return {
-                ...msg,
-                readReceipts: msg.readReceipts?.filter(
-                  (r) => r.userId._id !== data.userId
-                ),
-              };
-            }
-            return msg;
-          });
-        });
-      }
-    };
+    return () => clearTimeout(timer);
+  }, [messages, tick]);
 
-    socket.on("read_receipt", handleReadReceipt);
-    socket.on("messages_unread_updated", handleUnreadUpdated);
-
-    return () => {
-      // ... existing cleanup ...
-      socket.off("read_receipt", handleReadReceipt);
-      socket.off("messages_unread_updated", handleUnreadUpdated);
-    };
-  }, [socket, id]);
   return (
     <>
       {/* Thanh gửi yêu cầu kết bạn - hiện khi đang chat với người chưa kết bạn */}
@@ -263,9 +217,13 @@ const MessageList = ({
           const next = messages[index + 1];
 
           const isMe = message.senderId._id === currentUserId;
+          const isRecalled = message.recalled;
+          const messageExpiresAt = message.expiredAt;
           const isExpired =
-            message.expiresAt &&
-            new Date(message.expiresAt) < new Date();
+            message.expired ||
+            (!!messageExpiresAt &&
+              new Date(messageExpiresAt).getTime() <= Date.now());
+
           const showDivider =
             !prev ||
             new Date(prev.createdAt).toDateString() !==
@@ -304,46 +262,69 @@ const MessageList = ({
                 {!isMe &&
                   (showAvatar ? (
                     <Avatar className="w-8 h-8">
-                      <AvatarImage src={message.senderId.profile?.avatarUrl} />
+                      <AvatarImage src={message.senderId?.profile?.avatarUrl} />
                       <AvatarFallback>
-                        {message.senderId.profile?.name?.charAt(0)}
+                        {message.senderId?.profile?.name?.charAt(0)}
                       </AvatarFallback>
                     </Avatar>
                   ) : (
                     <div className="w-8" />
                   ))}
 
-                <div
-                  className={`rounded-md px-3 py-2 max-w-md border shadow-sm ${isExpired
-                    ? "bg-gray-100 text-gray-400"
-                    : isMe
+                <div className="flex flex-col items-end gap-1 max-w-md">
+                  <div
+                    className={`rounded-md px-3 py-2 border shadow-sm ${isMe
                       ? "bg-[#E5F1FF]"
                       : "bg-white"
-                    }`}
-                >
-                  {/* 🔥 Nội dung */}
-                  <div className="space-y-1 wrap-break-word">
+                      } ${isExpired || isRecalled ? "bg-gray-100 text-gray-400" : ""}`}
+                  >
+                    {/* 🔥 Nội dung */}
+                    <div className="space-y-1 wrap-break-word">
+                      {isRecalled ? (
+                        <div className="text-gray-400 italic">
+                          Tin nhắn đã bị thu hồi
+                        </div>
+                      ) : isExpired ? (
+                        <div className="text-gray-400 italic">
+                          Tin nhắn đã hết hạn
+                        </div>
+                      ) : (
+                        <>
+                          {message.content?.text && <p>{message.content.text}</p>}
+                          {message.content?.icon && (
+                            <p className="text-2xl">{message.content.icon}</p>
+                          )}
+                          {message.content?.file && <div>File</div>}
+                        </>
+                      )}
+                    </div>
 
-                    {isExpired ? (
-                      <div className="text-gray-400 italic">
-                        Tin nhắn đã hết hạn
+                    {/* Time */}
+                    {showTime && (
+                      <div className="text-[13px] text-gray-700 mt-1">
+                        {formatTime(message.createdAt)}
                       </div>
-                    ) : (
-                      <>
-                        {message.content?.text && <p>{message.content.text}</p>}
-                        {message.content?.icon && (
-                          <p className="text-2xl">{message.content.icon}</p>
-                        )}
-                        {message.content?.file && <div>File</div>}
-                      </>
                     )}
-
                   </div>
 
-                  {/* Time */}
-                  {showTime && (
-                    <div className="text-[13px] text-gray-700 mt-1">
-                      {formatTime(message.createdAt)}
+                  {/* ✅ Hiển thị Avatar những người đã đọc (Read Receipts) */}
+                  {!isExpired && !isRecalled && message.readReceipts && message.readReceipts.length > 0 && (
+                    <div className={`flex items-center gap-0.5 mt-0.5 ${isMe ? "justify-end" : "justify-start"}`}>
+                      {message.readReceipts.map((receipt: any) => {
+                        const reader = receipt.userId;
+                        const readerId = reader?._id || reader;
+                        // Không hiện avatar của chính mình dưới tin nhắn mình đã đọc
+                        if (readerId === currentUserId) return null;
+
+                        return (
+                          <Avatar key={readerId} className="w-3.5 h-3.5 border border-white">
+                            <AvatarImage src={reader?.profile?.avatarUrl} />
+                            <AvatarFallback className="text-[6px]">
+                              {reader?.profile?.name?.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

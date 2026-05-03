@@ -27,6 +27,14 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.htuan04.mobile",
       "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_AUDIO",
+        "ACCESS_MEDIA_LOCATION",
+        "RECORD_AUDIO",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
@@ -45,6 +53,8 @@
     },
     "plugins": [
       "expo-router",
+      "expo-media-library",
+      "expo-location",
       [
         "@config-plugins/react-native-webrtc",
         {

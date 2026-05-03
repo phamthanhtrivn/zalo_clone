@@ -37,7 +37,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly redisService: RedisService,
     private readonly eventEmitter: EventEmitter2,
     private readonly tokenService: TokenService,
-  ) {}
+  ) { }
 
   handleConnection(socket: Socket) {
     const token = socket.handshake.auth?.token as string;
@@ -155,6 +155,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         messages: updatedMessages,
       });
 
+      // Phát sự kiện cập nhật trạng thái đọc để xóa/hiện avatar realtime
+      this.server.to(data.conversationId).emit('messages_unread_updated', {
+        conversationId: data.conversationId,
+        userId: data.userId,
+        lastReadMessageId: lastReadMessageId?.toString() || null,
+        unreadCount: 0
+      });
+
       // 🔑 KEY: Emit callback success CHỈ cho user hiện tại
       client.emit('mark_as_read:success', {
         conversationId: data.conversationId,
@@ -213,6 +221,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           messages: result.messagesToUpdate,
         });
       }
+
+      // Quan trọng: Phát sự kiện để frontend xóa avatar của người này khỏi các tin nhắn đã "hủy đọc"
+      this.server.to(data.conversationId).emit('messages_unread_updated', {
+        conversationId: data.conversationId,
+        userId: data.userId,
+        lastReadMessageId: result.lastReadMessageId?.toString() || null,
+        unreadCount: result.unreadCount
+      });
 
       // 🔑 KEY: Emit callback success CHỈ cho user hiện tại
       client.emit('mark_as_unread:success', {

@@ -128,9 +128,8 @@ export default function ChatScreen() {
     return (
       <View className={`px-3 py-1 ${isMe ? "items-end" : "items-start"}`}>
         <View
-          className={`max-w-[80%] px-3 py-2 rounded-2xl ${
-            isMe ? "bg-[#e1f0ff]" : "bg-white"
-          }`}
+          className={`max-w-[80%] px-3 py-2 rounded-2xl ${isMe ? "bg-[#e1f0ff]" : "bg-white"
+            }`}
         >
           <Text className="text-[14px] text-black">{msgText}</Text>
         </View>
