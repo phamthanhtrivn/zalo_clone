@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Phone, PhoneIncoming, PhoneOff, Video } from "lucide-react"; // Thêm Video icon
 import { useCall } from "@/contexts/VideoCallContext";
+import { useAppSelector } from "@/store";
 import { CallType } from "@/constants/types"; // Đảm bảo import enum này
 
 function getInitial(nameOrId: string) {
@@ -9,20 +10,35 @@ function getInitial(nameOrId: string) {
 }
 
 export default function IncomingCall() {
-  const { videoCallData, answerCall, leaveCall, videoAccepted } = useCall();
+  const { videoCallData, answerCall, leaveCall, sessionState } = useCall();
+  const conversations = useAppSelector((state) => state.conversation.conversations);
 
-  const isOpen = Boolean(videoCallData?.isReceiving) && !videoAccepted;
+  // Phase 4: Simplify visibility logic (PM note #3)
+  const isOpen = sessionState === "RINGING";
 
   // Kiểm tra xem là cuộc gọi Video hay Voice
   const isVideo = videoCallData?.callType === CallType.VIDEO;
 
+  const currentConversation = useMemo(() => {
+    if (!videoCallData?.conversationId) return null;
+    return conversations.find(
+      (c) => String(c.conversationId) === String(videoCallData.conversationId) || 
+             String((c as any)?._id) === String(videoCallData.conversationId)
+    );
+  }, [conversations, videoCallData?.conversationId]);
+
   const callerName = useMemo(() => {
-    return videoCallData?.fromName || "Người dùng";
-  }, [videoCallData]);
+    return videoCallData?.fromName || currentConversation?.name || "Người dùng";
+  }, [videoCallData?.fromName, currentConversation]);
 
   const callerAvatar = useMemo(() => {
-    return videoCallData?.fromAvatar || "";
-  }, [videoCallData]);
+    return (
+      videoCallData?.fromAvatar ||
+      (currentConversation as any)?.avatarUrl ||
+      currentConversation?.avatar ||
+      ""
+    );
+  }, [videoCallData?.fromAvatar, currentConversation]);
 
   if (!isOpen) return null;
 

@@ -4,23 +4,38 @@ import ChatHeader from "@/components/layout/message/ChatHeader";
 import MessageList from "@/components/layout/message/MessageList";
 import ChatInput from "@/components/layout/message/ChatInput";
 import ConversationInfoPanel from "@/components/layout/message/ConversationInfoPanel";
+import MessageSearchPanel from "@/components/layout/message/MessageSearchPanel";
 import { messageService } from "@/services/message.service";
 import { userService } from "@/services/user.service";
 import type { MessagesType } from "@/types/messages.type";
 import { toast, Zoom } from "react-toastify";
 import { useSocket } from "@/contexts/SocketContext";
-import { conversationService } from "@/services/conversation.service";
 import { useAppDispatch, useAppSelector } from "@/store";
 import {
   setConversations,
   clearReplyingMessage,
+  updateRecallMessageInConversation,
 } from "@/store/slices/conversationSlice";
+import {
+  setMessages,
+  prependMessages,
+  appendMessages,
+  updateRecallMessage,
+  updateMessagesExpired,
+  updateCallStatus,
+  updateMessagePinned,
+  updateMessageReaction,
+  updateReadReceipt,
+} from "@/store/slices/messageSlice";
+import { addMessage } from "@/store/slices/messageSlice"; // Added import for addMessage
 import ForwardModal from "@/components/layout/message/ForwardModal";
+import { conversationService } from "@/services/conversation.service";
 
 const ConversationPage = () => {
   const { id } = useParams();
   const location = useLocation();
-  const { conversation: stateConversation, otherUserId: locationOtherUserId } = location.state || {};
+  const { conversation: stateConversation, otherUserId: locationOtherUserId } =
+    location.state || {};
   const dispatch = useAppDispatch();
 
   const currentUser = useAppSelector((state) => state.auth.user);
@@ -32,21 +47,20 @@ const ConversationPage = () => {
   const replyingMessage = useAppSelector(
     (state) => state.conversation.replyingMessage,
   );
+  const messages = useAppSelector(
+    (state) => state.message.messagesByConversation[id || ""] || [],
+  );
 
-  // Ưu tiên tìm trong state -> sau đó tìm trong store
   const conversation =
     stateConversation || conversations.find((c) => c.conversationId === id);
   const isGroup = conversation?.type === "GROUP";
 
-  // ID của người đối diện: lấy từ conversation store, hoặc fallback từ location.state
-  // (cần thiết khi conversation vừa được tạo và chưa có otherMemberId)
   const effectiveOtherMemberId = !isGroup
-    ? (conversation?.otherMemberId || locationOtherUserId || null)
+    ? conversation?.otherMemberId || locationOtherUserId || null
     : null;
-
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<MessagesType[]>([]);
-  const [messages, setMessages] = useState<MessagesType[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [prevCursor, setPrevCursor] = useState<string | null>(null);
 
@@ -55,37 +69,30 @@ const ConversationPage = () => {
   const isJumpingRef = useRef(false);
   const isFetchingRef = useRef(false);
   const isFetchingNewerRef = useRef(false);
-  // const conversation = useAppSelector((state) => {
-  //   const found = state.conversation.conversations.find(
-  //     (c) => c.conversationId === id,
-  //   );
-  //   return found ?? null;
-  // });
+
   const [isSelected, setIsSelected] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [loadingForward, setLoadingForward] = useState(false);
-  const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastProcessedMessageIdRef = useRef<string | null>(null);
   const pendingJumpMessageIdRef = useRef<string | null>(null);
 
-  // --- FRIEND STATUS ---
   const [isFriend, setIsFriend] = useState<boolean | null>(null);
   const [friendStatus, setFriendStatus] = useState<string | null>(null);
-
   const lastMessageId = messages[messages.length - 1]?._id;
-  const { socket } = useSocket();
-  const selectedMessageId = new URLSearchParams(location.search).get("messageId");
-  // Trong ConversationPage component, thêm useEffect để xử lý read_receipt
-  // ConversationPage.tsx - useEffect đã đúng, chỉ cần kiểm tra
-  // ConversationPage.tsx
-  // ConversationPage.tsx
-  // ConversationPage.tsx
+  const {
+    setActiveConversationId,
+    socket,
+    aiStatus,
+    aiStreamingText,
+    streamingTargetId,
+  } = useSocket();
+  
+  const selectedMessageId = new URLSearchParams(location.search).get(
+    "messageId",
+  );
 
-
-  // --- LOGIC THÔNG BÁO ---
-  const toastAlert = useCallback((noti: string) => {
-    toast(noti, {
+  const toastAlert = useCallback((message: string) => {
+    toast(message, {
       position: "top-center",
       autoClose: 3000,
       hideProgressBar: true,
@@ -93,6 +100,11 @@ const ConversationPage = () => {
       transition: Zoom,
     });
   }, []);
+
+  useEffect(() => {
+    setActiveConversationId(id || null);
+    return () => setActiveConversationId(null);
+  }, [id, setActiveConversationId]);
 
   // --- FRIEND STATUS CHECK ---
   useEffect(() => {
@@ -104,10 +116,7 @@ const ConversationPage = () => {
     let cancelled = false;
     const check = async () => {
       try {
-        console.log('[FriendStatus] Checking:', effectiveOtherMemberId);
         const res = await userService.checkFriendStatus(effectiveOtherMemberId);
-        console.log('[FriendStatus] Result:', res);
-        // Response cấu trúc: { success, statusCode, data: { success, data: { isFriend, status } } }
         const friendData = res?.data?.data ?? res?.data;
         if (!cancelled && friendData) {
           setIsFriend(!!friendData.isFriend);
@@ -117,8 +126,7 @@ const ConversationPage = () => {
           setFriendStatus(null);
         }
       } catch (err) {
-        console.error('[FriendStatus] API error:', err);
-        // Nếu API lỗi, mặc định coi là chưa kết bạn để hiện banner
+        console.error("[FriendStatus] API error:", err);
         if (!cancelled) {
           setIsFriend(false);
           setFriendStatus(null);
@@ -126,9 +134,10 @@ const ConversationPage = () => {
       }
     };
     check();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [id, effectiveOtherMemberId, isGroup, currentUserId]);
-
   const handleSendFriendRequest = async () => {
     if (!effectiveOtherMemberId || !currentUserId) return;
     try {
@@ -151,40 +160,59 @@ const ConversationPage = () => {
   };
 
   // --- LOGIC CUỘN & NHẢY TIN NHẮN ---
-  const scrollToMessage = (messageId: string, retry = 0) => {
+  const scrollToMessage = useCallback((messageId: string, retry = 0) => {
     const el = document.getElementById(messageId);
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
       el.classList.add("highlight");
       setTimeout(() => el.classList.remove("highlight"), 5000);
-      return;
+      return true;
     }
-    if (retry < 10) setTimeout(() => scrollToMessage(messageId, retry + 1), 50);
-  };
 
-  const handleJumpToMessage = async (messageId: string) => {
-    if (!id || !currentUserId) return;
-    isJumpingRef.current = true;
-    const res = await messageService.getMessagesAroundPinnedMessage(
-      id,
-      currentUserId,
-      messageId,
-      15,
-    );
-    if (res.success) {
-      setMessages(res.data.messages);
-      setNextCursor(res.data.nextCursor);
-      setPrevCursor(res.data.prevCursor);
-      setTimeout(() => {
-        scrollToMessage(messageId);
+    if (retry < 10) {
+      setTimeout(() => scrollToMessage(messageId, retry + 1), 50);
+    }
+
+    return false;
+  }, []);
+
+  const handleJumpToMessage = useCallback(
+    async (messageId: string) => {
+      if (!id || !currentUserId || !messageId) return;
+
+      if (scrollToMessage(messageId)) return;
+
+      isJumpingRef.current = true;
+      try {
+        const res = await messageService.getMessagesAroundPinnedMessage(
+          id,
+          currentUserId,
+          messageId,
+          15,
+        );
+
+        if (!res.success) return;
+
+        dispatch(
+          setMessages({ conversationId: id, messages: res.data.messages }),
+        );
+        setNextCursor(res.data.nextCursor);
+        setPrevCursor(res.data.prevCursor);
+
+        setTimeout(() => {
+          scrollToMessage(messageId);
+        }, 100);
+      } catch (error) {
+        console.error(error);
+      } finally {
         setTimeout(() => {
           isJumpingRef.current = false;
         }, 1000);
-      }, 100);
-    }
-  };
+      }
+    },
+    [id, currentUserId, dispatch, scrollToMessage],
+  );
 
-  // --- API FETCHING ---
   const handleLoadMessagesFromConversation = async () => {
     if (!id || !currentUserId) return;
     try {
@@ -195,7 +223,9 @@ const ConversationPage = () => {
         20,
       );
       if (res.success) {
-        setMessages(res.data.messages);
+        dispatch(
+          setMessages({ conversationId: id, messages: res.data.messages }),
+        );
         setNextCursor(res.data.nextCursor);
         setPrevCursor(null);
       }
@@ -213,51 +243,30 @@ const ConversationPage = () => {
       console.error(err);
     }
   };
-
-
   // ✅ SỬA: Chỉ xử lý read_receipt, bỏ qua messages_unread_updated
   // ConversationPage.tsx
-  const processingRef = useRef<Set<string>>(new Set());
-  // ConversationPage.tsx
-  const handleReadReceipt = useCallback((data: {
-    conversationId: string;
-    messages: Array<{ _id: string; readReceipts: any[] }>;
-  }) => {
-    if (data.conversationId !== id) return;
-    console.log('📖 Client received read_receipt:');
-    data.messages.forEach(msg => {
-      console.log(`  Message ${msg._id}:`);
-      msg.readReceipts?.forEach((receipt, idx) => {
-        console.log(`    Receipt ${idx}:`, {
-          userId: receipt.userId?._id,
-          hasProfile: !!receipt.userId?.profile,
-          avatarUrl: receipt.userId?.profile?.avatarUrl,
-          fullData: receipt
+  const handleReadReceipt = useCallback(
+    (data: {
+      conversationId: string;
+      messages: Array<{ _id: string; readReceipts: any[] }>;
+    }) => {
+      if (data.conversationId !== id) return;
+
+      data.messages.forEach((msg) => {
+        msg.readReceipts?.forEach((receipt) => {
+          dispatch(
+            updateReadReceipt({
+              conversationId: data.conversationId,
+              messageId: msg._id,
+              userId: receipt.userId?._id || receipt.userId,
+              type: "read",
+            }),
+          );
         });
       });
-    });
-
-    setMessages((prev) => {
-      const updatedMap = new Map(data.messages.map((m) => [m._id, m.readReceipts]));
-      let hasChanges = false;
-
-      const newMessages = prev.map((msg) => {
-        const newReadReceipts = updatedMap.get(msg._id);
-        if (newReadReceipts) {
-          const currentReceipts = msg.readReceipts || [];
-          // Kiểm tra xem có thay đổi không
-          if (currentReceipts.length !== newReadReceipts.length) {
-            hasChanges = true;
-            return { ...msg, readReceipts: newReadReceipts };
-          }
-        }
-        return msg;
-      });
-
-      return hasChanges ? newMessages : prev;
-    });
-  }, [id]);
-
+    },
+    [id, dispatch],
+  );
 
   const handleScrollToTop = async () => {
     const container = containerRef.current;
@@ -280,13 +289,9 @@ const ConversationPage = () => {
         20,
       );
       if (res.success && res.data.messages.length > 0) {
-        setMessages((prev) => {
-          const existingIds = new Set(prev.map((m) => m._id));
-          return [
-            ...res.data.messages.filter((m) => !existingIds.has(m._id)),
-            ...prev,
-          ];
-        });
+        dispatch(
+          prependMessages({ conversationId: id, messages: res.data.messages }),
+        );
         setNextCursor(res.data.nextCursor);
         requestAnimationFrame(() => {
           container.scrollTop = container.scrollHeight - prevHeight;
@@ -321,13 +326,9 @@ const ConversationPage = () => {
         20,
       );
       if (res.success && res.data.messages.length) {
-        setMessages((prev) => {
-          const existingIds = new Set(prev.map((m) => m._id));
-          return [
-            ...prev,
-            ...res.data.messages.filter((m) => !existingIds.has(m._id)),
-          ];
-        });
+        dispatch(
+          appendMessages({ conversationId: id, messages: res.data.messages }),
+        );
         setPrevCursor(res.data.messages[res.data.messages.length - 1]._id);
       } else {
         setPrevCursor(null);
@@ -335,17 +336,25 @@ const ConversationPage = () => {
       isFetchingNewerRef.current = false;
     }
   };
-
   // --- ACTIONS ---
   const onSendMessage = async (text: string) => {
     if (!id || !currentUserId || !text.trim()) return;
     try {
-      await messageService.sendMessage(
+      const res = await messageService.sendMessage(
         id,
         currentUserId,
         replyingMessage?._id,
         { text },
       );
+
+      // Cập nhật local store từ response API để UI phản hồi ngay (không phụ thuộc socket)
+      const msg = res?.data ?? res;
+      if (msg) {
+        const messageObj = msg.message ?? msg;
+        if (messageObj && (messageObj._id || messageObj.messageId)) {
+          dispatch(addMessage({ conversationId: id, message: messageObj } as any));
+        }
+      }
       if (replyingMessage) dispatch(clearReplyingMessage());
     } catch (error) {
       console.error(error);
@@ -403,7 +412,8 @@ const ConversationPage = () => {
             const formData = new FormData();
             formData.append("conversationId", id);
             formData.append("senderId", currentUserId);
-            if (replyingMessage?._id) formData.append("repliedId", replyingMessage._id);
+            if (replyingMessage?._id)
+              formData.append("repliedId", replyingMessage._id);
             formData.append(
               "content",
               JSON.stringify({
@@ -438,7 +448,17 @@ const ConversationPage = () => {
         ),
       );
 
-      await Promise.all(promises);
+      const results = await Promise.all(promises);
+
+      // Cập nhật ngay các message trả về từ API
+      results.forEach((r) => {
+        const msg = r?.data ?? r;
+        const messageObj = msg?.message ?? msg;
+        if (messageObj && (messageObj._id || messageObj.messageId)) {
+          dispatch(addMessage({ conversationId: id, message: messageObj } as any));
+        }
+      });
+
       if (replyingMessage) dispatch(clearReplyingMessage());
     } catch (error) {
       console.error(error);
@@ -472,13 +492,29 @@ const ConversationPage = () => {
     );
     formData.append("files", audioFile);
 
-    await messageService.sendVoiceMessage(formData);
+    const res = await messageService.sendVoiceMessage(formData);
+    // Cập nhật local ngay
+    const msg = res?.data ?? res;
+    const messageObj = msg?.message ?? msg;
+    if (messageObj && (messageObj._id || messageObj.messageId)) {
+      dispatch(addMessage({ conversationId: id, message: messageObj } as any));
+    }
+
     if (replyingMessage) dispatch(clearReplyingMessage());
   };
 
   const handleRecalledMessage = async (messageId: string) => {
     try {
-      await messageService.recalledMessage(currentUserId, messageId, id!);
+      const res = await messageService.recalledMessage(
+        currentUserId,
+        messageId,
+        id!,
+      );
+
+      // Cập nhật UI ngay khi API trả về
+      dispatch(updateRecallMessage({ conversationId: id!, messageId }));
+      dispatch(updateRecallMessageInConversation({ conversationId: id!, messageId }));
+      return res;
     } catch (err) {
       toastAlert("Bạn chỉ có thể thu hồi tin nhắn trong vòng 24 giờ");
     }
@@ -486,7 +522,22 @@ const ConversationPage = () => {
 
   const handlePinnedMessage = async (messageId: string) => {
     try {
-      await messageService.pinnedMessage(currentUserId, messageId, id!);
+      const res = await messageService.pinnedMessage(
+        currentUserId,
+        messageId,
+        id!,
+      );
+
+      // Cập nhật UI ngay
+      const msgLocal = messages.find((m) => m._id === messageId);
+      const newPinned = !msgLocal?.pinned;
+      dispatch(updateMessagePinned({ conversationId: id!, messageId, pinned: newPinned }));
+      try {
+        await handleLoadPinnedMessages();
+      } catch (e) {
+        // ignore
+      }
+      return res;
     } catch (err) {
       toastAlert("Bạn chỉ có thể ghim tối đa 3 tin nhắn");
     }
@@ -499,7 +550,13 @@ const ConversationPage = () => {
       id!,
     );
     if (res.success) {
-      setMessages((prev) => prev.filter((m) => m._id !== messageId));
+      dispatch(
+        setMessages({
+          conversationId: id!,
+          messages: messages.filter((m) => m._id !== messageId),
+        }),
+      );
+      setPinnedMessages((prev) => prev.filter((m) => m._id !== messageId));
       const convs =
         await conversationService.getConversationsFromUserId(currentUserId);
       if (convs.success) dispatch(setConversations(convs.data));
@@ -522,16 +579,13 @@ const ConversationPage = () => {
     }
   };
 
-  // --- EFFECTS ---
   useEffect(() => {
-    setMessages([]);
+    dispatch(setMessages({ conversationId: id || "", messages: [] }));
     setPinnedMessages([]);
     setNextCursor(null);
     setPrevCursor(null);
-
     isFirstLoad.current = true;
     pendingJumpMessageIdRef.current = selectedMessageId;
-
     handleLoadMessagesFromConversation();
     handleLoadPinnedMessages();
     messageService.readReceipt(currentUserId, id!);
@@ -540,56 +594,53 @@ const ConversationPage = () => {
 
   useEffect(() => {
     if (!pendingJumpMessageIdRef.current || !messages.length) return;
-
     const targetMessageId = pendingJumpMessageIdRef.current;
     pendingJumpMessageIdRef.current = null;
-
-    const timeoutId = setTimeout(() => {
+    setTimeout(() => {
       handleJumpToMessage(targetMessageId);
     }, 250);
+  }, [messages.length]);
 
-    return () => clearTimeout(timeoutId);
-  }, [messages]);
+  // Xử lý scroll khi nhận stream message AI
+  useEffect(() => {
+    if (aiStatus && streamingTargetId === id && containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [aiStatus, aiStreamingText, streamingTargetId, id]);
 
   useEffect(() => {
     if (containerRef.current && isFirstLoad.current && messages.length) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
       isFirstLoad.current = false;
     }
-  }, [messages]);
+  }, [messages.length]);
 
+  const handleMessagesExpired = useCallback(
+    (data: { conversationId: string; messageIds: string[] }) => {
+      if (data.conversationId !== id) return;
+
+      // Dùng dispatch thay vì setMessages
+      dispatch(
+        updateMessagesExpired({
+          conversationId: id,
+          messageIds: data.messageIds,
+        }),
+      );
+    },
+    [id, dispatch],
+  );
   useEffect(() => {
     if (!socket || !id) return;
     socket.emit("join_room", id);
 
-    const handleCallUpdated = (data: any) => {
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg._id === data.messageId
-            ? {
-              ...msg,
-              call: {
-                ...(msg.call || {}),
-                status: data.status,
-                duration: data.duration ?? msg.call?.duration ?? 0,
-              },
-            }
-            : msg,
-        ),
-      );
-    };
-
-    const handleNewMessage = (newMessage: MessagesType) => {
-      setMessages((prev) =>
-        prev.some((m) => m._id === newMessage._id)
-          ? prev
-          : [...prev, newMessage],
-      );
+    // ✅ Tin nhắn mới: Redux đã được cập nhật từ SocketContext, chỉ cần auto-scroll
+    const handleNewMessage = () => {
+      // (không cần setMessages)
       const container = containerRef.current;
       if (
         container &&
         container.scrollHeight - container.scrollTop - container.clientHeight <
-        150
+          150
       ) {
         requestAnimationFrame(() => {
           container.scrollTop = container.scrollHeight;
@@ -597,134 +648,84 @@ const ConversationPage = () => {
       }
     };
 
+    // ✅ Cảm xúc: dùng action updateMessageReaction
+    const handleMessageReacted = (data: any) => {
+      const conversationId = data.conversationId || id;
+      if (conversationId !== id) return;
 
-    const handleReadReceipt = (data: any) => {
+      dispatch(
+        updateMessageReaction({
+          conversationId,
+          messageId: data.messageId,
+          reactions: data.reactions,
+        }),
+      );
+    };
+
+    // ✅ Thu hồi: dùng updateRecallMessage
+    const handleMessageRecalled = (data: any) => {
+      const conversationId = data.conversationId || id;
+      if (conversationId !== id) return;
+
+      dispatch(
+        updateRecallMessage({
+          conversationId,
+          messageId: data.messageId,
+        }),
+      );
+      setPinnedMessages((prev) => prev.filter((msg) => msg._id !== data.messageId));
+    };
+
+    // ✅ Ghim: dùng updateMessagePinned
+    const handleMessagePinned = (data: any) => {
+      const conversationId = data.conversationId || id;
+      if (conversationId !== id) return;
+
+      dispatch(
+        updateMessagePinned({
+          conversationId,
+          messageId: data.messageId,
+          pinned: data.pinned,
+        }),
+      );
+      if (Array.isArray(data.pinnedMessages)) {
+        setPinnedMessages(data.pinnedMessages);
+      }
+    };
+
+    // ✅ Cuộc gọi: dùng updateCallStatus
+    const handleCallUpdated = (data: any) => {
       if (data.conversationId === id) {
-        const updatedMap = new Map(
-          data.messages.map((m: any) => [m._id, m.readReceipts]),
-        );
-        setMessages((prev) =>
-          prev.map((m) =>
-            updatedMap.has(m._id)
-              ? { ...m, readReceipts: updatedMap.get(m._id) }
-              : m,
-          ),
+        dispatch(
+          updateCallStatus({
+            conversationId: id,
+            messageId: data.messageId,
+            status: data.status,
+            duration: data.duration,
+          }),
         );
       }
-    }
-
-    const handleMessageReacted = (data: {
-      messageId: string;
-      reactions: any[];
-    }) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m._id === data.messageId ? { ...m, reactions: data.reactions } : m,
-        ),
-      );
-    };
-
-    const handleMessageRecalled = (data: { messageId: string }) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m._id === data.messageId ? { ...m, recalled: true } : m,
-        ),
-      );
-    };
-
-    const handleMessagePinned = (data: {
-      messageId: string;
-      pinned: boolean;
-      pinnedMessages: any[];
-    }) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m._id === data.messageId ? { ...m, pinned: data.pinned } : m,
-        ),
-      );
-
-      setPinnedMessages(data.pinnedMessages);
-    };
-
-    // const handleReadReceipt = (data: {
-    //   conversationId: string;
-    //   messages: MessagesType[];
-    // }) => {
-    //   if (data.conversationId === id) {
-    //     setMessages((prev) => {
-    //       const updatedMap = new Map(
-    //         data.messages.map((m) => [m._id, m.readReceipts]),
-    //       );
-
-    //       return prev.map((m) => {
-    //         const newReadReceipts = updatedMap.get(m._id);
-
-    //         if (!newReadReceipts) return m;
-
-    //         return {
-    //           ...m,
-    //           readReceipts: newReadReceipts,
-    //         };
-    //       });
-    //     });
-    //   }
-    // };
-
-    const handleMessagesExpired = (data: { conversationId: string, messageIds: string[] }) => {
-      if (data.conversationId !== id) return;
-      setMessages((prev) =>
-        prev.map((m) =>
-          data.messageIds.includes(m._id) ? { ...m, expired: true } : m,
-        ),
-      );
-
     };
 
     socket.on("new_message", handleNewMessage);
-    socket.on("message_reacted", (data) =>
-      setMessages((p) =>
-        p.map((m) =>
-          m._id === data.messageId ? { ...m, reactions: data.reactions } : m,
-        ),
-      ),
-    );
-    socket.on("message_recalled", (data) =>
-      setMessages((p) =>
-        p.map((m) => (m._id === data.messageId ? { ...m, recalled: true } : m)),
-      ),
-    );
-    socket.on("message_pinned", (data) => {
-      setMessages((p) =>
-        p.map((m) =>
-          m._id === data.messageId ? { ...m, pinned: data.pinned } : m,
-        ),
-      );
-      setPinnedMessages(data.pinnedMessages);
-    });
-
-
+    socket.on("message_reacted", handleMessageReacted);
+    socket.on("message_recalled", handleMessageRecalled);
+    socket.on("message_pinned", handleMessagePinned);
+    socket.on("messages_expired", handleMessagesExpired);
     socket.on("read_receipt", handleReadReceipt);
     socket.on("call_updated", handleCallUpdated);
-    socket.on("messages_expired", handleMessagesExpired);
 
     return () => {
-      [
-        "new_message",
-        "message_reacted",
-        "message_recalled",
-        "message_pinned",
-        "read_receipt",
-        "call_updated",
-        "messages_expired"
-      ].forEach((ev) => socket.off(ev));
-
+      socket.off("new_message", handleNewMessage);
+      socket.off("message_reacted", handleMessageReacted);
+      socket.off("message_recalled", handleMessageRecalled);
+      socket.off("message_pinned", handleMessagePinned);
+      socket.off("messages_expired", handleMessagesExpired);
+      socket.off("read_receipt", handleReadReceipt);
+      socket.off("call_updated", handleCallUpdated);
       socket.emit("leave_room", id);
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
-      }
     };
-  }, [socket, id]);
-
+  }, [socket, id, dispatch, handleMessagesExpired, handleReadReceipt]);
   if (!conversation)
     return (
       <div className="flex-1 flex items-center justify-center text-gray-500 italic">
@@ -738,18 +739,34 @@ const ConversationPage = () => {
         <ChatHeader
           conversation={conversation}
           isInfoOpen={isInfoOpen}
-          toggleInfo={() => setIsInfoOpen(!isInfoOpen)}
+          toggleInfo={() => {
+            setIsInfoOpen(!isInfoOpen);
+            setIsSearchOpen(false);
+          }}
           pinnedMessages={pinnedMessages}
           handlePinnedMessage={handlePinnedMessage}
           handleJumpToMessage={handleJumpToMessage}
+          isSearchOpen={isSearchOpen}
+          toggleSearch={() => {
+            setIsSearchOpen(!isSearchOpen);
+            setIsInfoOpen(false);
+          }}
         />
-
         {/* Thanh gửi yêu cầu kết bạn */}
         {!isGroup && isFriend === false && (
           <div className="px-4 py-2.5 bg-white border-b border-gray-100 flex items-center gap-3 text-sm">
             {/* Icon */}
             <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-[#0091ff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="w-4 h-4 text-[#0091ff]"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
                 <circle cx="9" cy="7" r="4" />
                 <line x1="19" y1="8" x2="19" y2="14" />
@@ -788,7 +805,6 @@ const ConversationPage = () => {
             )}
           </div>
         )}
-
         <MessageList
           messages={messages}
           currentUserId={currentUserId}
@@ -815,6 +831,21 @@ const ConversationPage = () => {
           lastMessageId={lastMessageId || ""}
           isGroup={isGroup}
           onJumpToMessage={handleJumpToMessage}
+          aiStatus={
+            streamingTargetId === id || streamingTargetId === currentUserId
+              ? aiStatus
+              : null
+          }
+          aiStreamingText={
+            streamingTargetId === id || streamingTargetId === currentUserId
+              ? aiStreamingText
+              : ""
+          }
+          aiAvatar={
+            conversation?.type === "AI"
+              ? conversation?.avatar
+              : "https://res.cloudinary.com/dmv766v92/image/upload/v1711111111/ai_avatar_placeholder.png"
+          }
         />
 
         <ChatInput
@@ -845,8 +876,17 @@ const ConversationPage = () => {
         conversation={conversation}
         onClose={() => setIsInfoOpen(false)}
       />
+      <MessageSearchPanel
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        conversation={conversation}
+        onJumpToMessage={handleJumpToMessage}
+      />
     </div>
   );
 };
 
 export default ConversationPage;
+
+
+

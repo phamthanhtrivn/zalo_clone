@@ -28,6 +28,7 @@ import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
 import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
 import { DeleteMessageForMeDto } from './dto/delete-message-for-me.dto';
 import { ForwardMessageDto } from './dto/forward-message.dto';
+import { SearchMessagesDto } from './dto/search-messages.dto';
 
 import { MessagesQueryService } from './services/query.service';
 import { MessagesActionService } from './services/action.service';
@@ -38,9 +39,18 @@ import { ChatGateway } from '../chat/chat.gateway';
 import { StorageService } from 'src/common/storage/storage.service';
 import { MessageResponse } from './types/message-response.type';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { AiService } from '../ai/ai.service';
+import { RedisService } from 'src/common/redis/redis.service';
+import { REDIS_CHANNEL_SOCKET_EVENTS } from 'src/common/constants/redis.constant';
+import { ConversationType } from 'src/common/types/enums/conversation-type';
+import { MessageType } from 'src/common/enums/message-type.enum';
+import { parseMessageText } from './helpers/parseMessageText';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class MessagesService {
+  private BOT_ID: string;
+
   constructor(
     @InjectModel(Message.name)
     private readonly messageModel: Model<Message>,
@@ -58,7 +68,12 @@ export class MessagesService {
     private readonly queryService: MessagesQueryService,
     private readonly actionService: MessagesActionService,
     private readonly callService: MessagesCallService,
-  ) { }
+    private readonly aiService: AiService,
+    private readonly redisService: RedisService,
+    private readonly configService: ConfigService,
+  ) {
+    this.BOT_ID = configService.get<string>('ai.botId')!;
+  }
 
   async getMessagesFromConversation(
     conversationId: string,
@@ -116,12 +131,8 @@ export class MessagesService {
     );
   }
 
-  // --- Action Methods ---
-  async sendMessage(
-    sendMessageDto: SendMessageDto,
-    files?: Express.Multer.File[],
-  ) {
-    return this.actionService.sendMessage(sendMessageDto, files);
+  async searchMessages(conversationId: string, searchDto: SearchMessagesDto) {
+    return this.queryService.searchMessages(conversationId, searchDto);
   }
 
   async sendVoiceMessage(
@@ -130,6 +141,24 @@ export class MessagesService {
   ) {
     return this.actionService.sendVoiceMessage(sendVoiceMessageDto, files);
   }
+
+  async getPollMessagesFromConversation(
+    conversationId: string,
+    userId: string,
+  ) {
+    return this.queryService.getPollMessagesFromConversation(
+      conversationId,
+      userId,
+    );
+  }
+
+  // --- Action Methods ---
+  // async sendMessage(
+  //   sendMessageDto: SendMessageDto,
+  //   files?: Express.Multer.File[],
+  // ) {
+  //   return this.actionService.sendMessage(sendMessageDto, files);
+  // }
 
   async createCallMessage(callMessageDto: CallMessageDto) {
     return this.callService.createCallMessage(callMessageDto);
@@ -176,19 +205,22 @@ export class MessagesService {
 
     if (!expiredMessages.length) return;
 
-    const ids = expiredMessages.map(m => m._id);
+    const ids = expiredMessages.map((m) => m._id);
 
     await this.messageModel.updateMany(
       { _id: { $in: ids } },
       { $set: { expired: true } },
     );
 
-    const grouped = expiredMessages.reduce((acc, m) => {
-      const key = m.conversationId.toString();
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(m._id.toString());
-      return acc;
-    }, {} as Record<string, string[]>);
+    const grouped = expiredMessages.reduce(
+      (acc, m) => {
+        const key = m.conversationId.toString();
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(m._id.toString());
+        return acc;
+      },
+      {} as Record<string, string[]>,
+    );
 
     for (const [convId, messageIds] of Object.entries(grouped)) {
       this.chatGateway.server
@@ -230,9 +262,9 @@ export class MessagesService {
       .lean();
 
     if (!conversation?.lastMessageId) {
-      return members.map(m => ({
+      return members.map((m) => ({
         userId: m.userId,
-        unreadCount: 0
+        unreadCount: 0,
       }));
     }
 
@@ -251,7 +283,7 @@ export class MessagesService {
           userId: member.userId,
           unreadCount,
         };
-      })
+      }),
     );
 
     return membersWithUnread;
@@ -278,13 +310,24 @@ export class MessagesService {
     });
 
     if (!member) {
-      throw new NotFoundException('User is not a participant in this conversation');
+      throw new NotFoundException(
+        'User is not a participant in this conversation',
+      );
     }
 
-    const conversation = await this.conversationModel.findById(objectConversationId, { lastMessageId: 1 });
+    const conversation = await this.conversationModel.findById(
+      objectConversationId,
+      { lastMessageId: 1 },
+    );
 
     if (!conversation?.lastMessageId) {
-      return { success: true, message: 'No messages', lastReadMessageId: null, unreadCount: 0, messagesToUpdate: [] };
+      return {
+        success: true,
+        message: 'No messages',
+        lastReadMessageId: null,
+        unreadCount: 0,
+        messagesToUpdate: [],
+      };
     }
 
     const messages = await this.messageModel
@@ -306,24 +349,23 @@ export class MessagesService {
     // 2️⃣ Xóa readReceipts của user từ các messages sau prevMessage
     const findFilter: any = {
       conversationId: objectConversationId,
-      readReceipts: { $elemMatch: { userId: objectUserId } }
+      readReceipts: { $elemMatch: { userId: objectUserId } },
     };
 
     if (prevMessage) {
       findFilter._id = { $gt: prevMessage._id };
     }
 
-    await this.messageModel.updateMany(
-      findFilter,
-      {
-        $pull: {
-          readReceipts: { userId: objectUserId }
-        }
-      }
-    );
+    await this.messageModel.updateMany(findFilter, {
+      $pull: {
+        readReceipts: { userId: objectUserId },
+      },
+    });
 
     // 3️⃣ Lấy danh sách messages cần cập nhật UI
-    const messagesToUpdateFilter: any = { conversationId: objectConversationId };
+    const messagesToUpdateFilter: any = {
+      conversationId: objectConversationId,
+    };
     if (prevMessage) {
       messagesToUpdateFilter._id = { $gt: prevMessage._id };
     }
@@ -332,7 +374,7 @@ export class MessagesService {
       .find(messagesToUpdateFilter)
       .populate({
         path: 'readReceipts.userId',
-        model: 'User',  // ✅ Đảm bảo đúng model name
+        model: 'User', // ✅ Đảm bảo đúng model name
         select: '_id profile.name profile.avatarUrl',
       })
       .lean();
@@ -350,10 +392,176 @@ export class MessagesService {
       unreadCount: 1,
       lastReadMessageId: prevMessage?._id ?? null,
       lastMessageId: conversation.lastMessageId,
-      messagesToUpdate: messagesToUpdate.map(m => ({
+      messagesToUpdate: messagesToUpdate.map((m) => ({
         _id: m._id,
-        readReceipts: m.readReceipts
-      }))
+        readReceipts: m.readReceipts,
+      })),
     };
+  }
+
+  //HaThanhTuan
+  // gọi đến api send message là gọi đến hàm này
+  async handleIncomingMessage(
+    dto: SendMessageDto,
+    files?: Express.Multer.File[],
+  ) {
+    const userText = parseMessageText(dto.content);
+    if (userText.startsWith('@Zola AI')) {
+      return this.processMessageWithAiStream(dto, files, '10', true);
+    }
+
+    // Kiểm tra hội thoại AI 1-1 qua Cache
+    const cacheKey = `is_ai_conv:${dto.conversationId}`;
+    let isAi = await this.redisService.get(cacheKey);
+
+    if (isAi === null) {
+      const conv = await this.conversationModel
+        .findById(dto.conversationId)
+        .lean();
+      isAi = conv?.type === ConversationType.AI ? 'true' : 'false';
+      await this.redisService.set(cacheKey, isAi, 'EX', 86400);
+    }
+
+    if (isAi === 'true') {
+      return this.processMessageWithAiStream(dto, files);
+    }
+
+    //Tin nhắn bình thường
+    return this.actionService.sendMessage(dto, files);
+  }
+
+  //chat with AI
+  async processMessageWithAiStream(
+    dto: SendMessageDto,
+    files?: Express.Multer.File[],
+    limit: string = '10',
+    isPrivate: boolean = false,
+  ) {
+    const { conversationId, senderId } = dto;
+    const userText = parseMessageText(dto.content);
+
+    // Xác định đích đến của Socket: Cá nhân hoặc Cả nhóm
+    const targetId = isPrivate ? senderId : conversationId;
+
+    // 1. Lưu tin nhắn gửi của User (Thầm lặng hoặc Công khai)
+    const userMessage = isPrivate
+      ? await this.sendPrivateAiSummary(
+          conversationId,
+          senderId,
+          userText,
+          MessageType.PRIVATE,
+          senderId,
+        )
+      : await this.actionService.sendMessage(dto, files);
+
+    // CHẠY NGẦM: Không dùng await cho phần xử lý AI phía dưới để tránh timeout cho Mobile
+    (async () => {
+      try {
+        await this.chatGateway.emitAiStatus(targetId, 'thinking');
+
+        // Lấy và map lịch sử hội thoại
+        const rawHistory = await this.getMessagesFromConversation(
+          conversationId,
+          { userId: senderId, limit },
+        );
+        const mappedHistory = rawHistory.messages
+          .filter((msg) => {
+            const isBot = msg.senderId._id.toString() === this.BOT_ID;
+            if (isPrivate && isBot) return false;
+            return true;
+          })
+          .map((msg) => {
+            const isBot = msg.senderId._id.toString() === this.BOT_ID;
+            const senderName = msg.senderId.profile?.name || 'Người dùng';
+            const messageText = parseMessageText(msg.content);
+
+            return {
+              role: (isBot ? 'assistant' : 'user') as 'assistant' | 'user',
+              content: isBot ? messageText : `${senderName}: ${messageText}`,
+            };
+          })
+          .filter((m) => m.content !== '');
+
+        if (mappedHistory.length > 0) mappedHistory.pop();
+
+        const knowledgeContext =
+          await this.aiService.findRelevantContext(userText);
+
+        const augmentedPrompt = `
+          Dựa trên thông tin sau đây về hệ thống Zola:
+          "${knowledgeContext}"
+          
+          Hãy trả lời câu hỏi của người dùng: ${userText}
+        `;
+
+        const aiResponse = await this.aiService.chatStreamAndEmit(
+          augmentedPrompt,
+          targetId,
+          mappedHistory,
+        );
+
+        if (isPrivate) {
+          await this.sendPrivateAiSummary(
+            conversationId,
+            this.BOT_ID,
+            aiResponse,
+            MessageType.AI_SUMMARY,
+            senderId,
+          );
+        } else {
+          const botMessage = await this.messageModel.create({
+            senderId: new Types.ObjectId(this.BOT_ID),
+            conversationId: new Types.ObjectId(conversationId),
+            content: { text: aiResponse },
+            type: MessageType.USER_MESSAGE,
+          });
+
+          await this.conversationModel.findByIdAndUpdate(conversationId, {
+            lastMessageId: botMessage._id,
+            lastMessageAt: (botMessage as any).createdAt,
+          });
+
+          const populatedBotMsg = await this.messageModel
+            .findById(botMessage._id)
+            .populate('senderId', 'profile.name profile.avatarUrl')
+            .lean();
+
+          await this.chatGateway.emitNewMessage(
+            conversationId,
+            populatedBotMsg,
+          );
+        }
+      } catch (error) {
+        console.error('AI Processing Error:', error);
+        await this.chatGateway.emitAiStatus(targetId, null);
+      }
+    })();
+
+    return userMessage;
+  }
+
+  async sendPrivateAiSummary(
+    conversationId: string,
+    senderId: string,
+    text: string,
+    type: MessageType = MessageType.AI_SUMMARY,
+    targetUserId: string,
+  ) {
+    const message = await this.messageModel.create({
+      senderId: new Types.ObjectId(senderId),
+      conversationId: new Types.ObjectId(conversationId),
+      type,
+      content: { text },
+      targetUserId: new Types.ObjectId(targetUserId),
+    });
+
+    // populate senderId để FE lấy được Avatar/Name
+    const populatedMessage = await this.messageModel
+      .findById(message._id)
+      .populate('senderId', 'profile.name profile.avatarUrl')
+      .lean();
+
+    await this.chatGateway.emitNewMessage(targetUserId, populatedMessage);
+    return populatedMessage;
   }
 }

@@ -5,11 +5,14 @@ import {
   Mic,
   Square,
   SendHorizontal,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
 import { RiShareForward2Fill } from "react-icons/ri";
+
+import CreatePollModal from "./CreatePollModal";
 
 import { conversationService } from "@/services/conversation.service";
 
@@ -65,6 +68,7 @@ const ChatInput = ({
     mimeType: string;
     durationMs: number;
   } | null>(null);
+  const [showPollModal, setShowPollModal] = useState(false);
   const [myRole, setMyRole] = useState<string>("MEMBER");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -434,6 +438,16 @@ const ChatInput = ({
         >
           <Mic className="w-10 h-10" />
         </Button>
+        {isGroup && (
+          <Button
+            onClick={() => setShowPollModal(true)}
+            variant="ghost"
+            className="w-10 h-10 text-gray-500 cursor-pointer"
+            title="Tạo bình chọn"
+          >
+            <BarChart3 className="w-10 h-10" />
+          </Button>
+        )}
         <div className="flex-1"></div>
       </div>
       <div className="flex items-center gap-2 p-2">
@@ -498,10 +512,18 @@ const ChatInput = ({
               {recordedVoice ? (
                 <div className="space-y-4">
                   <div className="rounded-2xl bg-gray-50 border border-gray-200 p-4">
-                    <audio controls src={recordedVoice.url} className="w-full" />
+                    <audio
+                      controls
+                      src={recordedVoice.url}
+                      className="w-full"
+                    />
                     <div className="mt-3 text-xs text-gray-500 flex items-center justify-between">
-                      <span>{formatVoiceDuration(recordedVoice.durationMs)}</span>
-                      <span className="truncate ml-3">Bản ghi sẵn sàng gửi</span>
+                      <span>
+                        {formatVoiceDuration(recordedVoice.durationMs)}
+                      </span>
+                      <span className="truncate ml-3">
+                        Bản ghi sẵn sàng gửi
+                      </span>
                     </div>
                   </div>
 
@@ -539,12 +561,18 @@ const ChatInput = ({
                     }}
                     className={`h-24 w-24 rounded-full flex items-center justify-center shadow-xl transition-all cursor-pointer ${isRecordingVoice ? "bg-red-500 text-white scale-95" : "bg-[#0068ff] text-white hover:scale-105"}`}
                   >
-                    {isRecordingVoice ? <Square size={28} /> : <Mic size={30} />}
+                    {isRecordingVoice ? (
+                      <Square size={28} />
+                    ) : (
+                      <Mic size={30} />
+                    )}
                   </button>
 
                   <div className="text-center">
                     <div className="text-sm font-medium text-gray-900">
-                      {isRecordingVoice ? "Đang ghi âm" : "Bấm để bắt đầu ghi âm"}
+                      {isRecordingVoice
+                        ? "Đang ghi âm"
+                        : "Bấm để bắt đầu ghi âm"}
                     </div>
                     <div className="mt-1 text-xs text-gray-500">
                       {formatVoiceDuration(recordingDurationMs)}
@@ -560,6 +588,11 @@ const ChatInput = ({
           </div>
         </div>
       )}
+      <CreatePollModal
+        conversationId={conversationId}
+        isOpen={showPollModal}
+        onClose={() => setShowPollModal(false)}
+      />
     </div>
   );
 };

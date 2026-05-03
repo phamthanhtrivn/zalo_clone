@@ -4,6 +4,7 @@ export interface ConversationItemType {
   name: string;
   avatar: string;
   otherMemberId?: string | null;
+  isStranger?: boolean;
   muted: boolean;
   mutedUntil?: string | null;
   pinned: boolean;
@@ -23,11 +24,26 @@ export interface ConversationItemType {
     };
     recalled: boolean;
     type?: string;
+    call?: {
+      type?: "VIDEO" | "VOICE";
+      status?: string;
+      duration?: number | null;
+    };
     expired?: boolean;
     expiresAt?: string | null;
   };
   unreadCount: number;
   lastMessageAt: string;
+  myRole?: "OWNER" | "ADMIN" | "MEMBER";
+  group?: {
+    name: string;
+    avatarUrl?: string;
+    allowMembersInvite: boolean;
+    allowMembersSendMessages: boolean;
+    approvalRequired: boolean;
+    ownerId: string;
+    joinToken: string | null;
+  };
 }
 
 export interface File {

@@ -8,9 +8,10 @@ import {
   Alert,
   Text,
   TouchableOpacity,
+  StyleSheet
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useSocket } from "@/contexts/SocketContext";
 import { messageService } from "@/services/message.service";
 import { useAppDispatch, useAppSelector } from "@/store/store";
@@ -22,6 +23,7 @@ import {
 } from "@/constants/emoji.constant";
 import Container from "@/components/common/Container";
 import MessageBubble from "@/components/chat/MessageBubble";
+import SystemMessage from "@/components/chat/SystemMessage";
 import ChatInput from "@/components/chat/ChatInput";
 import PinnedMessagesBar from "@/components/chat/PinnedMessagesBar";
 import ReactionPicker from "@/components/chat/ReactionPicker";
@@ -38,6 +40,8 @@ import MenuItem from "@/components/chat/MenuItem";
 import { clearReplyingMessage, setConversations, setReplyingMessage } from "@/store/slices/conversationSlice";
 import { useVideoCall } from "@/contexts/VideoCallContext";
 import { userService } from "@/services/user.service";
+import GroupAvatar from "@/components/ui/GroupAvatar";
+import AiTypingIndicator from "@/components/chat/AiTypingIndicator";
 
 export default function ChatWindow() {
   const conversations = useAppSelector(
@@ -51,9 +55,11 @@ export default function ChatWindow() {
   const { socket } = useSocket();
   const user = useAppSelector((state) => state.auth.user);
   const router = useRouter();
+  const navigation = useNavigation();
   const dispatch = useAppDispatch();
 
   const conversation = conversations.find((c) => c.conversationId === id);
+
   const isGroup = conversation?.type === "GROUP";
   const [contextMenuMsg, setContextMenuMsg] = useState<MessagesType | null>(
     null,
@@ -101,6 +107,10 @@ export default function ChatWindow() {
     (state) => state.conversation.replyingMessage,
   );
 
+  // AI Status
+  const [aiStatus, setAiStatus] = useState<"thinking" | "typing" | null>(null);
+  const [aiStreamingText, setAiStreamingText] = useState("");
+
   const flatListRef = useRef<FlatList>(null);
   const isFirstLoad = useRef(true);
   const isFetchingRef = useRef(false);
@@ -111,6 +121,19 @@ export default function ChatWindow() {
 
   const isPinned =
     contextMenuMsg && pinnedMessages.some((m) => m._id === contextMenuMsg._id);
+
+  const userMember = isGroup
+    ? conversation?.group?.members?.find((m: any) => m.userId === user?.userId)
+    : null;
+  const userRole = userMember?.role || (isGroup ? "MEMBER" : "OWNER");
+  const isOwner = userRole === "OWNER";
+  const isAdmin = userRole === "ADMIN";
+
+  const canChat =
+    !isGroup ||
+    conversation?.group?.allowMembersSendMessages ||
+    isOwner ||
+    isAdmin;
 
   const scrollToBottom = (animated = true) => {
     flatListRef.current?.scrollToEnd({ animated });
@@ -141,7 +164,7 @@ export default function ChatWindow() {
         const isOldestFirst =
           msgs.length >= 2 &&
           new Date(msgs[0].createdAt) <
-            new Date(msgs[msgs.length - 1].createdAt);
+          new Date(msgs[msgs.length - 1].createdAt);
         const sorted = isOldestFirst ? msgs : [...msgs].reverse();
 
         setMessages(sorted);
@@ -176,7 +199,7 @@ export default function ChatWindow() {
         const isOldestFirst =
           newMsgs.length >= 2 &&
           new Date(newMsgs[0].createdAt) <
-            new Date(newMsgs[newMsgs.length - 1].createdAt);
+          new Date(newMsgs[newMsgs.length - 1].createdAt);
         const sortedNew = isOldestFirst ? newMsgs : [...newMsgs].reverse();
 
         setMessages((prev) => {
@@ -220,7 +243,7 @@ export default function ChatWindow() {
         const isOldestFirst =
           newMsgs.length >= 2 &&
           new Date(newMsgs[0].createdAt) <
-            new Date(newMsgs[newMsgs.length - 1].createdAt);
+          new Date(newMsgs[newMsgs.length - 1].createdAt);
         const sortedNew = isOldestFirst ? newMsgs : [...newMsgs].reverse();
 
         setMessages((prev) => {
@@ -537,9 +560,9 @@ export default function ChatWindow() {
     // 4. Kích hoạt cuộc gọi
     startCall(
       partnerId,
-      conversation.name || "Người dùng",
-      id, // conversationId
-      "VIDEO",
+      id, // conversationId (Mã ID của phòng chat)
+      "VIDEO", // Loại cuộc gọi
+      conversation.name || "Người dùng", // Tên hiển thị đối phương
     );
   };
 
@@ -715,12 +738,65 @@ export default function ChatWindow() {
         });
       }
     };
+    const handleUpdatePoll = (data: any) => {
+      if (data.conversationId !== id) return;
+      setMessages((prev) =>
+        prev.map((m) => {
+          const mPollId = typeof m.pollId === "string" ? m.pollId : m.pollId?._id;
+          if (String(mPollId) === String(data._id)) {
+            return { ...m, poll: data };
+          }
+          return m;
+        }),
+      );
+    };
+
+    const handleCallUpdated = (data: { messageId: string, status: string, duration?: number }) => {
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId
+            ? { ...m, call: { ...m.call!, status: data.status, duration: data.duration ?? m.call?.duration ?? null } }
+            : m,
+        ),
+      );
+    };
+
+    const handleAiStatus = (data: { targetId: string; status: "thinking" | "typing" | null }) => {
+      if (data.targetId === id || data.targetId === user?.userId) {
+        setAiStatus(data.status);
+        if (data.status === null) {
+          setAiStreamingText("");
+        }
+      }
+    };
+
+    const handleAiTypingChunk = (data: {
+      targetId: string;
+      text: string;
+      isFinished: boolean;
+    }) => {
+      if (data.targetId === id || data.targetId === user?.userId) {
+        setAiStatus("typing");
+        const chunk = typeof data.text === "string" ? data.text : "";
+        setAiStreamingText((prev) => prev + chunk);
+        if (data.isFinished) {
+          setAiStatus(null);
+          setAiStreamingText("");
+        }
+      }
+    };
+
+    socket.on("call_updated", handleCallUpdated);
     socket.on("read_receipt", handleReadReceipt);
     socket.on("messages_expired", handleMessagesExpired);
     socket.on("new_message", handleNewMessage);
     socket.on("message_reacted", handleMessageReacted);
     socket.on("message_recalled", handleMessageRecalled);
     socket.on("message_pinned", handleMessagePinned);
+    socket.on("update_poll", handleUpdatePoll);
+    socket.on("ai_status", handleAiStatus);
+    socket.on("ai_typing_chunk", handleAiTypingChunk);
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -729,6 +805,10 @@ export default function ChatWindow() {
       socket.off("message_pinned", handleMessagePinned);
       socket.off("read_receipt", handleReadReceipt);
       socket.off("messages_expired", handleMessagesExpired);
+      socket.off("update_poll", handleUpdatePoll);
+      socket.off("call_updated", handleCallUpdated);
+      socket.off("ai_status", handleAiStatus);
+      socket.off("ai_typing_chunk", handleAiTypingChunk);
 
       socket.emit("leave_room", id);
     };
@@ -740,7 +820,12 @@ export default function ChatWindow() {
     const older = messages[index - 1];
     const newer = messages[index + 1];
 
-    const isMe = item.senderId?._id === user?.userId;
+    const isSystem = item.type === "SYSTEM";
+    const isMe =
+      !isSystem &&
+      (typeof item.senderId === "string" ? item.senderId : item.senderId?._id) ===
+      user?.userId;
+
     const sameSenderOlder = older && older.senderId?._id === item.senderId?._id;
     const sameMinuteOlder =
       older && isSameHourAndMinute(older.createdAt, item.createdAt);
@@ -751,25 +836,23 @@ export default function ChatWindow() {
       newer && isSameHourAndMinute(newer.createdAt, item.createdAt);
     const isLastInCluster = !(sameSenderNewer && sameMinuteNewer);
 
-    const showAvatar = !isMe && isFirstInCluster;
-    const showName = !isMe && isFirstInCluster;
-    const showTime = isLastInCluster;
+    const showAvatar = !isMe && !isSystem && isFirstInCluster;
+    const showName = !isMe && !isSystem && isFirstInCluster;
+    const showTime = !isSystem && isLastInCluster;
     const showDivider =
       !older ||
       new Date(older.createdAt).toDateString() !==
-        new Date(item.createdAt).toDateString();
+      new Date(item.createdAt).toDateString();
 
     const isSelected = selectedMessages.includes(item._id);
-
     const isLastReadMessage = index === messages.length - 1;
-
-    const addSpacing = isFirstInCluster && !showDivider;
+    const addSpacing = isFirstInCluster && !showDivider && !isSystem;
 
     return (
       <View
         style={{
-          marginTop: addSpacing ? 12 : 2, // 2px within cluster, 12px between clusters
-          marginBottom: item.reactions?.length > 0 ? 14 : 0, // Space for reaction bar
+          marginTop: addSpacing ? 12 : 2,
+          marginBottom: item.reactions?.length > 0 ? 14 : 0,
         }}
       >
         {showDivider && (
@@ -794,28 +877,28 @@ export default function ChatWindow() {
             </View>
           </View>
         )}
-        <MessageBubble
-          message={item}
-          isMe={
-            (typeof item.senderId === "string"
-              ? item.senderId
-              : item.senderId?._id) === user?.userId
-          }
-          showAvatar={showAvatar}
-          showName={showName}
-          showTime={showTime}
-          isSelected={isSelected}
-          isSelectMode={isSelectMode}
-          isHighlighted={highlightedMessageId === item._id}
-          onLongPress={() => setContextMenuMsg(item)}
-          onPress={() => {
-            if (isSelectMode) toggleSelectMessage(item._id);
-          }}
-          onOpenReactionModal={(reactions) => setReactionModalData(reactions)}
-          renderReadReceipts={isLastReadMessage}
-          onReplyPress={handleJumpToMessage}
-          isGroup={isGroup}
-        />
+        {isSystem ? (
+          <SystemMessage message={item} />
+        ) : (
+          <MessageBubble
+            message={item}
+            isMe={isMe}
+            showAvatar={showAvatar}
+            showName={showName}
+            showTime={showTime}
+            isSelected={isSelected}
+            isSelectMode={isSelectMode}
+            isHighlighted={highlightedMessageId === item._id}
+            onLongPress={() => setContextMenuMsg(item)}
+            onPress={() => {
+              if (isSelectMode) toggleSelectMessage(item._id);
+            }}
+            onOpenReactionModal={(reactions) => setReactionModalData(reactions)}
+            renderReadReceipts={isLastReadMessage}
+            onReplyPress={handleJumpToMessage}
+            isGroup={isGroup}
+          />
+        )}
       </View>
     );
   };
@@ -855,12 +938,22 @@ export default function ChatWindow() {
 
         {/* Name and Badge */}
         <View style={{ flex: 1 }}>
-          <Text
-            style={{ color: "white", fontSize: 16, fontWeight: "700" }}
-            numberOfLines={1}
-          >
-            {conversation?.name}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Text
+              style={{ color: "white", fontSize: 16, fontWeight: "700" }}
+              numberOfLines={1}
+            >
+              {conversation?.name}
+            </Text>
+            {conversation?.type === "AI" && (
+              <MaterialIcons
+                name="verified"
+                size={14}
+                color="white"
+                style={{ marginLeft: 4 }}
+              />
+            )}
+          </View>
           {isFriend === false && (
             <View style={{ flexDirection: "row", marginTop: 2 }}>
               <View
@@ -886,7 +979,15 @@ export default function ChatWindow() {
         <TouchableOpacity style={{ padding: 4 }} onPress={handleVideoCall}>
           <Ionicons name="videocam-outline" size={24} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity style={{ padding: 4 }}>
+        <TouchableOpacity
+          style={{ padding: 4 }}
+          onPress={() =>
+            router.push({
+              pathname: "/private/search",
+              params: { conversationId: id },
+            })
+          }
+        >
           <Ionicons name="search-outline" size={24} color="white" />
         </TouchableOpacity>
         <TouchableOpacity
@@ -922,18 +1023,18 @@ export default function ChatWindow() {
               borderBottomColor: "#f3f4f6",
             }}
           >
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={friendStatus === "PENDING" ? undefined : (friendStatus === "REQUESTED" ? handleAcceptFriend : handleAddFriend)}
               style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
             >
-              <Ionicons 
-                name={friendStatus === "PENDING" ? "time-outline" : "person-add-outline"} 
-                size={20} 
-                color="#0068ff" 
+              <Ionicons
+                name={friendStatus === "PENDING" ? "time-outline" : "person-add-outline"}
+                size={20}
+                color="#0068ff"
               />
               <Text style={{ color: "#0068ff", fontWeight: "600", fontSize: 14 }}>
-                {friendStatus === "PENDING" 
-                  ? "Đã gửi lời mời" 
+                {friendStatus === "PENDING"
+                  ? "Đã gửi lời mời"
                   : (friendStatus === "REQUESTED" ? "Chấp nhận lời mời" : "Kết bạn")}
               </Text>
             </TouchableOpacity>
@@ -1006,6 +1107,23 @@ export default function ChatWindow() {
                 paddingTop: 8,
                 paddingBottom: 90, // space for input
               }}
+              ListFooterComponent={
+                <View style={{ paddingBottom: 20 }}>
+                  {isLoading && messages.length > 0 && (
+                    <View style={{ paddingVertical: 10 }}>
+                      <ActivityIndicator size="small" color="#0068ff" />
+                    </View>
+                  )}
+                  {aiStatus && (
+                    <AiTypingIndicator
+                      key="ai-indicator"
+                      status={aiStatus}
+                      streamingText={aiStreamingText || ""}
+                      botAvatar={conversation?.avatar}
+                    />
+                  )}
+                </View>
+              }
               ListEmptyComponent={() => (
                 <View style={{ alignItems: "center", paddingVertical: 10 }}>
                   {isFriend === false && (
@@ -1026,30 +1144,24 @@ export default function ChatWindow() {
                     >
                       {/* Cover Photo Placeholder */}
                       <View style={{ height: 120, backgroundColor: "#e5e7eb" }}>
-                         <Image
-                           source={{ uri: "https://picsum.photos/seed/zalo/800/400" }}
-                           style={{ width: "100%", height: 120 }}
-                         />
+                        <Image
+                          source={{ uri: "https://picsum.photos/seed/zalo/800/400" }}
+                          style={{ width: "100%", height: 120 }}
+                        />
                       </View>
-                      
+
                       <View style={{ padding: 16, alignItems: "center", position: "relative" }}>
                         {/* Avatar */}
-                        <View 
-                          style={{ 
-                            position: "absolute", 
-                            top: -40, 
-                            borderWidth: 3, 
-                            borderColor: "white", 
-                            borderRadius: 40,
-                            overflow: "hidden" 
-                          }}
+                        <View
+                          style={styles.avatarContainer}
                         >
-                          <Image
-                            source={{ uri: conversation?.avatar }}
-                            style={{ width: 80, height: 80 }}
+                          <GroupAvatar
+                            uri={conversation?.avatar}
+                            name={conversation?.name || "Group"}
+                            size={80}
                           />
                         </View>
-                        
+
                         <View style={{ marginTop: 45, alignItems: "center" }}>
                           <Text style={{ fontSize: 18, fontWeight: "700", color: "#111827" }}>
                             {conversation?.name}
@@ -1119,19 +1231,39 @@ export default function ChatWindow() {
             </View>
           )}
 
-          <ChatInput
-            chatName={conversation?.name}
-            onSendMessage={handleSendMessage}
-            onSendFiles={handleSendFile}
-            onSendVoiceAudio={handleSendVoiceAudio}
-            isSelectMode={isSelectMode}
-            selectedMessages={selectedMessages}
-            onOpenForwardModal={() => setShowForwardModal(true)}
-            onCancelSelect={() => {
-              setIsSelectMode(false);
-              setSelectedMessages([]);
-            }}
-          />
+          {!canChat && !isSelectMode ? (
+            <View
+              style={{
+                padding: 16,
+                backgroundColor: "#f9fafb",
+                borderTopWidth: 1,
+                borderTopColor: "#e5e7eb",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{ color: "#6b7280", fontSize: 13, fontStyle: "italic" }}
+              >
+                Chỉ Trưởng/Phó nhóm mới được gửi tin nhắn
+              </Text>
+            </View>
+          ) : (
+            <ChatInput
+              chatName={conversation?.name}
+              onSendMessage={handleSendMessage}
+              onSendFiles={handleSendFile}
+              onSendVoiceAudio={handleSendVoiceAudio}
+              isSelectMode={isSelectMode}
+              selectedMessages={selectedMessages}
+              onOpenForwardModal={() => setShowForwardModal(true)}
+              onCancelSelect={() => {
+                setIsSelectMode(false);
+                setSelectedMessages([]);
+              }}
+              isGroup={isGroup}
+              conversationId={id}
+            />
+          )}
 
           {/* Floating Jump to Newest Button */}
           {showScrollToBottom && (
@@ -1258,23 +1390,23 @@ export default function ChatWindow() {
             {contextMenuMsg.reactions?.some(
               (r) => r.userId?._id === user?.userId,
             ) && (
-              <TouchableOpacity
-                onPress={() => {
-                  handleRemoveReaction(contextMenuMsg._id);
-                  setContextMenuMsg(null);
-                }}
-                style={{
-                  width: 36,
-                  height: 36,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  borderRadius: 18,
-                  backgroundColor: "#f3f4f6",
-                }}
-              >
-                <Ionicons name="close" size={18} color="#6b7280" />
-              </TouchableOpacity>
-            )}
+                <TouchableOpacity
+                  onPress={() => {
+                    handleRemoveReaction(contextMenuMsg._id);
+                    setContextMenuMsg(null);
+                  }}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    borderRadius: 18,
+                    backgroundColor: "#f3f4f6",
+                  }}
+                >
+                  <Ionicons name="close" size={18} color="#6b7280" />
+                </TouchableOpacity>
+              )}
           </View>
 
           {/* ===== MENU ===== */}
@@ -1349,3 +1481,25 @@ export default function ChatWindow() {
     </Container>
   );
 }
+
+const styles = StyleSheet.create({
+  headerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#000",
+    maxWidth: 200,
+  },
+  avatarContainer: {
+    position: "absolute",
+    top: -40,
+    borderWidth: 3,
+    borderColor: "white",
+    borderRadius: 43,
+    overflow: "hidden",
+  },
+});

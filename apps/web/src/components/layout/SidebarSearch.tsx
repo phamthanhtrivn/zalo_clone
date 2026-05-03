@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import CreateGroupModal from "./CreateGroupModal";
+import AddFriendModal from "./AddFriendModal";
 import { conversationService } from "@/services/conversation.service";
 import { useAppSelector } from "@/store";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ export const SidebarSearch = ({
   setScope
 }: SidebarSearchProps) => {
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [isOpenModelAddFriend, setIsOpenAddFriend] = useState<boolean>(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const user = useAppSelector((state) => state.auth.user);
   useEffect(() => {
@@ -94,6 +96,7 @@ export const SidebarSearch = ({
             )}
           </div>
           <Button
+            onClick={() => setIsOpenAddFriend(true)}
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-gray-600 hover:bg-[#f1f2f4] cursor-pointer"
@@ -112,6 +115,9 @@ export const SidebarSearch = ({
           </Button>
         </div>
       </div>
+      {isOpenModelAddFriend && (
+        <AddFriendModal onClose={() => setIsOpenAddFriend(false)} />
+      )}
 
       {/* Search Filters Tabs */}
       {keyword.trim().length > 0 && (

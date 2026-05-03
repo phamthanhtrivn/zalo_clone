@@ -3,19 +3,37 @@ import { Mic, MicOff, Move, PhoneOff, Video, VideoOff } from "lucide-react";
 import { useCall } from "@/contexts/VideoCallContext";
 import { CallType } from "@/constants/types";
 
-function formatDuration(seconds: number) {
-  const s = Math.max(0, Math.floor(seconds));
-  const hh = Math.floor(s / 3600);
-  const mm = Math.floor((s % 3600) / 60);
-  const ss = s % 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return hh > 0 ? `${pad(hh)}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
+// Phase 4: Isolate Re-renders - Separate CallTimer component
+function CallTimer({ isOpen }: { isOpen: boolean }) {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSeconds(0);
+      return;
+    }
+    const t = window.setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [isOpen]);
+
+  const formatDuration = (s: number) => {
+    const hh = Math.floor(s / 3600);
+    const mm = Math.floor((s % 3600) / 60);
+    const ss = s % 60;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return hh > 0 ? `${pad(hh)}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
+  };
+
+  return (
+    <div className="text-white font-mono text-lg tabular-nums">
+      {formatDuration(seconds)}
+    </div>
+  );
 }
 
 export default function VideoCallOverlay() {
   const {
-    videoAccepted,
-    callEnded,
+    sessionState,
     myVideoRef,
     userVideoRef,
     stream,
@@ -24,19 +42,14 @@ export default function VideoCallOverlay() {
     videoCallData,
   } = useCall();
 
-  const isOpen = videoAccepted && !callEnded;
-  const isVideo = useMemo(() => {
-    return (
-      
-      videoCallData.callType === CallType.VIDEO ||
-      String(videoCallData.callType).toUpperCase() === "VIDEO"
-    );
-  }, [videoCallData.callType]);
+  // Phase 4: Simplify visibility logic (PM note #3)
+  const isOpen = sessionState === "CONNECTED";
+
+  // Phase 4: Strict CallType Check (Remove defensive hacks)
+  const isVideo = videoCallData.callType === CallType.VIDEO;
 
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
-  const [seconds, setSeconds] = useState(0);
-
   const hasSetStream = useRef(false);
 
   useEffect(() => {
@@ -50,11 +63,10 @@ export default function VideoCallOverlay() {
   useEffect(() => {
     const videoEl = userVideoRef.current;
     if (videoEl && remoteStream && !hasSetStream.current) {
-      console.log("Tiến hành gắn luồng hình ảnh...");
       videoEl.srcObject = remoteStream;
       hasSetStream.current = true;
       videoEl.play().catch((e) => {
-        console.warn("Auto-play bị ngắt (không sao):", e.message);
+        console.warn("Auto-play interrupted:", e.message);
       });
     }
 
@@ -63,17 +75,6 @@ export default function VideoCallOverlay() {
     };
   }, [remoteStream, isOpen, isVideo]);
 
-  // Bộ đếm thời gian
-  useEffect(() => {
-    if (!isOpen) {
-      setSeconds(0);
-      return;
-    }
-    const t = window.setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => window.clearInterval(t);
-  }, [isOpen]);
-
-  // Sync trạng thái Mic/Cam từ track thực tế
   useEffect(() => {
     if (!stream) return;
     setMicOn(stream.getAudioTracks()?.[0]?.enabled ?? false);
@@ -96,7 +97,7 @@ export default function VideoCallOverlay() {
     }
   };
 
-  // Logic Draggable PIP (Kéo thả)
+  // Logic Draggable PIP (Phase 4: Optimization)
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef({
     dragging: false,
@@ -104,32 +105,45 @@ export default function VideoCallOverlay() {
     startY: 0,
     originX: 0,
     originY: 0,
+    maxX: 0,
+    maxY: 0,
   });
   const [pipPos, setPipPos] = useState({ x: 0, y: 0 });
 
   const onPointerDown = (e: React.PointerEvent) => {
     const el = e.currentTarget as HTMLElement;
     el.setPointerCapture(e.pointerId);
+
+    // Phase 4: Cache container bounds (PM note)
+    let maxX = 0;
+    let maxY = 0;
+    if (containerRef.current) {
+      const bounds = containerRef.current.getBoundingClientRect();
+      maxX = Math.max(0, bounds.width - 236);
+      maxY = Math.max(0, bounds.height - 156);
+    }
+
     dragRef.current = {
       dragging: true,
       startX: e.clientX,
       startY: e.clientY,
       originX: pipPos.x,
       originY: pipPos.y,
+      maxX,
+      maxY,
     };
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!dragRef.current.dragging || !containerRef.current) return;
+    if (!dragRef.current.dragging) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
-    const bounds = containerRef.current.getBoundingClientRect();
-    const maxX = Math.max(0, bounds.width - 236);
-    const maxY = Math.max(0, bounds.height - 156);
+    
+    const { maxX, maxY, originX, originY } = dragRef.current;
 
     setPipPos({
-      x: Math.min(0, Math.max(-maxX, dragRef.current.originX + dx)),
-      y: Math.min(maxY, Math.max(0, dragRef.current.originY + dy)),
+      x: Math.min(0, Math.max(-maxX, originX + dx)),
+      y: Math.min(maxY, Math.max(0, originY + dy)),
     });
   };
 
@@ -200,9 +214,7 @@ export default function VideoCallOverlay() {
       {/* 3. THANH ĐIỀU KHIỂN */}
       <div className="absolute left-0 right-0 bottom-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
         <div className="mx-auto w-full max-w-xl rounded-3xl bg-white/10 backdrop-blur-2xl border border-white/10 px-6 py-4 flex items-center justify-between shadow-2xl">
-          <div className="text-white font-mono text-lg tabular-nums">
-            {formatDuration(seconds)}
-          </div>
+          <CallTimer isOpen={isOpen} />
 
           <div className="flex items-center gap-4">
             <button

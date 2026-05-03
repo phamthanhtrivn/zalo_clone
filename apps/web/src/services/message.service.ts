@@ -282,4 +282,23 @@ export const messageService = {
     const response = await apiClient.patch(`/api/messages/call`, data);
     return response.data;
   },
+
+  searchMessages: async (
+    conversationId: string,
+    params: {
+      userId: string;
+      keyword?: string;
+      senderId?: string;
+      startDate?: string;
+      endDate?: string;
+      cursor?: string;
+      limit?: number;
+    }
+  ) => {
+    const response = await apiClient.get(
+      `/api/messages/conversation/${conversationId}/search`,
+      { params }
+    );
+    return response.data;
+  },
 };

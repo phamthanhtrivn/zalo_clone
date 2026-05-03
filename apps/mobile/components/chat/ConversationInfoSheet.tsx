@@ -41,6 +41,10 @@ import { formatFileSize } from "@/utils/format-file.util";
 import { conversationService } from "@/services/conversation.service";
 import CreateGroupModal from "./CreateGroupModal";
 import { useRouter } from "expo-router";
+import MemberActionSheet from "../ui/MemberActionSheet";
+import GroupAvatar from "../ui/GroupAvatar";
+import ShareGroupQRModal from "./ShareGroupQRModal";
+import { pollService } from "@/services/poll.service";
 
 const { width } = Dimensions.get("window");
 
@@ -111,13 +115,17 @@ const ConversationInfoSheet: React.FC<Props> = ({
   const [joinRequests, setJoinRequests] = useState<any[]>([]);
   const [expandedRequests, setExpandedRequests] = useState(true);
   const [expandedManagement, setExpandedManagement] = useState(false);
+  const [polls, setPolls] = useState<any[]>([]);
+  const [expandedPoll, setExpandedPoll] = useState(false);
+  const [loadingPolls, setLoadingPolls] = useState(false);
   const [membersRefreshKey, setMembersRefreshKey] = useState(0);
+  const [isQrModalVisible, setIsQrModalVisible] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState(conversation?.name || "");
   const isGroup = conversation?.type === "GROUP";
   const currentConversation =
     useAppSelector((state) =>
-      state.conversation.items?.find(
+      state.conversation.conversations?.find(
         (c) => c.conversationId === conversation?.conversationId,
       ),
     ) || conversation;
@@ -215,6 +223,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
   const myMemberInfo = members.find((m) => m.userId === currentUserId);
   const isOwner = myMemberInfo?.role === "OWNER";
   const isAdmin = myMemberInfo?.role === "ADMIN";
+  const currentUserRole = myMemberInfo?.role || (isGroup ? "MEMBER" : "OWNER");
 
   const handlePin = () => {
     const newPinned = !conversation.pinned;
@@ -396,45 +405,49 @@ const ConversationInfoSheet: React.FC<Props> = ({
     };
   }, [socket, currentConversation?.conversationId]);
 
+  const [selectedMemberForAction, setSelectedMemberForAction] = useState<any | null>(
+    null,
+  );
+
   const handleMemberAction = (target: any) => {
     if (target.userId === currentUserId) return;
-    const options: any[] = [
-      {
-        text: "Xem trang cá nhân",
-        onPress: () => router.push(`/user/${target.userId}`),
-      },
-      {
-        text: "Nhắn tin riêng",
-        onPress: async () => {
-          const res: any = await conversationService.getOrCreateDirect(
-            target.userId,
-          );
-          const cid = res?.data?._id || res?._id;
-          if (cid) {
-            onClose();
-            router.push(`/private/chat/${cid}`);
-          }
+    setSelectedMemberForAction(target);
+  };
+
+
+
+  const confirmTransferOwner = (target: any) => {
+    Alert.alert(
+      "Xác nhận",
+      `Bạn chắc chắn muốn chuyển quyền Trưởng nhóm cho ${target.name}? Sau khi chuyển, bạn sẽ trở thành thành viên thường.`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xác nhận",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const res: any = await conversationService.transferOwner(
+                conversation.conversationId,
+                target.userId,
+              );
+              if (res.success) {
+                Alert.alert("Thành công", "Đã chuyển quyền Trưởng nhóm");
+                fetchMembers();
+              }
+            } catch (err: any) {
+              Alert.alert(
+                "Lỗi",
+                err.response?.data?.message || "Không thể chuyển quyền lúc này",
+              );
+            } finally {
+              setLoading(false);
+            }
+          },
         },
-      },
-    ];
-    if (isOwner) {
-      options.push({
-        text: target.role === "ADMIN" ? "Gỡ phó nhóm" : "Bổ nhiệm phó nhóm",
-        onPress: () =>
-          updateRole(target, target.role === "ADMIN" ? "MEMBER" : "ADMIN"),
-      });
-    }
-    if (isOwner || (isAdmin && target.role === "MEMBER")) {
-      options.push({
-        text: "Mời ra khỏi nhóm",
-        style: "destructive",
-        onPress: () => confirmRemoveMember(target),
-      });
-    }
-    Alert.alert("Tùy chọn", target.name, [
-      ...options,
-      { text: "Hủy", style: "cancel" },
-    ]);
+      ],
+    );
   };
 
   const updateRole = async (t: any, r: string) => {
@@ -605,6 +618,26 @@ const ConversationInfoSheet: React.FC<Props> = ({
       );
     }
   };
+ 
+  const handleTogglePolls = async () => {
+    const willExpand = !expandedPoll;
+    setExpandedPoll(willExpand);
+    if (willExpand && conversation?.conversationId) {
+      setLoadingPolls(true);
+      try {
+        const res: any = await pollService.getPolls(
+          conversation.conversationId,
+        );
+        if (res) {
+          setPolls(res);
+        }
+      } catch (error) {
+        console.error("Lỗi khi tải danh sách bình chọn:", error);
+      } finally {
+        setLoadingPolls(false);
+      }
+    }
+  };
 
   const uploadAvatar = async (selectedFile: ImagePicker.ImagePickerAsset) => {
     try {
@@ -743,9 +776,10 @@ const ConversationInfoSheet: React.FC<Props> = ({
                   marginBottom: 10,
                 }}
               >
-                <Image
-                  source={{ uri: conversation?.avatar }}
-                  style={{ width: 70, height: 70 }}
+                <GroupAvatar
+                  uri={conversation?.avatar}
+                  name={conversation?.name || "Group"}
+                  size={70}
                 />
                 {isGroup && (isOwner || isAdmin) && (
                   <TouchableOpacity
@@ -827,6 +861,12 @@ const ConversationInfoSheet: React.FC<Props> = ({
                       setIsAddMemberVisible(true);
                     }
                   },
+                  active: false,
+                },
+                {
+                  icon: "qr-code-outline",
+                  label: "Mã QR",
+                  onPress: () => setIsQrModalVisible(true),
                   active: false,
                 },
               ].map((action) => (
@@ -1248,6 +1288,76 @@ const ConversationInfoSheet: React.FC<Props> = ({
               )}
             </View>
 
+            <View style={{ backgroundColor: "white", marginBottom: 2 }}>
+              <SectionHeader
+                icon={<Ionicons name="stats-chart" size={18} color="#374151" />}
+                title="Bình chọn"
+                expanded={expandedPoll}
+                onToggle={handleTogglePolls}
+              />
+              {expandedPoll && (
+                <View style={{ paddingHorizontal: 12, paddingBottom: 16 }}>
+                  {loadingPolls ? (
+                    <ActivityIndicator size="small" color="#0068ff" />
+                  ) : polls.length === 0 ? (
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#9ca3af",
+                        textAlign: "center",
+                        paddingVertical: 8,
+                      }}
+                    >
+                      Chưa có bình chọn nào trong cuộc trò chuyện
+                    </Text>
+                  ) : (
+                    polls.map((msg, idx) => {
+                      const pollData = msg.poll;
+                      if (!pollData) return null;
+                      return (
+                        <TouchableOpacity
+                          key={msg._id || idx}
+                          style={{
+                            padding: 12,
+                            borderRadius: 10,
+                            backgroundColor: "#f9fafb",
+                            borderWidth: 1,
+                            borderColor: "#f3f4f6",
+                            marginBottom: 8,
+                          }}
+                          onPress={() => {
+                            onClose();
+                            router.push({
+                              pathname: "/private/chat/[id]",
+                              params: {
+                                id: conversation.conversationId,
+                                messageId: msg._id,
+                              },
+                            });
+                          }}
+                        >
+                          <Text
+                            numberOfLines={1}
+                            style={{
+                              fontSize: 14,
+                              fontWeight: "600",
+                              color: "#111",
+                              marginBottom: 4,
+                            }}
+                          >
+                            {pollData.title || "Bình chọn không tiêu đề"}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: "#6b7280" }}>
+                            {pollData.totalParticipants || 0} người đã bình chọn
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </View>
+              )}
+            </View>
+
             {/* 3. DANH SÁCH THÀNH VIÊN */}
             {isGroup && (
               <View style={styles.whiteSection}>
@@ -1265,12 +1375,10 @@ const ConversationInfoSheet: React.FC<Props> = ({
                         style={styles.memberRow}
                         onPress={() => handleMemberAction(m)}
                       >
-                        <Image
-                          source={{
-                            uri:
-                              m.avatarUrl || "https://via.placeholder.com/150",
-                          }}
-                          style={styles.memberAvatar}
+                        <GroupAvatar
+                          uri={m.avatarUrl}
+                          name={m.name || "User"}
+                          size={44}
                         />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.memberName}>
@@ -1506,6 +1614,52 @@ const ConversationInfoSheet: React.FC<Props> = ({
         conversationId={conversation.conversationId}
         excludedIds={members.map((m) => m.userId)}
         onSuccess={fetchMembers}
+      />
+
+      {isGroup && (
+        <ShareGroupQRModal
+          visible={isQrModalVisible}
+          onClose={() => setIsQrModalVisible(false)}
+          conversationId={conversation.conversationId}
+          conversationName={conversation.name}
+          initialJoinToken={currentConversation?.group?.joinToken || null}
+          myRole={currentUserRole as any}
+          onTokenRefreshed={(newToken) => {
+            dispatch(
+              updateConversationSetting({
+                conversationId: conversation.conversationId,
+                group: { ...currentConversation.group, joinToken: newToken },
+              }),
+            );
+          }}
+        />
+      )}
+      <MemberActionSheet
+        visible={!!selectedMemberForAction}
+        onClose={() => setSelectedMemberForAction(null)}
+        member={selectedMemberForAction}
+        userRole={currentUserRole}
+        onViewProfile={(uid) => router.push(`/user/${uid}`)}
+        onChat={async (uid) => {
+          const res: any = await conversationService.getOrCreateDirect(uid);
+          const cid = res?.data?._id || res?._id;
+          if (cid) {
+            onClose();
+            router.push(`/private/chat/${cid}`);
+          }
+        }}
+        onPromoteAdmin={(uid, isPromote) => {
+          const target = members.find((m) => m.userId === uid);
+          if (target) updateRole(target, isPromote ? "ADMIN" : "MEMBER");
+        }}
+        onTransferOwner={(uid) => {
+          const target = members.find((m) => m.userId === uid);
+          if (target) confirmTransferOwner(target);
+        }}
+        onRemove={(uid) => {
+          const target = members.find((m) => m.userId === uid);
+          if (target) confirmRemoveMember(target);
+        }}
       />
     </Modal>
   );

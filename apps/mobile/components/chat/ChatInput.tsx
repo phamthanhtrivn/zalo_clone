@@ -17,6 +17,7 @@ import * as DocumentPicker from "expo-document-picker";
 import EmojiPicker from "rn-emoji-keyboard";
 import { Audio } from "expo-av";
 import { COLORS } from "@/constants/colors";
+import CreatePollModal from "./CreatePollModal";
 
 interface SelectedFile {
   uri: string;
@@ -40,6 +41,8 @@ interface ChatInputProps {
   selectedMessages?: string[];
   onOpenForwardModal?: () => void;
   onCancelSelect?: () => void;
+  isGroup?: boolean;
+  conversationId?: string;
 }
 
 type VoiceMode = "audio";
@@ -62,8 +65,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
   selectedMessages = [],
   onOpenForwardModal,
   onCancelSelect,
+  isGroup = false,
+  conversationId = "",
 }) => {
   const [text, setText] = useState("");
+  const [showPollModal, setShowPollModal] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
@@ -468,6 +474,17 @@ const ChatInput: React.FC<ChatInputProps> = ({
           <Ionicons name="mic-outline" size={24} color={COLORS.primary} />
         </TouchableOpacity>
 
+        {/* Poll (Group only) */}
+        {isGroup && (
+          <TouchableOpacity
+            onPress={() => setShowPollModal(true)}
+            style={{ padding: 6 }}
+          >
+            <Ionicons name="bar-chart-outline" size={26} color="#6b7280" />
+          </TouchableOpacity>
+        )}
+
+        {/* Send */}
         <TouchableOpacity
           onPress={handleSend}
           disabled={!text.trim() && selectedFiles.length === 0}
@@ -529,7 +546,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <Text style={{ fontSize: 18, fontWeight: "700", color: "#111" }}>
                 Gửi bản ghi âm
               </Text>
-              <TouchableOpacity onPress={closeVoiceModal} disabled={isRecording}>
+              <TouchableOpacity
+                onPress={closeVoiceModal}
+                disabled={isRecording}
+              >
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
@@ -647,6 +667,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </Pressable>
         </Pressable>
       </Modal>
+      {/* Create Poll Modal */}
+      {isGroup && (
+        <CreatePollModal
+          visible={showPollModal}
+          onClose={() => setShowPollModal(false)}
+          conversationId={conversationId}
+        />
+      )}
     </View>
   );
 };

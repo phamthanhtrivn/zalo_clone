@@ -94,17 +94,6 @@ export const conversationService = {
   },
   getConversationsFromUserId: async (userId: string) => {
     const response = await api.get(`/conversations/user/${userId}`);
-    console.log(
-      "📊 API Response sample:",
-      JSON.stringify(response.data?.[0], null, 2),
-    );
-    console.log(
-      "📊 unreadCount values:",
-      response.data?.map((c: any) => ({
-        name: c.name,
-        unreadCount: c.unreadCount,
-      })),
-    );
     return response;
   },
   search: async (
@@ -125,4 +114,12 @@ export const conversationService = {
     });
     return response;
   },
+  refreshGroupJoinToken: (id: string) =>
+    api.patch(`/conversations/${id}/qr-token`),
+
+  getGroupInfoByToken: (id: string, token: string) =>
+    api.get(`/conversations/${id}/qr-info/${token}`),
+
+  joinViaQR: (id: string, token: string) =>
+    api.post(`/conversations/${id}/join-via-qr`, { token }),
 };

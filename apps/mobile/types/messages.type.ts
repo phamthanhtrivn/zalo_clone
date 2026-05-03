@@ -3,6 +3,7 @@ import type { File } from "./conversation-item.type";
 export interface MessagesType {
   _id: string;
   senderId: {
+    name: string;
     _id: string;
     profile: {
       name: string;
@@ -10,18 +11,25 @@ export interface MessagesType {
     };
   };
   conversationId: string;
+  type: "USER_MESSAGE" | "SYSTEM" | "POLL";
   content: {
     text: string | null;
     icon: string | null;
     files: File[];
     voiceDuration?: number | null;
   };
+  pollId?: string;
+  poll?: any;
   pinned: boolean;
   recalled: boolean;
   reactions: ReactionType[];
   readReceipts: ReadReceiptType[];
   repliedId: MessagesType | null;
-  call: string | null;
+  call: {
+    type: "VIDEO" | "VOICE";
+    status: string;
+    duration: number | null;
+  } | null;
   expiresAt: string | null;
   expired?: boolean;
   createdAt: string;

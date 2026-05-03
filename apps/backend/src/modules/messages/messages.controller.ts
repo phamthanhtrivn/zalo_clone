@@ -7,6 +7,7 @@ import {
   Post,
   Query,
   UploadedFiles,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { MessagesService } from './messages.service';
@@ -27,10 +28,32 @@ import { GetAroundPinnedMessage } from './dto/get-around-pinned-message.dto';
 import { GetPinnedMessagesDto } from './dto/get-pinned-messages.dto';
 import { DeleteMessageForMeDto } from './dto/delete-message-for-me.dto';
 import { ForwardMessageDto } from './dto/forward-message.dto';
+import { SearchMessagesDto } from './dto/search-messages.dto';
+
+import { PollService } from './services/poll.service';
+import { CreatePollDto } from './dto/create-poll.dto';
+import { VotePollDto } from './dto/vote-poll.dto';
+import { Req } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/passport/jwt-auth.guard';
 
 @Controller('messages')
 export class MessagesController {
-  constructor(private readonly messagesService: MessagesService) {}
+  constructor(
+    private readonly messagesService: MessagesService,
+    private readonly pollService: PollService,
+  ) {}
+
+  @UseGuards(JwtAuthGuard)
+  @Get('conversation/:conversationId/polls')
+  async getPolls(
+    @Req() req: any,
+    @Param('conversationId') conversationId: string,
+  ) {
+    return this.messagesService.getPollMessagesFromConversation(
+      conversationId,
+      req.user.userId,
+    );
+  }
 
   @Get('conversation/:conversationId')
   async getMessagesFromConversation(
@@ -41,6 +64,14 @@ export class MessagesController {
       conversationId,
       getMessagesDto,
     );
+  }
+
+  @Get('conversation/:conversationId/search')
+  async searchMessages(
+    @Param('conversationId') conversationId: string,
+    @Query() searchDto: SearchMessagesDto,
+  ) {
+    return this.messagesService.searchMessages(conversationId, searchDto);
   }
 
   @Get('conversation/:conversationId/newer')
@@ -104,7 +135,7 @@ export class MessagesController {
     @Body() sendMessageDto: SendMessageDto,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    return this.messagesService.sendMessage(sendMessageDto, files);
+    return this.messagesService.handleIncomingMessage(sendMessageDto, files);
   }
 
   @Post('voice')
@@ -161,5 +192,51 @@ export class MessagesController {
   @Post('forward')
   async forwardMessages(@Body() dto: ForwardMessageDto) {
     return this.messagesService.forwardMessages(dto);
+  }
+
+  /**
+   * TẠO BÌNH CHỌN MỚI
+   * POST /messages/conversation/:conversationId/poll
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('conversation/:conversationId/poll')
+  async createPoll(
+    @Req() req: any,
+    @Param('conversationId') conversationId: string,
+    @Body() dto: CreatePollDto,
+  ) {
+    const userId = req.user.userId;
+    return this.pollService.createPoll(userId, conversationId, dto);
+  }
+
+  /**
+   * THỰC HIỆN VOTE
+   * POST /messages/conversation/:conversationId/poll/vote
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('conversation/:conversationId/poll/vote')
+  async votePoll(
+    @Req() req: any,
+    @Param('conversationId') conversationId: string,
+    @Body() dto: VotePollDto,
+  ) {
+    const userId = req.user.userId;
+    return this.pollService.vote(userId, conversationId, dto);
+  }
+
+  /**
+   * THÊM PHƯƠNG ÁN MỚI
+   * PATCH /messages/conversation/:conversationId/poll/:pollId/option
+   */
+  @UseGuards(JwtAuthGuard)
+  @Patch('conversation/:conversationId/poll/:pollId/option')
+  async addPollOption(
+    @Req() req: any,
+    @Param('conversationId') conversationId: string,
+    @Param('pollId') pollId: string,
+    @Body('text') text: string,
+  ) {
+    const userId = req.user.userId;
+    return this.pollService.addOption(userId, conversationId, pollId, text);
   }
 }

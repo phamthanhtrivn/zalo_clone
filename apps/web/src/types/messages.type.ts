@@ -1,5 +1,26 @@
 import type { File } from "./conversation-item.type";
 
+export interface PollOptionType {
+  _id: string;
+  text: string;
+  voters: {
+    userId: string;
+    name: string;
+    avatar: string;
+  }[];
+  voteCount: number;
+}
+
+export interface PollType {
+  _id: string;
+  title: string;
+  options: PollOptionType[];
+  isMultipleChoice: boolean;
+  allowAddOptions: boolean;
+  creatorId: string;
+  totalParticipants?: number;
+}
+
 export interface MessagesType {
   _id: string;
   senderId: {
@@ -31,6 +52,8 @@ export interface MessagesType {
   updatedAt: string;
 
   type: string;
+  pollId?: string | null;
+  poll?: PollType | null;
 
   expired?: boolean;
   expiredAt: string | null;
@@ -64,3 +87,4 @@ export interface ReadReceiptType {
   updatedAt: string;
 
 }
+

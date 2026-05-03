@@ -21,6 +21,9 @@ export class Group {
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   ownerId: Types.ObjectId;
+
+  @Prop({ type: String, default: null })
+  joinToken: string | null;
 }
 
 @Schema({ timestamps: true })
@@ -49,6 +52,9 @@ export class Conversation {
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }] })
   participants: Types.ObjectId[];
+
+  @Prop({ type: Types.ObjectId, ref: 'User', required: false })
+  targetUserId?: Types.ObjectId;
 }
 
 @Schema({ timestamps: true })

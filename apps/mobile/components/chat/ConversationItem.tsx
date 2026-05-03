@@ -31,7 +31,7 @@ import {
   removeConversation,
   setUnreadCount,
 } from "@/store/slices/conversationSlice";
-import { Avatar } from "../common/ui/Avatar";
+import GroupAvatar from "../ui/GroupAvatar";
 import { useSocket } from "@/contexts/SocketContext";
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
@@ -426,10 +426,33 @@ const ConversationItem: React.FC<Props> = ({
           </View>
         )}
 
-        <Image
-          source={{ uri: conversation.avatar }}
-          style={{ width: 48, height: 48, borderRadius: 24 }}
-        />
+        <View style={{ position: "relative" }}>
+          <GroupAvatar
+            uri={conversation.avatar}
+            name={conversation.name}
+            size={48}
+          />
+          {conversation.type === "AI" && (
+            <View
+              style={{
+                position: "absolute",
+                bottom: -2,
+                right: -2,
+                backgroundColor: "#fff",
+                borderRadius: 10,
+                padding: 1,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <MaterialIcons
+                name="verified"
+                size={16}
+                color="#0068ff"
+              />
+            </View>
+          )}
+        </View>
 
         <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
           <View
@@ -613,15 +636,33 @@ const ConversationItem: React.FC<Props> = ({
               borderBottomColor: "#f0f0f0",
             }}
           >
-            <Image
-              source={{ uri: conversation.avatar }}
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 19,
-                marginRight: 12,
-              }}
-            />
+            <View style={{ position: "relative", marginRight: 12 }}>
+              <GroupAvatar
+                uri={conversation.avatar}
+                name={conversation.name}
+                size={38}
+              />
+              {conversation.type === "AI" && (
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: -2,
+                    right: -2,
+                    backgroundColor: "#fff",
+                    borderRadius: 8,
+                    padding: 1,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  <MaterialIcons
+                    name="verified"
+                    size={14}
+                    color="#0068ff"
+                  />
+                </View>
+              )}
+            </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
                 numberOfLines={1}

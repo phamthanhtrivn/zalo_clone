@@ -1,18 +1,16 @@
 import { apiClient } from "./apiClient";
 
 export const userService = {
-  getListFriends: async () => {
-    const response = await apiClient.get(`/api/users/list-friends`);
-    return response.data;
-  },
 
   searchFriend: async (key: string, userId: string) => {
+
     const response = await apiClient.post("/api/users/search-friend", {
       userId: userId,
       key,
     });
     return response.data;
   },
+
   cancelFriend: async (friendId: string, userId: string) => {
     const response = await apiClient.post("/api/users/cancel-friend", {
       userId: userId,
@@ -35,9 +33,7 @@ export const userService = {
   },
 
   sentFriendRequests: async () => {
-    const response = await apiClient.get(
-      `/api/users/sent-friends-requests`,
-    );
+    const response = await apiClient.get(`/api/users/sent-friends-requests`);
     return response.data;
   },
 
@@ -70,8 +66,8 @@ export const userService = {
     return response.data;
   },
 
-  getProfile: async () => {
-    const response = await apiClient.get("/api/users/user-information");
+  getProfile: async (userId: string) => {
+    const response = await apiClient.get(`/api/users/user-information/${userId}`);
     return response.data;
   },
 
@@ -98,8 +94,13 @@ export const userService = {
     return response.data;
   },
 
+
+  searchFriendByPhone : async (userId : string, phone : string) => {
+    const response = await apiClient.post("/api/users/search-friend-phone", {userId, phone});
+    return response.data;
+  },
   checkFriendStatus: async (targetUserId: string) => {
     const response = await apiClient.get(`/api/users/friend-status/${targetUserId}`);
     return response.data;
-  },
+  }
 };

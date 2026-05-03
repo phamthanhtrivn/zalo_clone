@@ -1,4 +1,7 @@
-import { memo, useState } from "react";
+import { memo, useState, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import {
   getDateLabel,
   isSameHourAndMinute,
@@ -8,6 +11,7 @@ import type { RefObject } from "react";
 import type { EmojiType } from "@/constants/emoji.constant";
 import { ReactionModal } from "./ReactionModal";
 import { MessageItem } from "./MessageItem";
+import { SystemMessage } from "./SystemMessage";
 
 type Props = {
   messages: MessagesType[];
@@ -27,6 +31,9 @@ type Props = {
   lastMessageId: string;
   isGroup: boolean;
   onJumpToMessage?: (messageId: string) => void;
+  aiStatus?: "thinking" | "typing" | null;
+  aiStreamingText?: string;
+  aiAvatar?: string;
 };
 
 const MessageList = ({
@@ -47,6 +54,9 @@ const MessageList = ({
   lastMessageId,
   isGroup,
   onJumpToMessage,
+  aiStatus,
+  aiStreamingText,
+  aiAvatar,
 }: Props) => {
   const [selectedMessageReactions, setSelectedMessageReactions] = useState<
     ReactionType[] | null
@@ -122,26 +132,30 @@ const MessageList = ({
               </div>
             )}
 
-            <MessageItem
-              message={message}
-              isMe={isMe}
-              showAvatar={showAvatar}
-              showTime={showTime}
-              reactionMessage={reactionMessage}
-              onOpenReactionModal={(reactions) =>
-                setSelectedMessageReactions(reactions)
-              }
-              removeReaction={removeReaction}
-              handleRecalledMessage={handleRecalledMessage}
-              handlePinnedMessage={handlePinnedMessage}
-              handleDeleteMessageForMe={handleDeleteMessageForMe}
-              isSelected={isSelected}
-              setIsSelected={setIsSelected}
-              selectedMessages={selectedMessages}
-              toggleSelectMessage={toggleSelectMessage}
-              isGroup={isGroup}
-              onJumpToMessage={onJumpToMessage}
-            />
+            {isSystem ? (
+              <SystemMessage message={message} />
+            ) : (
+              <MessageItem
+                message={message}
+                isMe={isMe}
+                showAvatar={showAvatar}
+                showTime={showTime}
+                reactionMessage={reactionMessage}
+                onOpenReactionModal={(reactions) =>
+                  setSelectedMessageReactions(reactions)
+                }
+                removeReaction={removeReaction}
+                handleRecalledMessage={handleRecalledMessage}
+                handlePinnedMessage={handlePinnedMessage}
+                handleDeleteMessageForMe={handleDeleteMessageForMe}
+                isSelected={isSelected}
+                setIsSelected={setIsSelected}
+                selectedMessages={selectedMessages}
+                toggleSelectMessage={toggleSelectMessage}
+                isGroup={isGroup}
+                onJumpToMessage={onJumpToMessage}
+              />
+            )}
 
             {isLastMessage && !message.recalled && message.readReceipts && message.readReceipts.length > 0 && (
               <div className={`flex ${isMe ? "justify-end" : "justify-start ml-11"} mt-1 pr-1`}>
@@ -181,6 +195,36 @@ const MessageList = ({
           </div>
         );
       })}
+
+      {/* AI STREAMING MESSAGE */}
+      {aiStatus && (
+        <div className="flex items-end gap-2 mt-2">
+          {aiAvatar ? (
+            <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
+              <img src={aiAvatar} alt="AI" className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs">
+              AI
+            </div>
+          )}
+
+          <div className="bg-white rounded-lg px-3 py-2 max-w-md border shadow-sm">
+            {aiStatus === "thinking" ? (
+              <p className="text-[15px] italic text-gray-400 animate-pulse">
+                AI đang suy nghĩ...
+              </p>
+            ) : (
+              <div className="text-[15px] text-gray-800 markdown-content">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                  {aiStreamingText}
+                </ReactMarkdown>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

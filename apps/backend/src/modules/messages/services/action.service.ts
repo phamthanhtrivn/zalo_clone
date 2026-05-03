@@ -1007,7 +1007,7 @@ export class MessagesActionService {
           })
           .session(session);
 
-        if (pinnedCount > 3) {
+        if (pinnedCount >= 3) {
           throw new BadRequestException('Maximum pinned messages reached');
         }
       }

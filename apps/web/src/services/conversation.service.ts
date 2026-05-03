@@ -153,6 +153,7 @@ export const conversationService = {
         },
       },
     );
+    return response.data;
   },
   search: async (
     query: {
@@ -172,6 +173,10 @@ export const conversationService = {
       userId: fromUserId,
       friendId: targetUserId,
     });
+    return response.data;
+  },
+  refreshGroupJoinToken: async (id: string) => {
+    const response = await apiClient.patch(`/api/conversations/${id}/qr-token`);
     return response.data;
   },
 };

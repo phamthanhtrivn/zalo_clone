@@ -14,6 +14,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/passport/jwt-auth.guard';
 import { ChatModule } from './modules/chat/chat.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { SocialModule } from './modules/social/social.module';
+import { AiModule } from './modules/ai/ai.module';
 
 @Module({
   imports: [
@@ -37,6 +39,8 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
     AuthModule,
     ChatModule,
     EventEmitterModule.forRoot(),
+    SocialModule,
+    AiModule,
   ],
   providers: [
     {
@@ -45,4 +49,4 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

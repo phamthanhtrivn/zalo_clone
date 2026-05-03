@@ -19,6 +19,8 @@ import { REDIS_CHANNEL_SOCKET_EVENTS } from 'src/common/constants/redis.constant
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Types } from 'mongoose';
 import { TokenService } from 'src/common/jwt-token/jwt.service';
+import { MessagesCallService } from '../messages/services/call.service';
+import { CallStatus } from 'src/common/types/enums/call-status';
 @WebSocketGateway({
   cors: {
     origin: '*',
@@ -31,10 +33,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     @Inject(forwardRef(() => MessagesService))
     private readonly messagesService: MessagesService,
+    private readonly messagesCallService: MessagesCallService,
     private readonly redisService: RedisService,
     private readonly eventEmitter: EventEmitter2,
     private readonly tokenService: TokenService,
-  ) {}
+  ) { }
 
   handleConnection(socket: Socket) {
     const token = socket.handshake.auth?.token as string;
@@ -96,6 +99,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
 
+      if (event === 'ai_status' || event === 'ai_typing_chunk') {
+        this.server.to(room).emit(event, data);
+        return;
+      }
+
       if (event && room) {
         this.server.to(room).emit(event, data);
       }
@@ -150,6 +158,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(data.conversationId).emit('read_receipt', {
         conversationId: data.conversationId,
         messages: updatedMessages,
+      });
+
+      // Phát sự kiện cập nhật trạng thái đọc để xóa/hiện avatar realtime
+      this.server.to(data.conversationId).emit('messages_unread_updated', {
+        conversationId: data.conversationId,
+        userId: data.userId,
+        lastReadMessageId: lastReadMessageId?.toString() || null,
+        unreadCount: 0
       });
 
       // 🔑 KEY: Emit callback success CHỈ cho user hiện tại
@@ -210,6 +226,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           messages: result.messagesToUpdate,
         });
       }
+
+      // Quan trọng: Phát sự kiện để frontend xóa avatar của người này khỏi các tin nhắn đã "hủy đọc"
+      this.server.to(data.conversationId).emit('messages_unread_updated', {
+        conversationId: data.conversationId,
+        userId: data.userId,
+        lastReadMessageId: result.lastReadMessageId?.toString() || null,
+        unreadCount: result.unreadCount
+      });
 
       // 🔑 KEY: Emit callback success CHỈ cho user hiện tại
       client.emit('mark_as_unread:success', {
@@ -282,6 +306,133 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   forceLogoutDevice(deviceId: string) {
     this.server.to(deviceId).emit('force_logout', {
       message: 'Phiên đăng nhập đã hết hạn hoặc bạn bị đăng xuất từ nơi khác.',
+    });
+  }
+
+  // --- WebRTC Signaling Handlers ---
+
+  @SubscribeMessage('call:signal')
+  async handleCallSignal(
+    @MessageBody() data: any,
+    @ConnectedSocket() client: Socket,
+  ) {
+    // Phase 3: Check for answer signal to update DB status
+    if (data.signal?.type === 'answer' && data.messageId) {
+      try {
+        await this.messagesCallService.updateCallMessage({
+          messageId: data.messageId,
+          conversationId: data.conversationId,
+          status: CallStatus.ACCEPTED,
+        });
+      } catch (err) {
+        console.warn(
+          '[Socket] Failed to update call to ACCEPTED:',
+          err.message,
+        );
+      }
+    }
+
+    this.server.to(data.to).emit('call:signal', {
+      ...data,
+      from: client.data.userId,
+    });
+  }
+
+  @SubscribeMessage('call:reject')
+  async handleCallReject(
+    @MessageBody() data: any,
+    @ConnectedSocket() client: Socket,
+  ) {
+    // Phase 1: Update DB on reject
+    if (data.messageId) {
+      try {
+        await this.messagesCallService.updateCallMessage({
+          messageId: data.messageId,
+          conversationId: data.conversationId,
+          status: CallStatus.REJECTED,
+        });
+      } catch (err) {
+        console.warn(
+          '[Socket] Failed to update call to REJECTED:',
+          err.message,
+        );
+      }
+    }
+
+    this.server.to(data.to).emit('call:rejected', {
+      ...data,
+      from: client.data.userId,
+    });
+  }
+
+  @SubscribeMessage('call:end')
+  async handleCallEnd(
+    @MessageBody() data: any,
+    @ConnectedSocket() client: Socket,
+  ) {
+    // Phase 1: Update DB on end
+    if (data.messageId) {
+      try {
+        await this.messagesCallService.updateCallMessage({
+          messageId: data.messageId,
+          conversationId: data.conversationId,
+          status: data.status || CallStatus.ENDED,
+        });
+      } catch (err) {
+        console.warn('[Socket] Failed to update call to ENDED:', err.message);
+      }
+    }
+
+    this.server.to(data.to).emit('call:ended', {
+      ...data,
+      from: client.data.userId,
+    });
+  }
+
+  @SubscribeMessage('call:respond_status')
+  handleCallRespondStatus(
+    @MessageBody() data: any,
+    @ConnectedSocket() client: Socket,
+  ) {
+    console.log(
+      `[Socket] Forwarding call:respond_status from ${client.data.userId} to ${data.to}`,
+    );
+    this.server.to(data.to).emit('call:signal', {
+      ...data,
+      from: client.data.userId,
+    });
+  }
+  //AI event
+  //Dùng để ngắt AI trả lời
+  @SubscribeMessage('stop_ai_generation')
+  handleStopAi(socket: Socket, payload: { conversationId: string }) {
+    this.eventEmitter.emit('ai.stop_generation', {
+      conversationId: payload.conversationId,
+      userId: socket.data.userId as string,
+    });
+  }
+
+  async emitAiChunk(targetId: string, text: string, isFinished: boolean) {
+    return this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+      room: targetId,
+      event: 'ai_typing_chunk',
+      data: { targetId, text, isFinished },
+    });
+  }
+
+  async emitAiStatus(targetId: string, status: 'thinking' | 'typing' | null) {
+    return this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+      room: targetId,
+      event: 'ai_status',
+      data: { targetId, status },
+    });
+  }
+
+  async emitNewMessage(targetId: string, message: any) {
+    return this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+      room: targetId,
+      event: 'new_message',
+      data: message,
     });
   }
 }
