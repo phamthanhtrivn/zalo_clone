@@ -6,13 +6,12 @@ import { Public } from 'src/common/decorator/is-public.decorator';
 export class AiController {
   constructor(private readonly aiService: AiService) {}
 
-  // @Post('chat')
-  // @Public()
-  // async chatWithAI(@Body('message') message: string) {
-  //   const response = await this.aiService.chat(message);
-  //   return {
-  //     success: true,
-  //     data: response,
-  //   };
-  // }
+  @Post('seed')
+  @Public()
+  async seed(
+    @Body() data: { title: string; content: string; category?: string }[],
+  ) {
+    await this.aiService.seedKnowledge(data);
+    return { message: 'Bắt đầu quá trình nạp tri thức...' };
+  }
 }

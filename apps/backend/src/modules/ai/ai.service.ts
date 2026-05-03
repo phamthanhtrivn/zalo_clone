@@ -7,6 +7,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { ChatGateway } from '../chat/chat.gateway';
+import { Knowledge } from './schema/knowledge.schema';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 
 @Injectable()
 export class AiService {
@@ -16,6 +19,7 @@ export class AiService {
     private configService: ConfigService,
     @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
+    @InjectModel(Knowledge.name) private knowledgeModel: Model<Knowledge>,
   ) {
     this.openai = new OpenAI({
       apiKey: this.configService.get('ai.api_key'),
@@ -69,15 +73,17 @@ export class AiService {
     try {
       return await this.openai.chat.completions.create({
         model: this.configService.get<string>('ai.model')!,
-        temperature: 0.5,
-        max_tokens: 500,
+        temperature: 0.4,
+        max_tokens: 600,
         messages: [
           {
             role: 'system',
-            content: `Bạn là Zola AI - một người bạn thân thiện trong ứng dụng Zola Zola. 
-              Hãy trò chuyện tự nhiên, gần gũi như bạn bè, và điều chỉnh ngữ điệu theo thái độ của người dùng. 
-              TRÁNH sử dụng bảng biểu trừ khi người dùng yêu cầu rõ ràng. 
-              Nếu tóm tắt, tuyệt đối đừng làm bảng tóm tắt, hãy dùng văn bản trôi chảy.`,
+            content: `Bạn là Zola AI - trợ lý thông minh và thân thiện trong ứng dụng Zola. 
+            Nhiệm vụ của bạn là hỗ trợ người dùng dựa trên các thông tin hệ thống được cung cấp.
+            - Nếu thông tin được cung cấp có câu trả lời, hãy trả lời dựa trên đó một cách tự nhiên.
+            - Nếu không có trong tài liệu, hãy dùng kiến thức chung của bạn nhưng vẫn giữ giọng điệu bạn bè.
+            - Tuyệt đối không dùng bảng biểu, hãy dùng văn bản trôi chảy.
+            - Xưng hô gần gũi (mình - bạn, hoặc cậu - tớ).`,
           },
           ...(history?.length ? history : []),
           { role: 'user', content: prompt },
@@ -88,5 +94,61 @@ export class AiService {
       console.error('Lỗi stream:', error);
       throw new BadGatewayException('Máy chủ Ai tạm thời không thể truy cập.');
     }
+  }
+
+  async getEmbedding(text: string): Promise<number[]> {
+    try {
+      const response = await this.openai.embeddings.create({
+        model: this.configService.get<string>('ai.embeddingModel')!,
+        input: text,
+        encoding_format: 'float',
+      });
+      return response.data[0].embedding;
+    } catch (error) {
+      console.error('Lỗi lấy Embedding:', error);
+      throw new Error('Không thể tạo Vector cho văn bản');
+    }
+  }
+
+  async findRelevantContext(query: string): Promise<string> {
+    const queryVector = await this.getEmbedding(query);
+
+    const result = await this.knowledgeModel.aggregate([
+      {
+        $vectorSearch: {
+          index: 'knowledge_index',
+          path: 'embedding',
+          queryVector: queryVector,
+          numCandidates: 100,
+          limit: 3,
+        },
+      },
+      {
+        $project: {
+          content: 1,
+          score: { $meta: 'vectorSearchScore' },
+        },
+      },
+    ] as any);
+
+    return result.map((doc) => doc.content).join('\n\n');
+  }
+
+  async seedKnowledge(
+    data: { title: string; content: string; category?: string }[],
+  ) {
+    for (const item of data) {
+      // 1. Tạo vector từ nội dung
+      const vector = await this.getEmbedding(item.content);
+
+      // 2. Lưu vào DB
+      await this.knowledgeModel.create({
+        title: item.title,
+        content: item.content,
+        embedding: vector, // Đây là thứ để MongoDB Vector Search tìm kiếm
+        category: item.category || 'zalo_doc',
+      });
+    }
+    console.log('Đã nạp xong tri thức cho Zola!');
   }
 }

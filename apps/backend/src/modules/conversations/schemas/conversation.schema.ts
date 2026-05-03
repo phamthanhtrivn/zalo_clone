@@ -50,9 +50,6 @@ export class Conversation {
   @Prop({ required: true })
   lastMessageAt: Date;
 
-  @Prop({ default: false })
-  isAi!: boolean;
-
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }] })
   participants: Types.ObjectId[];
 

@@ -446,67 +446,88 @@ export class MessagesService {
         )
       : await this.actionService.sendMessage(dto, files);
 
-    try {
-      await this.chatGateway.emitAiStatus(targetId, 'thinking');
+    // CHẠY NGẦM: Không dùng await cho phần xử lý AI phía dưới để tránh timeout cho Mobile
+    (async () => {
+      try {
+        await this.chatGateway.emitAiStatus(targetId, 'thinking');
 
-      // Lấy và map lịch sử hội thoại
-      const rawHistory = await this.getMessagesFromConversation(
-        conversationId,
-        { userId: senderId, limit },
-      );
-      const mappedHistory = rawHistory.messages
-        .filter((msg) => !msg.recalled && !msg.deletedFor.includes(senderId))
-        .map((msg) => ({
-          role: (msg.senderId.toString() === this.BOT_ID
-            ? 'assistant'
-            : 'user') as 'assistant' | 'user',
-          content: parseMessageText(msg.content),
-        }))
-        .filter((m) => m.content !== '');
-
-      if (mappedHistory.length > 0) mappedHistory.pop();
-
-      // Gọi AI Service
-      const aiResponse = await this.aiService.chatStreamAndEmit(
-        userText,
-        targetId, // Truyền đúng targetId đã sửa để bắn socket
-        mappedHistory,
-      );
-
-      // 2. Lưu phản hồi của AI
-      if (isPrivate) {
-        await this.sendPrivateAiSummary(
+        // Lấy và map lịch sử hội thoại
+        const rawHistory = await this.getMessagesFromConversation(
           conversationId,
-          this.BOT_ID,
-          aiResponse,
-          MessageType.AI_SUMMARY,
-          senderId,
+          { userId: senderId, limit },
         );
-      } else {
-        const botMessage = await this.messageModel.create({
-          senderId: new Types.ObjectId(this.BOT_ID),
-          conversationId: new Types.ObjectId(conversationId),
-          content: { text: aiResponse },
-          type: MessageType.USER_MESSAGE,
-        });
+        const mappedHistory = rawHistory.messages
+          .filter((msg) => {
+            const isBot = msg.senderId._id.toString() === this.BOT_ID;
+            if (isPrivate && isBot) return false;
+            return true;
+          })
+          .map((msg) => {
+            const isBot = msg.senderId._id.toString() === this.BOT_ID;
+            const senderName = msg.senderId.profile?.name || 'Người dùng';
+            const messageText = parseMessageText(msg.content);
 
-        await this.conversationModel.findByIdAndUpdate(conversationId, {
-          lastMessageId: botMessage._id,
-          lastMessageAt: (botMessage as any).createdAt,
-        });
+            return {
+              role: (isBot ? 'assistant' : 'user') as 'assistant' | 'user',
+              content: isBot ? messageText : `${senderName}: ${messageText}`,
+            };
+          })
+          .filter((m) => m.content !== '');
 
-        // Phải populate để FE có avatar[cite: 6]
-        const populatedBotMsg = await this.messageModel
-          .findById(botMessage._id)
-          .populate('senderId', 'profile.name profile.avatarUrl')
-          .lean();
+        if (mappedHistory.length > 0) mappedHistory.pop();
 
-        await this.chatGateway.emitNewMessage(conversationId, populatedBotMsg);
+        const knowledgeContext =
+          await this.aiService.findRelevantContext(userText);
+
+        const augmentedPrompt = `
+          Dựa trên thông tin sau đây về hệ thống Zola:
+          "${knowledgeContext}"
+          
+          Hãy trả lời câu hỏi của người dùng: ${userText}
+        `;
+
+        const aiResponse = await this.aiService.chatStreamAndEmit(
+          augmentedPrompt,
+          targetId,
+          mappedHistory,
+        );
+
+        if (isPrivate) {
+          await this.sendPrivateAiSummary(
+            conversationId,
+            this.BOT_ID,
+            aiResponse,
+            MessageType.AI_SUMMARY,
+            senderId,
+          );
+        } else {
+          const botMessage = await this.messageModel.create({
+            senderId: new Types.ObjectId(this.BOT_ID),
+            conversationId: new Types.ObjectId(conversationId),
+            content: { text: aiResponse },
+            type: MessageType.USER_MESSAGE,
+          });
+
+          await this.conversationModel.findByIdAndUpdate(conversationId, {
+            lastMessageId: botMessage._id,
+            lastMessageAt: (botMessage as any).createdAt,
+          });
+
+          const populatedBotMsg = await this.messageModel
+            .findById(botMessage._id)
+            .populate('senderId', 'profile.name profile.avatarUrl')
+            .lean();
+
+          await this.chatGateway.emitNewMessage(
+            conversationId,
+            populatedBotMsg,
+          );
+        }
+      } catch (error) {
+        console.error('AI Processing Error:', error);
+        await this.chatGateway.emitAiStatus(targetId, null);
       }
-    } catch (error) {
-      console.error('AI Processing Error:', error);
-      await this.chatGateway.emitAiStatus(targetId, null);
-    }
+    })();
 
     return userMessage;
   }
