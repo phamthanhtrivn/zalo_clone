@@ -2,6 +2,6 @@ export enum MessageType {
   USER_MESSAGE = 'USER_MESSAGE',
   SYSTEM = 'SYSTEM',
   POLL = 'POLL',
-  
+  AI_SUMMARY = 'AI_SUMMARY',
+  PRIVATE = 'PRIVATE',
 }
-  

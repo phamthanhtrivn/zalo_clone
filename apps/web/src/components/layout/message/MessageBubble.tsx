@@ -14,6 +14,10 @@ import PollMessage from "./PollMessage";
 import CallContent from "./sub-components/CallContent";
 import MediaGrid from "./sub-components/MediaGrid";
 import DocumentList from "./sub-components/DocumentList";
+import { Lock } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 
 interface Props {
   message: MessagesType;
@@ -214,7 +218,23 @@ export const MessageBubble = ({
 
             {/* TEXT */}
             {content?.text && (
-              <p className="text-[15px]">{renderTextWithLinks(content.text)}</p>
+              <div className="text-[15px] markdown-content">
+                {message.senderId?.profile?.name === "Zola AI" || message.type === "AI_SUMMARY" ? (
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                    {content.text}
+                  </ReactMarkdown>
+                ) : (
+                  <p>{renderTextWithLinks(content.text)}</p>
+                )}
+              </div>
+            )}
+
+            {/* PRIVATE / NINJA INDICATOR */}
+            {(message.type === "PRIVATE" || message.type === "AI_SUMMARY") && (
+              <div className="flex items-center gap-1 mt-1 text-[10px] text-gray-400 border-t border-gray-100 pt-1">
+                <Lock size={10} />
+                <span>Chỉ mình bạn thấy</span>
+              </div>
             )}
 
             {/* ICON */}

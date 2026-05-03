@@ -8,7 +8,9 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  StyleSheet,
 } from "react-native";
+import Markdown from "react-native-markdown-display";
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
@@ -45,6 +47,34 @@ type Props = {
   isHighlighted?: boolean;
   onReplyPress?: (messageId: string) => void;
   isGroup: boolean;
+};
+
+const MessageTextRenderer = ({ text, isMe, isAi }: { text: string; isMe: boolean; isAi: boolean }) => {
+  const processedText = text.replace(/<br\s*\/?>/gi, "\n");
+  const hasMarkdown = /\|[-:]+\||#|\*\*|`|\[.*\]\(.*\)/.test(processedText);
+
+  if (isAi || hasMarkdown) {
+    return (
+      <Markdown
+        style={{
+          body: {
+            fontSize: 14,
+            lineHeight: 20,
+            color: isMe ? "#000" : "#111",
+          },
+          paragraph: { marginTop: 0, marginBottom: 0 },
+          table: { borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 4, marginVertical: 8 },
+          th: { padding: 6, borderWidth: 0.5, borderColor: "#e5e7eb", fontWeight: "700" },
+          td: { padding: 6, borderWidth: 0.5, borderColor: "#e5e7eb" },
+          code_inline: { backgroundColor: isMe ? "rgba(255,255,255,0.3)" : "#f3f4f6", padding: 2, borderRadius: 4 },
+        }}
+      >
+        {processedText}
+      </Markdown>
+    );
+  }
+
+  return <TextWithLinks text={processedText} />;
 };
 
 const TextWithLinks = ({ text }: { text: string }) => {
@@ -564,7 +594,13 @@ const MessageBubble = React.memo(({
           )}
 
           {/* TEXT */}
-          {content?.text && <TextWithLinks text={content.text} />}
+          {content?.text && (
+            <MessageTextRenderer
+              text={content.text}
+              isMe={isMe}
+              isAi={message.senderId?.profile?.name === "Zola AI"}
+            />
+          )}
 
           {/* ICON */}
           {content?.icon && (
@@ -573,9 +609,9 @@ const MessageBubble = React.memo(({
 
           {/* POLL */}
           {message.type === "POLL" && (
-            <PollMessage 
-              pollId={message.pollId || ""} 
-              conversationId={message.conversationId} 
+            <PollMessage
+              pollId={message.pollId || ""}
+              conversationId={message.conversationId}
               initialPoll={message.poll}
             />
           )}

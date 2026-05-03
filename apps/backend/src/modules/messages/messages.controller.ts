@@ -32,12 +32,13 @@ import { SearchMessagesDto } from './dto/search-messages.dto';
 import { PollService } from './services/poll.service';
 import { CreatePollDto } from './dto/create-poll.dto';
 import { VotePollDto } from './dto/vote-poll.dto';
-import { Req } from '@nestjs/common'; 
+import { Req } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/passport/jwt-auth.guard';
 
 @Controller('messages')
 export class MessagesController {
-  constructor(private readonly messagesService: MessagesService,
+  constructor(
+    private readonly messagesService: MessagesService,
     private readonly pollService: PollService,
   ) {}
 
@@ -133,7 +134,7 @@ export class MessagesController {
     @Body() sendMessageDto: SendMessageDto,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    return this.messagesService.sendMessage(sendMessageDto, files);
+    return this.messagesService.handleIncomingMessage(sendMessageDto, files);
   }
 
   @Post('call')

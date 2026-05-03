@@ -64,7 +64,6 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
   const updateCallState = useCallback((newState: CallSessionState) => {
     setSessionState(newState);
     sessionStateRef.current = newState;
-    console.log(`[Mobile-CallState] Transition to: ${newState}`);
   }, []);
 
   const stopSound = async () => {
@@ -72,7 +71,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
       try {
         await soundRef.current.stopAsync();
         await soundRef.current.unloadAsync();
-      } catch (e) {}
+      } catch (e) { }
       soundRef.current = null;
     }
   };
@@ -88,7 +87,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
       soundRef.current = sound;
       await sound.setIsLoopingAsync(true);
       await sound.playAsync();
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const stopMediaStream = useCallback(() => {
@@ -112,7 +111,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
   const leaveCall = useCallback((reason = "ENDED", isRemote = false) => {
     if (videoCallData.from || videoCallData.to) {
       const partnerId = videoCallData.isReceiving ? videoCallData.from : videoCallData.to;
-      
+
       if (!isRemote) {
         const event = (reason === "REJECTED") ? "call:reject" : "call:end";
         socket?.emit(event, {
@@ -307,7 +306,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
           messageId: videoCallData.messageId,
           status: "ACCEPTED",
           conversationId: videoCallData.conversationId,
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } catch (error) {
       console.error("Error answering call:", error);
@@ -326,7 +325,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
         if (peerRef.current) {
           try {
             await peerRef.current.addIceCandidate(new RTCIceCandidate(data.signal));
-          } catch (e) {}
+          } catch (e) { }
         }
         return;
       }
@@ -347,7 +346,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
             messageId: data.messageId,
             status: "RINGING",
             conversationId: data.conversationId,
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }
 

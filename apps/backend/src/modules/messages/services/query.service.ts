@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Message } from '../schemas/message.schema';
@@ -81,6 +85,12 @@ export class MessagesQueryService {
       conversationId: conversationObjectId,
       deletedFor: { $ne: userObjectId },
     };
+
+    //Thanh Tuấn viết
+    query.$or = [
+      { type: { $nin: [MessageType.AI_SUMMARY, MessageType.PRIVATE] } },
+      { targetUserId: userObjectId },
+    ];
 
     if (cursor) {
       query._id = { $lt: new Types.ObjectId(cursor) };
@@ -547,11 +557,16 @@ export class MessagesQueryService {
     }));
   }
 
-  async searchMessages(
-    conversationId: string,
-    searchDto: SearchMessagesDto,
-  ) {
-    const { userId, keyword, senderId, startDate, endDate, cursor, limit = '20' } = searchDto;
+  async searchMessages(conversationId: string, searchDto: SearchMessagesDto) {
+    const {
+      userId,
+      keyword,
+      senderId,
+      startDate,
+      endDate,
+      cursor,
+      limit = '20',
+    } = searchDto;
 
     const conversationObjectId = new Types.ObjectId(conversationId);
     const userObjectId = new Types.ObjectId(userId);
@@ -563,13 +578,15 @@ export class MessagesQueryService {
     });
 
     if (!member) {
-      throw new NotFoundException('User is not a participant in this conversation');
+      throw new NotFoundException(
+        'User is not a participant in this conversation',
+      );
     }
 
     const query: Record<string, any> = {
       conversationId: conversationObjectId,
       deletedFor: { $ne: userObjectId },
-      recalled: false, 
+      recalled: false,
     };
 
     if (keyword) {
@@ -616,7 +633,10 @@ export class MessagesQueryService {
     );
     return {
       messages: transformedMessages,
-      nextCursor: transformedMessages.length > 0 ? transformedMessages[transformedMessages.length - 1]._id : null,
+      nextCursor:
+        transformedMessages.length > 0
+          ? transformedMessages[transformedMessages.length - 1]._id
+          : null,
     };
   }
 
@@ -628,32 +648,32 @@ export class MessagesQueryService {
       // 1. Join với pollvotes để lấy các chỉ số tổng quát
       {
         $lookup: {
-          from: "pollvotes",
-          localField: "_id",
-          foreignField: "pollId",
-          as: "allVotes",
+          from: 'pollvotes',
+          localField: '_id',
+          foreignField: 'pollId',
+          as: 'allVotes',
         },
       },
       {
         $addFields: {
           totalParticipants: {
-            $size: { $setUnion: "$allVotes.userId" },
+            $size: { $setUnion: '$allVotes.userId' },
           },
         },
       },
       // 2. Xử lý từng option để lấy voteCount và Top 5 voters
-      { $unwind: "$options" },
+      { $unwind: '$options' },
       {
         $lookup: {
-          from: "pollvotes",
-          let: { pId: "$_id", oId: "$options._id" },
+          from: 'pollvotes',
+          let: { pId: '$_id', oId: '$options._id' },
           pipeline: [
             {
               $match: {
                 $expr: {
                   $and: [
-                    { $eq: ["$pollId", "$$pId"] },
-                    { $eq: ["$optionId", "$$oId"] },
+                    { $eq: ['$pollId', '$$pId'] },
+                    { $eq: ['$optionId', '$$oId'] },
                   ],
                 },
               },
@@ -662,44 +682,44 @@ export class MessagesQueryService {
             { $limit: 5 },
             {
               $lookup: {
-                from: "users",
-                localField: "userId",
-                foreignField: "_id",
-                as: "userInfo",
+                from: 'users',
+                localField: 'userId',
+                foreignField: '_id',
+                as: 'userInfo',
               },
             },
-            { $unwind: "$userInfo" },
+            { $unwind: '$userInfo' },
             {
               $project: {
                 _id: 0,
                 userId: 1,
-                name: "$userInfo.profile.name",
-                avatar: "$userInfo.profile.avatarUrl",
+                name: '$userInfo.profile.name',
+                avatar: '$userInfo.profile.avatarUrl',
               },
             },
           ],
-          as: "voters",
+          as: 'voters',
         },
       },
       {
         $addFields: {
-          "options.voters": {
-             $map: {
-                input: "$voters",
-                as: "v",
-                in: {
-                   userId: "$$v.userId",
-                   name: "$$v.name",
-                   avatar: "$$v.avatar"
-                }
-             }
+          'options.voters': {
+            $map: {
+              input: '$voters',
+              as: 'v',
+              in: {
+                userId: '$$v.userId',
+                name: '$$v.name',
+                avatar: '$$v.avatar',
+              },
+            },
           },
-          "options.voteCount": {
+          'options.voteCount': {
             $size: {
               $filter: {
-                input: "$allVotes",
-                as: "av",
-                cond: { $eq: ["$$av.optionId", "$options._id"] },
+                input: '$allVotes',
+                as: 'av',
+                cond: { $eq: ['$$av.optionId', '$options._id'] },
               },
             },
           },
@@ -708,16 +728,16 @@ export class MessagesQueryService {
       // 3. Group lại thành document Poll hoàn chỉnh
       {
         $group: {
-          _id: "$_id",
-          title: { $first: "$title" },
-          isMultipleChoice: { $first: "$isMultipleChoice" },
-          allowAddOptions: { $first: "$allowAddOptions" },
-          isAnonymous: { $first: "$isAnonymous" },
-          hideResultsUntilVoted: { $first: "$hideResultsUntilVoted" },
-          expiresAt: { $first: "$expiresAt" },
-          totalParticipants: { $first: "$totalParticipants" },
-          options: { $push: "$options" },
-          createdAt: { $first: "$createdAt" },
+          _id: '$_id',
+          title: { $first: '$title' },
+          isMultipleChoice: { $first: '$isMultipleChoice' },
+          allowAddOptions: { $first: '$allowAddOptions' },
+          isAnonymous: { $first: '$isAnonymous' },
+          hideResultsUntilVoted: { $first: '$hideResultsUntilVoted' },
+          expiresAt: { $first: '$expiresAt' },
+          totalParticipants: { $first: '$totalParticipants' },
+          options: { $push: '$options' },
+          createdAt: { $first: '$createdAt' },
         },
       },
     ]);
@@ -725,7 +745,10 @@ export class MessagesQueryService {
     return stats[0] || null;
   }
 
-  async getPollMessagesFromConversation(conversationId: string, userId: string) {
+  async getPollMessagesFromConversation(
+    conversationId: string,
+    userId: string,
+  ) {
     const conversationObjectId = new Types.ObjectId(conversationId);
     const userObjectId = new Types.ObjectId(userId);
 
@@ -756,8 +779,6 @@ export class MessagesQueryService {
       this.transformService.transformMessage(msg),
     );
 
-    return transformedMessages.filter(msg => msg.pollId);
+    return transformedMessages.filter((msg) => msg.pollId);
   }
 }
-
-

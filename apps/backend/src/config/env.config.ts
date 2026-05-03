@@ -20,4 +20,11 @@ export default () => ({
     cloudFrontKeyPairId: process.env.AWS_CLOUDFRONT_KEY_PAIR_ID,
     cloudFrontDomain: process.env.AWS_CLOUDFRONT_DOMAIN,
   },
+  ai: {
+    api_key: process.env.OPENROUTER_API_KEY,
+    model: process.env.OPENROUTER_MODEL,
+    embeddingModel: process.env.EMBEDDING_MODEL,
+    base_url: process.env.OPENROUTER_BASE_URL,
+    botId: process.env.BOT_ID,
+  },
 });
