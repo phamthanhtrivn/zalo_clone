@@ -39,6 +39,7 @@ import {
   removeConversation,
   setUnreadCount,
 } from "@/store/slices/conversationSlice";
+import { IoMicOutline } from "react-icons/io5";
 import { useSocket } from "@/contexts/SocketContext";
 import { getAvatarData, getColorByName } from "@/utils/avatar-utils";
 import type {
@@ -332,6 +333,10 @@ const ConversationListItem = ({
         case "FILE":
           icon = <GoFileSymlinkFile />;
           text = content.files[0].fileName;
+          break;
+        case "VOICE":
+          icon = <IoMicOutline />;
+          text = "Tin nhắn thoại";
           break;
         default:
           text = "";

@@ -115,6 +115,11 @@ const ConversationItem: React.FC<Props> = ({
             ),
             text: content.files[0].fileName,
           };
+        case "VOICE":
+          return {
+            icon: <Ionicons name="mic" size={14} color="#6b7280" />,
+            text: "Tin nhắn thoại",
+          };
         default:
           return { icon: null, text: "" };
       }

@@ -118,7 +118,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   useEffect(() => {
-    if (!user?.userId || !apiUrl) return;
+    if (!user?.userId || !apiUrl) {
+      socketRef.current?.disconnect();
+      setSocket(null);
+      setIsConnected(false);
+      return;
+    }
 
     const initSocket = async () => {
       if (!socketRef.current) {

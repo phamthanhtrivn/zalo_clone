@@ -319,11 +319,21 @@ export class MessagesQueryService {
         deletedFor: { $ne: userObjectId },
         pinned: true,
         recalled: false,
+        type: MessageType.USER_MESSAGE,
       })
-      .sort({ updatedAt: 1 })
-      .populate('senderId', 'profile.name')
+      .sort({ _id: -1 })
+      .populate('senderId', 'profile.name profile.avatarUrl')
+      .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
+      .populate('reactions.userId', 'profile.name profile.avatarUrl')
+      .populate({
+        path: 'repliedId',
+        populate: {
+          path: 'senderId',
+          select: 'profile.name profile.avatarUrl',
+        },
+      })
       .lean();
-
+      
     const enrichedMessages = await this.enrichPollMessages(messages);
 
     const transformedMessages = enrichedMessages.map((message) =>

@@ -213,15 +213,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [dispatch]);
 
   const handleMessageRecalled = useCallback((data: { messageId: string; conversationId?: string }) => {
-    if (data.conversationId) {
-      dispatch(updateRecallMessage({ conversationId: data.conversationId, messageId: data.messageId }));
-      dispatch(updateRecallMessageInConversation({ conversationId: data.conversationId, messageId: data.messageId }));
+    const conversationId = data.conversationId || activeConversationIdRef.current;
+    if (conversationId) {
+      dispatch(updateRecallMessage({ conversationId, messageId: data.messageId }));
+      dispatch(updateRecallMessageInConversation({ conversationId, messageId: data.messageId }));
     }
   }, [dispatch]);
 
   const handleMessagePinned = useCallback((data: { messageId: string; pinned: boolean; conversationId?: string }) => {
-    if (data.conversationId) {
-      dispatch(updateMessagePinned({ conversationId: data.conversationId, messageId: data.messageId, pinned: data.pinned }));
+    const conversationId = data.conversationId || activeConversationIdRef.current;
+    if (conversationId) {
+      dispatch(updateMessagePinned({ conversationId, messageId: data.messageId, pinned: data.pinned }));
     }
   }, [dispatch]);
 
@@ -319,6 +321,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     const socketInstance = socketRef.current;
+    if (!socketInstance.connected) {
+      socketInstance.connect();
+    }
     setSocket(socketInstance);
 
     const onConnect = () => {

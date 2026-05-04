@@ -31,6 +31,9 @@ export class Content {
 
   @Prop({ type: [File] })
   files?: File[];
+
+  @Prop({ type: Number, default: null })
+  voiceDuration?: number | null;
 }
 
 @Schema({ _id: false })
