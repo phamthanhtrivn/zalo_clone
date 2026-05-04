@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Visibility } from "../types";
+import { Visibility } from "../../types/social.type";
 
 interface Props {
     visibility: Visibility;
@@ -9,15 +9,35 @@ interface Props {
     onBack: () => void;
     onPost: () => void;
     onFont?: () => void;
+    onChangeVisibility?: () => void;
 }
 
 const LABEL: Record<Visibility, string> = {
     PUBLIC: "Công khai",
-    FRIENDS: "Bạn bè Zalo",
+    FRIENDS: "Bạn bè",
     PRIVATE: "Chỉ mình tôi",
 };
 
-export default function PostHeader({ visibility, canPost, onBack, onPost, onFont }: Props) {
+const DESC: Record<Visibility, string> = {
+    PUBLIC: "Ai cũng có thể xem",
+    FRIENDS: "Trừ bạn bè đã bị chặn xem",
+    PRIVATE: "Chỉ mình bạn xem",
+};
+
+const ICON: Record<Visibility, any> = {
+    PUBLIC: "earth",
+    FRIENDS: "people",
+    PRIVATE: "lock-closed",
+};
+
+export default function PostHeader({
+    visibility,
+    canPost,
+    onBack,
+    onPost,
+    onFont,
+    onChangeVisibility
+}: Props) {
     return (
         <View style={{
             flexDirection: "row",
@@ -32,21 +52,26 @@ export default function PostHeader({ visibility, canPost, onBack, onPost, onFont
                 <Ionicons name="arrow-back" size={22} color="#333" />
             </Pressable>
 
-            {/* Group selector */}
+            {/* Visibility */}
             <View style={{ flex: 1, marginLeft: 8 }}>
-                <Pressable style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Ionicons name="people" size={16} color="#555" />
-                    <Text style={{ fontSize: 15, fontWeight: "700", color: "#000" }}>
+                <Pressable
+                    onPress={onChangeVisibility}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                >
+                    <Ionicons name={ICON[visibility]} size={16} color="#555" />
+                    <Text style={{ fontSize: 15, fontWeight: "700" }}>
                         {LABEL[visibility]}
                     </Text>
                     <Ionicons name="caret-down" size={14} color="#0068FF" />
                 </Pressable>
-                <Text style={{ fontSize: 11, color: "#999", marginTop: 1 }}>
-                    Trừ bạn bè đã bị chặn xem
+
+                {/* 👇 FIX: hiển thị theo từng mode */}
+                <Text style={{ fontSize: 11, color: "#999" }}>
+                    {DESC[visibility]}
                 </Text>
             </View>
 
-            {/* Aa toggle */}
+            {/* Font */}
             <Pressable
                 onPress={onFont}
                 style={{
@@ -56,24 +81,22 @@ export default function PostHeader({ visibility, canPost, onBack, onPost, onFont
                     borderRadius: 20,
                     paddingHorizontal: 4,
                     paddingVertical: 3,
-                    gap: 2,
                     marginRight: 10,
-                }}>
+                }}
+            >
                 <View style={{
                     backgroundColor: "#fff",
                     borderRadius: 16,
                     paddingHorizontal: 8,
                     paddingVertical: 3,
                 }}>
-                    <Text style={{ color: "#0068FF", fontWeight: "700", fontSize: 13 }}>Aa</Text>
+                    <Text style={{ color: "#0068FF", fontWeight: "700" }}>Aa</Text>
                 </View>
-                <View style={{ paddingHorizontal: 6 }}>
-                    <Ionicons name="pencil" size={14} color="#fff" />
-                </View>
+                <Ionicons name="pencil" size={14} color="#fff" />
             </Pressable>
 
-            {/* Đăng */}
-            <Pressable onPress={onPost} disabled={!canPost} style={{ padding: 4 }}>
+            {/* Post */}
+            <Pressable onPress={onPost} disabled={!canPost}>
                 <Text style={{
                     fontSize: 15,
                     fontWeight: "600",

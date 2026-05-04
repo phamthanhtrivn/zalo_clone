@@ -1,53 +1,40 @@
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
-import * as qs from 'querystring';
 
 @Injectable()
 export class SpotifyService {
-
-
-    private async getToken() {
-        try {
-            const clientId = this.configService.get<string>('SPOTIFY_CLIENT_ID');
-            const clientSecret = this.configService.get<string>('SPOTIFY_CLIENT_SECRET');
-
-            console.log("SPOTIFY DEBUG:", { clientId, clientSecret });
-
-            const res = await axios.post(
-                'https://accounts.spotify.com/api/token',
-                qs.stringify({ grant_type: 'client_credentials' }),
-                {
-                    headers: {
-                        Authorization:
-                            'Basic ' +
-                            Buffer.from(`${clientId}:${clientSecret}`).toString('base64'),
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                },
-            );
-
-            return res.data.access_token;
-
-        } catch (err: any) {
-            console.log("❌ SPOTIFY TOKEN ERROR:", err?.response?.data || err.message);
-            throw err;
-        }
-    }
+    // Vẫn giữ tên class là SpotifyService để không phải sửa controller/module
+    constructor() { }
 
     async searchTrack(query: string) {
-        const token = await this.getToken();
+        try {
+            // NẾU KHÔNG CÓ TỪ KHÓA -> Tìm kiếm các bài hát pop/hot hit mặc định
+            const searchTerm = (query?.trim()) || 'top hit việt nam';
+            // Sử dụng iTunes Search API (Miễn phí, không cần Token)
+            const res = await axios.get('https://itunes.apple.com/search', {
+                params: {
+                    term: searchTerm,
+                    entity: 'song', // Chỉ tìm bài hát
+                    limit: 20,
+                    country: 'vn',  // Ưu tiên nhạc Việt
+                },
+            });
 
-        const res = await axios.get('https://api.spotify.com/v1/search', {
-            headers: { Authorization: `Bearer ${token}` },
-            params: { q: query, type: 'track', limit: 20 },
-        });
+            // Map dữ liệu iTunes về đúng chuẩn Frontend của bạn đang dùng
+            return res.data.results
+                .filter((t: any) => t.previewUrl) // Chỉ lấy các bài có link nghe thử 30s
+                .map((t: any) => ({
+                    id: t.trackId.toString(),
+                    title: t.trackName,
+                    artist: t.artistName,
+                    previewUrl: t.previewUrl,
+                    // Lấy ảnh bìa chất lượng cao hơn (mặc định 100x100, đổi thành 600x600)
+                    image: t.artworkUrl100?.replace('100x100bb', '600x600bb'),
+                }));
 
-        return res.data.tracks.items.map((t: any) => ({
-            id: t.id,
-            title: t.name,
-            artist: t.artists.map((a: any) => a.name).join(', '),
-            previewUrl: t.preview_url,
-            image: t.album.images?.[0]?.url,
-        }));
+        } catch (err: any) {
+            console.log("❌ LỖI GET DATA MUSIC:", err?.message);
+            return []; // Trả về mảng rỗng để app không bị crash
+        }
     }
 }

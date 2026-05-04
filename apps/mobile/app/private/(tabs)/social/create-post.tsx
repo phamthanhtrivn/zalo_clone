@@ -12,7 +12,8 @@ import * as ImagePicker from "expo-image-picker";
 import * as ExpoLocation from "expo-location";
 import { userService } from "../../../../services/user.service"
 import { Visibility, BottomSheet, Friend, Location } from "../../../../types/social.type";
-
+import { Modal, Pressable, Text } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import PostHeader from "../../../../components/social/PostHeader";
 import PostBody from "../../../../components/social/Postbody";
 import QuickActions from "../../../../components/social/Quickactions";
@@ -21,8 +22,9 @@ import MediaSheet from "../../../../components/social/MediaSheet";
 import FriendsSheet from "../../../../components/social/Friendssheet";
 import AlbumSheet from "../../../../components/social/Albumsheet";
 import LocationSheet from "../../../../components/social/Locationsheet";
-import FontSheet from "../../../../components/social/FontSheet"; // ✅ Import FontSheet
-import MusicSheet from "../../../../components/social/MusicSheet"; // ✅ Import MusicSheet
+import FontSheet from "../../../../components/social/FontSheet";
+import MusicSheet from "../../../../components/social/MusicSheet";
+import { createPost } from "@/services/social.service";
 
 export default function CreatePostScreen() {
     const router = useRouter();
@@ -36,13 +38,16 @@ export default function CreatePostScreen() {
     const [activeIcon, setActiveIcon] = useState<string | null>(null);
     const [video, setVideo] = useState<string | null>(null);
     const [loadingLocation, setLoadingLocation] = useState(false);
+    const [showVisibilitySheet, setShowVisibilitySheet] = useState(false);
+    // State quản lý bạn bè
     const [friends, setFriends] = useState<Friend[]>([]);
-    const [musicList, setMusicList] = useState<any[]>([]);
-    const [isLoadingMusic, setIsLoadingMusic] = useState(false);
     const [isLoadingFriends, setIsLoadingFriends] = useState(false);
+
+    // ĐÃ XÓA State của Music ở đây vì MusicSheet tự quản lý
+
     const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
 
-    // ✅ State cho font và music
+    // State cho font và music (kết quả sau khi chọn)
     const [selectedFontStyle, setSelectedFontStyle] = useState<any>(null);
     const [selectedFontColor, setSelectedFontColor] = useState<any>(null);
     const [selectedMusic, setSelectedMusic] = useState<any>(null);
@@ -50,15 +55,12 @@ export default function CreatePostScreen() {
     const canPost = text.trim().length > 0 || selectedImages.length > 0;
     const selectedFriends = friends.filter(f => f.selected);
 
-    // ✅ Fetch danh sách bạn bè từ Backend
+    // Fetch danh sách bạn bè từ Backend
     useEffect(() => {
         const fetchFriendsList = async () => {
             setIsLoadingFriends(true);
             try {
-                // Sử dụng getListFriends hoặc kiểm tra lại tên hàm trong service
                 const response = await userService.getListFriends();
-
-                // Truy cập trực tiếp vào .users hoặc dự phòng qua .data.users
                 const users = response?.users ?? response?.data?.users ?? [];
                 const mappedData = users
                     .flatMap((group: any) => group.friends)
@@ -68,7 +70,6 @@ export default function CreatePostScreen() {
                         avatar: f.avatarUrl || "https://i.pravatar.cc/150",
                         selected: false,
                     }));
-                console.log("Mapped friends data:", mappedData);
                 setFriends(mappedData);
             } catch (error) {
                 console.error("Lỗi khi lấy danh sách bạn bè:", error);
@@ -79,20 +80,7 @@ export default function CreatePostScreen() {
         fetchFriendsList();
     }, []);
 
-    useEffect(() => {
-        const fetchMusic = async () => {
-            setIsLoadingMusic(true);
-            try {
-                const data = await userService.getMusicList();
-                setMusicList(Array.isArray(data) ? data : []);
-            } catch (error) {
-                console.error("Lỗi khi lấy danh sách nhạc:", error);
-            } finally {
-                setIsLoadingMusic(false);
-            }
-        };
-        fetchMusic();
-    }, []); // Chạy 1 lần khi mount
+    // ĐÃ XÓA hàm useEffect fetchHotMusic ở đây để nhường việc đó cho MusicSheet
 
     const openSheet = (sheet: BottomSheet, icon?: string) => {
         setActiveIcon(icon ?? null);
@@ -103,8 +91,7 @@ export default function CreatePostScreen() {
         setActiveIcon(null);
     };
 
-
-    // Toggle ảnh từ MediaSheet (dùng asset id)
+    // Toggle ảnh từ MediaSheet
     const handleToggleMedia = useCallback((id: string, uri: string) => {
         setCheckedIds(prev => {
             const next = new Set(prev);
@@ -121,10 +108,7 @@ export default function CreatePostScreen() {
 
     // Xoá ảnh khỏi preview
     const handleRemoveImage = (index: number) => {
-        const uri = selectedImages[index];
         setSelectedImages(prev => prev.filter((_, i) => i !== index));
-        // Camera asset dùng id "camera_xxx" — không có reverse map nên không xoá checkedIds
-        // (ảnh từ MediaLibrary: id ≠ uri, cần map nếu muốn bỏ dấu check — đơn giản hoá: chỉ xoá uri)
     };
 
     // Chọn video từ thư viện
@@ -169,24 +153,68 @@ export default function CreatePostScreen() {
     const toggleFriend = (id: string) => {
         setFriends(prev => prev.map(f => f.id === id ? { ...f, selected: !f.selected } : f));
     };
+
     const handleRemoveMusic = () => {
         setSelectedMusic(null);
     };
-    const handlePost = () => {
-        const payload = {
-            text,
-            images: selectedImages,
-            video,
-            location: selectedLocation,
-            visibility,
-            taggedFriends: selectedFriends.map(f => f.id),
-            // ✅ Thêm font style và music vào payload
-            fontStyle: selectedFontStyle,
-            fontColor: selectedFontColor?.color,
-            music: selectedMusic,
-        };
-        console.log("POST DATA:", payload);
-        // TODO: dispatch createPost thunk
+
+    const handlePost = async () => {
+        try {
+            const formData = new FormData();
+
+            // TEXT
+            if (text.trim()) {
+                formData.append("text", text);
+            }
+
+            formData.append("visibility", visibility);
+
+            // LOCATION
+            if (selectedLocation) {
+                formData.append("location", JSON.stringify(selectedLocation));
+            }
+
+            // MUSIC
+            if (selectedMusic) {
+                formData.append("music", JSON.stringify(selectedMusic));
+            }
+
+            // FRIENDS
+            if (selectedFriends.length > 0) {
+                formData.append(
+                    "taggedFriends",
+                    JSON.stringify(selectedFriends.map(f => f.id))
+                );
+            }
+
+            // FONT
+            if (selectedFontStyle) {
+                formData.append("fontStyle", selectedFontStyle);
+            }
+
+            if (selectedFontColor?.color) {
+                formData.append("fontColor", selectedFontColor.color);
+            }
+
+            // FILES
+            selectedImages.forEach((uri, index) => {
+                const fileName = uri.split("/").pop() || `file-${index}.jpg`;
+
+                formData.append("files", {
+                    uri: Platform.OS === "android" ? uri : uri.replace("file://", ""),
+                    name: fileName,
+                    type: uri.endsWith(".mp4") ? "video/mp4" : "image/jpeg",
+                } as any);
+            });
+
+            await createPost(formData);
+
+            Alert.alert("✅ Thành công", "Đăng bài OK");
+            router.back();
+
+        } catch (err: any) {
+            console.log("❌ ERROR:", err?.response?.data);
+        }
     };
 
     return (
@@ -201,6 +229,7 @@ export default function CreatePostScreen() {
                     onBack={() => router.back()}
                     onPost={handlePost}
                     onFont={() => openSheet("font")}
+                    onChangeVisibility={() => setShowVisibilitySheet(true)}
                 />
 
                 <ScrollView
@@ -216,17 +245,16 @@ export default function CreatePostScreen() {
                         selectedFriends={selectedFriends}
                         selectedLocation={selectedLocation}
                         onRemoveLocation={() => setSelectedLocation(null)}
-                        // ✅ Truyền thêm props mới
                         fontStyle={selectedFontStyle}
                         fontColor={selectedFontColor?.color}
                         selectedMusic={selectedMusic}
                         onRemoveMusic={handleRemoveMusic}
                     />
                     <QuickActions
-                        onMusic={() => openSheet("music")} // ✅ Mở MusicSheet
+                        onMusic={() => openSheet("music")}
                         onAlbum={() => openSheet("album")}
                         onFriends={() => openSheet("friends", "people")}
-                        onFont={() => openSheet("font")} // ✅ Mở FontSheet
+                        onFont={() => openSheet("font")}
                     />
                 </ScrollView>
 
@@ -238,26 +266,21 @@ export default function CreatePostScreen() {
                     loadingLocation={loadingLocation}
                 />
 
-                {/* ✅ Thêm FontSheet */}
                 <FontSheet
                     visible={bottomSheet === "font"}
                     onClose={closeSheet}
                     onSelect={(style, color) => {
                         setSelectedFontStyle(style);
                         setSelectedFontColor(color);
-                        console.log("Font selected:", style.name, color.name);
                     }}
                 />
 
-                {/* ✅ Thêm MusicSheet */}
+                {/* MusicSheet gọi gọn gàng, nó sẽ tự lo việc fetch nhạc */}
                 <MusicSheet
                     visible={bottomSheet === "music"}
-                    musicList={musicList}
-                    loading={isLoadingMusic}
                     onClose={closeSheet}
                     onSelect={(music) => {
                         setSelectedMusic(music);
-                        console.log("Music selected:", music.title);
                     }}
                 />
 
@@ -286,6 +309,80 @@ export default function CreatePostScreen() {
                     onSelect={setSelectedLocation}
                     onClose={closeSheet}
                 />
+                <Modal visible={showVisibilitySheet} transparent animationType="slide">
+                    <View style={{ flex: 1, justifyContent: "flex-end" }}>
+                        {/* Overlay */}
+                        <Pressable
+                            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
+                            onPress={() => setShowVisibilitySheet(false)}
+                        />
+
+                        {/* Sheet */}
+                        <View style={{
+                            backgroundColor: "#fff",
+                            borderTopLeftRadius: 20,
+                            borderTopRightRadius: 20,
+                            padding: 16
+                        }}>
+                            <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 12 }}>
+                                Chọn đối tượng
+                            </Text>
+
+                            {[
+                                {
+                                    key: "PUBLIC",
+                                    label: "Công khai",
+                                    desc: "Ai cũng xem được",
+                                    icon: "earth"
+                                },
+                                {
+                                    key: "FRIENDS",
+                                    label: "Bạn bè",
+                                    desc: "Chỉ bạn bè xem",
+                                    icon: "people"
+                                },
+                                {
+                                    key: "PRIVATE",
+                                    label: "Chỉ mình tôi",
+                                    desc: "Chỉ bạn thấy",
+                                    icon: "lock-closed"
+                                },
+                            ].map(opt => {
+                                const isActive = visibility === opt.key;
+
+                                return (
+                                    <Pressable
+                                        key={opt.key}
+                                        onPress={() => {
+                                            setVisibility(opt.key as Visibility);
+                                            setShowVisibilitySheet(false);
+                                        }}
+                                        style={{
+                                            flexDirection: "row",
+                                            alignItems: "center",
+                                            justifyContent: "space-between",
+                                            paddingVertical: 12
+                                        }}
+                                    >
+                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                                            <Ionicons name={opt.icon as any} size={20} color="#333" />
+                                            <View>
+                                                <Text style={{ fontSize: 15 }}>{opt.label}</Text>
+                                                <Text style={{ fontSize: 12, color: "#999" }}>
+                                                    {opt.desc}
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        {isActive && (
+                                            <Ionicons name="checkmark" size={20} color="#0068FF" />
+                                        )}
+                                    </Pressable>
+                                );
+                            })}
+                        </View>
+                    </View>
+                </Modal>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );

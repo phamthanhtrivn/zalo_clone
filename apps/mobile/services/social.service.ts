@@ -1,6 +1,6 @@
 import { api } from "./api";
 import axios from "axios";
-
+import { config } from "@/constants/config";
 export const getFeed = async () => {
     const res = await api.get("/posts/feed");
     return res; // interceptor đã return data
@@ -16,28 +16,19 @@ export const commentPost = async (postId: string, content: string) => {
     return res;
 };
 export const musicService = {
-    searchMusic: async (keyword: string) => {
-        const res = await api.get("/posts/search", {
-            params: { q: keyword },
-        });
-        return res;
+    // social.service.ts
+    searchMusic: async (keyword: string = "") => {
+        const params = keyword.trim() ? { q: keyword.trim() } : {}; // không truyền q nếu rỗng
+        const res = await axios.get(`${config.apiUrl}/api/posts/search`, { params });
+        return res.data;
     },
 };
-export const getMusicList = async (searchTerm: string = "vietnam") => {
-    try {
-        // Gọi trực tiếp iTunes API bằng axios (không dùng instance 'api' của hệ thống)
-        const response = await axios.get(
-            `https://itunes.apple.com/search?term=${searchTerm}&limit=20&media=music`
-        );
-        return response.data.results.map((item: any) => ({
-            id: item.trackId.toString(),
-            title: item.trackName,
-            artist: item.artistName,
-            thumbnail: item.artworkUrl100,
-            previewUrl: item.previewUrl,
-        }));
-    } catch (error) {
-        console.error("Lỗi khi fetch nhạc từ iTunes:", error);
-        throw error;
-    }
+export const createPost = async (formData: FormData) => {
+    const res = await api.post("/posts", formData, {
+        headers: {
+            "Content-Type": "multipart/form-data",
+        },
+    });
+    return res;
 };
+

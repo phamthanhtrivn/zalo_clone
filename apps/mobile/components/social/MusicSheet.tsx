@@ -1,22 +1,18 @@
 import React, { useEffect, useState } from "react";
 import {
-    Modal,
-    View,
-    Text,
-    Pressable,
-    FlatList,
-    StyleSheet,
-    TextInput,
+    Modal, View, Text, Pressable, FlatList, StyleSheet, TextInput, ActivityIndicator
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { musicService } from "../../services/social.service";
 import { Audio } from "expo-av";
+import { Image } from "react-native";
 interface Music {
     id: string;
     title: string;
     artist: string;
     duration?: string;
     previewUrl?: string;
+    image?: string;
 }
 
 interface Props {
@@ -31,39 +27,81 @@ export default function MusicSheet({ visible, onClose, onSelect }: Props) {
     const [loading, setLoading] = useState(false);
     const [musicList, setMusicList] = useState<Music[]>([]);
     const [sound, setSound] = useState<Audio.Sound | null>(null);
-    // debounce search
-    useEffect(() => {
-        const timeout = setTimeout(() => {
-            if (query.trim()) {
-                fetchMusic();
-            }
-        }, 400);
 
-        return () => clearTimeout(timeout);
-    }, [query]);
+    // KHI MODAL MỞ LÊN HOẶC KHI TỪ KHÓA THAY ĐỔI -> GỌI API
+    useEffect(() => {
+        if (visible) {
+            const timeout = setTimeout(() => {
+                // Bỏ if (query.trim()) đi để query rỗng "" vẫn được gọi
+                fetchMusic();
+            }, 400); // 400ms debounce để người dùng gõ xong mới tìm
+            return () => clearTimeout(timeout);
+        } else {
+            // Khi đóng modal, dừng nhạc đang phát
+            if (sound) sound.unloadAsync();
+        }
+    }, [query, visible]); // Theo dõi cả query và visible
 
     const fetchMusic = async () => {
         try {
             setLoading(true);
             const res = await musicService.searchMusic(query);
-            setMusicList(res || []);
+
+            const data = res?.data || []; // ✅ đúng
+            setMusicList(Array.isArray(data) ? data : []);
+
         } catch (err) {
             console.error("Music search error:", err);
+            setMusicList([]);
         } finally {
             setLoading(false);
         }
     };
-    const playPreview = async (url?: string) => {
+
+    const playPreview = async (url?: string, id?: string) => {
         if (!url) return;
 
-        if (sound) {
-            await sound.unloadAsync();
-        }
+        try {
+            // 👉 Nếu bấm lại bài đang phát -> STOP
+            if (selectedId === id && sound) {
+                try {
+                    const status = await sound.getStatusAsync();
+                    if (status.isLoaded) {
+                        await sound.stopAsync();
+                        await sound.unloadAsync();
+                    }
+                } catch { }
 
-        const { sound: newSound } = await Audio.Sound.createAsync({ uri: url });
-        setSound(newSound);
-        await newSound.playAsync();
+                setSound(null);
+                setSelectedId(null);
+                return;
+            }
+
+            // 👉 Nếu đang có bài khác
+            if (sound) {
+                try {
+                    const status = await sound.getStatusAsync();
+                    if (status.isLoaded) {
+                        await sound.stopAsync();
+                        await sound.unloadAsync();
+                    }
+                } catch { }
+            }
+
+            // 👉 Tạo sound mới
+            const { sound: newSound } = await Audio.Sound.createAsync(
+                { uri: url },
+                { shouldPlay: true }
+            );
+
+            setSound(newSound);
+            setSelectedId(id || null);
+
+        } catch (err) {
+            console.log("❌ PLAY ERROR:", err);
+        }
     };
+
     return (
         <Modal visible={visible} animationType="slide" transparent>
             <View style={styles.container}>
@@ -83,6 +121,7 @@ export default function MusicSheet({ visible, onClose, onSelect }: Props) {
                                 const music = musicList.find(m => m.id === selectedId);
                                 if (music) {
                                     onSelect(music);
+                                    if (sound) sound.unloadAsync(); // Tắt nhạc khi chọn xong
                                     onClose();
                                 }
                             }}
@@ -100,37 +139,46 @@ export default function MusicSheet({ visible, onClose, onSelect }: Props) {
                             placeholder="Tìm kiếm bài hát..."
                             value={query}
                             onChangeText={setQuery}
-                            style={{ flex: 1 }}
+                            style={{ flex: 1, fontSize: 16, paddingVertical: 0 }}
                         />
+                        {query.length > 0 && (
+                            <Pressable onPress={() => setQuery("")}>
+                                <Ionicons name="close-circle" size={18} color="#999" />
+                            </Pressable>
+                        )}
                     </View>
+
+                    {/* Tiêu đề danh sách (Thay đổi theo trạng thái tìm kiếm) */}
+                    <Text style={{ paddingHorizontal: 16, marginBottom: 10, fontSize: 15, fontWeight: "600", color: "#333" }}>
+                        {query.trim() === "" ? "🔥 Đang thịnh hành" : "🔍 Kết quả tìm kiếm"}
+                    </Text>
 
                     {/* List */}
                     <FlatList
                         data={musicList}
                         keyExtractor={(item) => item.id}
                         ListEmptyComponent={
-                            <Text style={{ textAlign: "center", marginTop: 20, color: "#999" }}>
-                                {loading ? "Đang tải..." : "Không có bài hát"}
-                            </Text>
+                            <View style={{ alignItems: "center", marginTop: 40 }}>
+                                {loading ? (
+                                    <ActivityIndicator size="large" color="#0068FF" />
+                                ) : (
+                                    <Text style={{ color: "#999" }}>Không tìm thấy bài hát nào</Text>
+                                )}
+                            </View>
                         }
                         renderItem={({ item }) => {
                             const isSelected = selectedId === item.id;
-
                             return (
                                 <Pressable
                                     style={[styles.musicItem, isSelected && styles.selectedItem]}
                                     onPress={() => {
-                                        setSelectedId(item.id);
-                                        playPreview(item.previewUrl);
+                                        playPreview(item.previewUrl, item.id);
                                     }}
                                 >
-                                    <View style={[styles.musicIcon, isSelected && styles.selectedMusicIcon]}>
-                                        {isSelected ? (
-                                            <Ionicons name="checkmark" size={20} color="#fff" />
-                                        ) : (
-                                            <Ionicons name="musical-note" size={20} color="#666" />
-                                        )}
-                                    </View>
+                                    <Image
+                                        source={{ uri: item.image }}
+                                        style={styles.musicImage}
+                                    />
 
                                     <View style={styles.musicInfo}>
                                         <Text style={[styles.musicTitle, isSelected && styles.selectedText]}>
@@ -138,6 +186,10 @@ export default function MusicSheet({ visible, onClose, onSelect }: Props) {
                                         </Text>
                                         <Text style={styles.musicArtist}>{item.artist}</Text>
                                     </View>
+
+                                    {isSelected && (
+                                        <Ionicons name="volume-medium" size={20} color="#0068FF" />
+                                    )}
                                 </Pressable>
                             );
                         }}
@@ -150,102 +202,28 @@ export default function MusicSheet({ visible, onClose, onSelect }: Props) {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: "flex-end",
-    },
-    backdrop: {
-        flex: 1,
-        backgroundColor: "rgba(0,0,0,0.5)",
-    },
-    sheet: {
-        backgroundColor: "#fff",
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        maxHeight: "80%",
-        paddingBottom: 30,
-    },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: "#f0f0f0",
-    },
-    title: {
-        fontSize: 17,
-        fontWeight: "600",
-        color: "#333",
-    },
-    doneBtn: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#0068FF",
-    },
-    disabled: {
-        color: "#ccc",
-    },
-    searchContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        margin: 16,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        backgroundColor: "#f5f5f5",
+    container: { flex: 1, justifyContent: "flex-end" },
+    backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)" },
+    sheet: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, height: "85%", paddingBottom: 30 },
+    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f0f0f0" },
+    title: { fontSize: 17, fontWeight: "600", color: "#333" },
+    doneBtn: { fontSize: 16, fontWeight: "600", color: "#0068FF" },
+    disabled: { color: "#ccc" },
+    searchContainer: { flexDirection: "row", alignItems: "center", margin: 16, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: "#f5f5f5", borderRadius: 10, gap: 8 },
+    listContent: { paddingHorizontal: 16, paddingBottom: 20 },
+    musicItem: { flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, marginBottom: 6 },
+    selectedItem: { backgroundColor: "#e3f0ff" },
+    musicIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#f0f0f0", justifyContent: "center", alignItems: "center", marginRight: 12 },
+    selectedMusicIcon: { backgroundColor: "#0068FF" },
+    musicInfo: { flex: 1 },
+    musicTitle: { fontSize: 15, fontWeight: "500", color: "#333" },
+    selectedText: { color: "#0068FF", fontWeight: "600" },
+    musicArtist: { fontSize: 13, color: "#999", marginTop: 2 },
+    musicImage: {
+        width: 50,
+        height: 50,
         borderRadius: 10,
-        gap: 8,
-    },
-    searchPlaceholder: {
-        fontSize: 14,
-        color: "#999",
-    },
-    listContent: {
-        paddingHorizontal: 16,
-    },
-    musicItem: {
-        flexDirection: "row",
-        alignItems: "center",
-        paddingVertical: 12,
-        paddingHorizontal: 12,
-        borderRadius: 10,
-        marginBottom: 6,
-    },
-    selectedItem: {
-        backgroundColor: "#e3f0ff",
-    },
-    musicIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: "#f0f0f0",
-        justifyContent: "center",
-        alignItems: "center",
         marginRight: 12,
-    },
-    selectedMusicIcon: {
-        backgroundColor: "#0068FF",
-    },
-    musicInfo: {
-        flex: 1,
-    },
-    musicTitle: {
-        fontSize: 15,
-        fontWeight: "500",
-        color: "#333",
-    },
-    selectedText: {
-        color: "#0068FF",
-        fontWeight: "600",
-    },
-    musicArtist: {
-        fontSize: 13,
-        color: "#999",
-        marginTop: 2,
-    },
-    musicDuration: {
-        fontSize: 13,
-        color: "#999",
+        backgroundColor: "#eee"
     },
 });

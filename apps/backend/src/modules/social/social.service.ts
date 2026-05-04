@@ -21,6 +21,20 @@ export class SocialService {
 
     // ================= CREATE POST =================
     async createPost(userId: string, dto: CreatePostDto, files: Express.Multer.File[]) {
+
+        // 🔥 parse JSON từ multipart
+        if (dto.location) {
+            dto.location = JSON.parse(dto.location as any);
+        }
+
+        if (dto.music) {
+            dto.music = JSON.parse(dto.music as any);
+        }
+
+        if (dto.taggedFriends) {
+            dto.taggedFriends = JSON.parse(dto.taggedFriends as any);
+        }
+
         const media: { url: string; type: 'IMAGE' | 'VIDEO' }[] = [];
 
         if (files?.length) {
@@ -35,8 +49,20 @@ export class SocialService {
 
         return this.postModel.create({
             authorId: new Types.ObjectId(userId),
-            content: { text: dto.text, media },
+
+            content: {
+                text: dto.text,
+                media,
+            },
+
             visibility: dto.visibility || 'PUBLIC',
+
+            // 🔥 NEW FEATURES
+            location: dto.location,
+            music: dto.music,
+            taggedFriends: dto.taggedFriends?.map(id => new Types.ObjectId(id)) || [],
+            fontStyle: dto.fontStyle,
+            fontColor: dto.fontColor,
         });
     }
 
@@ -83,6 +109,7 @@ export class SocialService {
             {
                 $project: {
                     id: '$_id',
+                    authorId: '$authorId',
                     text: '$content.text',
                     media: '$content.media',
                     likes: { $size: { $ifNull: ['$reactions', []] } },
@@ -99,6 +126,7 @@ export class SocialService {
 
         return posts.map(post => ({
             id: post.id.toString(),
+            authorId: post.authorId?.toString(),
             name: post.name || 'User',
             avatar: post.avatar
                 ? this.storageService.signFileUrl(post.avatar)
@@ -110,6 +138,8 @@ export class SocialService {
             likes: post.likes || 0,
             comments: post.comments || 0,
             createdAt: post.createdAt,
+            music: post.music,
+            location: post.location,
         }));
     }
 
