@@ -7,6 +7,7 @@ import {
     Req,
     UploadedFiles,
     UseInterceptors,
+    Query,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { SocialService } from './social.service';
@@ -44,5 +45,9 @@ export class SocialController {
     @Get('/:id/comments')
     getComments(@Param('id') id: string) {
         return this.socialService.getComments(id);
+    }
+    @Get("search")
+    search(@Query("q") q: string) {
+        return this.socialService.searchTrack(q);
     }
 }

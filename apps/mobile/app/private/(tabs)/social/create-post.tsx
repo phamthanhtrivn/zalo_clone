@@ -37,6 +37,8 @@ export default function CreatePostScreen() {
     const [video, setVideo] = useState<string | null>(null);
     const [loadingLocation, setLoadingLocation] = useState(false);
     const [friends, setFriends] = useState<Friend[]>([]);
+    const [musicList, setMusicList] = useState<any[]>([]);
+    const [isLoadingMusic, setIsLoadingMusic] = useState(false);
     const [isLoadingFriends, setIsLoadingFriends] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
 
@@ -53,16 +55,21 @@ export default function CreatePostScreen() {
         const fetchFriendsList = async () => {
             setIsLoadingFriends(true);
             try {
-                const response = await userService.getFriends();
-                if (response.data?.success) {
-                    const mappedData = response.data.data.map((f: any) => ({
-                        id: f._id,
-                        name: f.profile?.name || f.name || "Người dùng",
-                        avatar: f.profile?.avatarUrl || f.avatar || "https://i.pravatar.cc/150",
+                // Sử dụng getListFriends hoặc kiểm tra lại tên hàm trong service
+                const response = await userService.getListFriends();
+
+                // Truy cập trực tiếp vào .users hoặc dự phòng qua .data.users
+                const users = response?.users ?? response?.data?.users ?? [];
+                const mappedData = users
+                    .flatMap((group: any) => group.friends)
+                    .map((f: any) => ({
+                        id: f.friendId,
+                        name: f.name || "Người dùng",
+                        avatar: f.avatarUrl || "https://i.pravatar.cc/150",
                         selected: false,
                     }));
-                    setFriends(mappedData);
-                }
+                console.log("Mapped friends data:", mappedData);
+                setFriends(mappedData);
             } catch (error) {
                 console.error("Lỗi khi lấy danh sách bạn bè:", error);
             } finally {
@@ -71,6 +78,21 @@ export default function CreatePostScreen() {
         };
         fetchFriendsList();
     }, []);
+
+    useEffect(() => {
+        const fetchMusic = async () => {
+            setIsLoadingMusic(true);
+            try {
+                const data = await userService.getMusicList();
+                setMusicList(Array.isArray(data) ? data : []);
+            } catch (error) {
+                console.error("Lỗi khi lấy danh sách nhạc:", error);
+            } finally {
+                setIsLoadingMusic(false);
+            }
+        };
+        fetchMusic();
+    }, []); // Chạy 1 lần khi mount
 
     const openSheet = (sheet: BottomSheet, icon?: string) => {
         setActiveIcon(icon ?? null);
@@ -230,6 +252,8 @@ export default function CreatePostScreen() {
                 {/* ✅ Thêm MusicSheet */}
                 <MusicSheet
                     visible={bottomSheet === "music"}
+                    musicList={musicList}
+                    loading={isLoadingMusic}
                     onClose={closeSheet}
                     onSelect={(music) => {
                         setSelectedMusic(music);

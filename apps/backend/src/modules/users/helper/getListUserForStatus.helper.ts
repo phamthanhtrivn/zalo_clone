@@ -36,8 +36,19 @@ export async function getListUserForStatus(
     {
       $lookup: {
         from: 'users',
-        localField: 'friends.friendId',
-        foreignField: '_id',
+        let: { friendId: '$friends.friendId' },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ['$_id', '$$friendId'] },
+            },
+          },
+          {
+            $match: {
+              isBot: { $ne: true },
+            },
+          },
+        ],
         as: 'friendInfo',
       },
     },

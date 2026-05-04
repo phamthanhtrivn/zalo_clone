@@ -39,6 +39,7 @@ import { SocialModule } from './modules/social/social.module';
     ChatModule,
     EventEmitterModule.forRoot(),
     SocialModule,
+
   ],
   providers: [
     {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
     Injectable,
     NotFoundException,
@@ -7,6 +8,7 @@ import { Model, Types } from 'mongoose';
 import { Post, Comment } from './schemas/post.schema';
 import { CreatePostDto } from './dto/create-post.dto';
 import { StorageService } from 'src/common/storage/storage.service';
+import { SpotifyService } from './spotify.service';
 
 @Injectable()
 export class SocialService {
@@ -14,6 +16,7 @@ export class SocialService {
         @InjectModel(Post.name) private postModel: Model<Post>,
         @InjectModel(Comment.name) private commentModel: Model<Comment>,
         private readonly storageService: StorageService,
+        private readonly spotifyService: SpotifyService,
     ) { }
 
     // ================= CREATE POST =================
@@ -194,4 +197,9 @@ export class SocialService {
             },
         }));
     }
+    searchTrack(query: string) {
+        return this.spotifyService.searchTrack(query);
+    }
+
+
 }

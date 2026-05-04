@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
     Modal,
     View,
@@ -6,15 +6,17 @@ import {
     Pressable,
     FlatList,
     StyleSheet,
+    TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-
+import { musicService } from "../../services/social.service";
+import { Audio } from "expo-av";
 interface Music {
     id: string;
     title: string;
     artist: string;
-    duration: string;
-    url?: string;
+    duration?: string;
+    previewUrl?: string;
 }
 
 interface Props {
@@ -23,36 +25,62 @@ interface Props {
     onSelect: (music: Music) => void;
 }
 
-const MOCK_MUSIC: Music[] = [
-    { id: "1", title: "Shape of You", artist: "Ed Sheeran", duration: "3:53" },
-    { id: "2", title: "Blinding Lights", artist: "The Weeknd", duration: "3:20" },
-    { id: "3", title: "Dance Monkey", artist: "Tones and I", duration: "3:29" },
-    { id: "4", title: "Someone Like You", artist: "Adele", duration: "4:45" },
-    { id: "5", title: "Bohemian Rhapsody", artist: "Queen", duration: "5:55" },
-    { id: "6", title: "Hotel California", artist: "Eagles", duration: "6:30" },
-    { id: "7", title: "Imagine", artist: "John Lennon", duration: "3:03" },
-    { id: "8", title: "Yesterday", artist: "The Beatles", duration: "2:05" },
-    { id: "9", title: "Rolling in the Deep", artist: "Adele", duration: "3:48" },
-    { id: "10", title: "Uptown Funk", artist: "Mark Ronson ft. Bruno Mars", duration: "4:30" },
-];
-
 export default function MusicSheet({ visible, onClose, onSelect }: Props) {
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [query, setQuery] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [musicList, setMusicList] = useState<Music[]>([]);
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
+    // debounce search
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            if (query.trim()) {
+                fetchMusic();
+            }
+        }, 400);
 
+        return () => clearTimeout(timeout);
+    }, [query]);
+
+    const fetchMusic = async () => {
+        try {
+            setLoading(true);
+            const res = await musicService.searchMusic(query);
+            setMusicList(res || []);
+        } catch (err) {
+            console.error("Music search error:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+    const playPreview = async (url?: string) => {
+        if (!url) return;
+
+        if (sound) {
+            await sound.unloadAsync();
+        }
+
+        const { sound: newSound } = await Audio.Sound.createAsync({ uri: url });
+        setSound(newSound);
+        await newSound.playAsync();
+    };
     return (
         <Modal visible={visible} animationType="slide" transparent>
             <View style={styles.container}>
                 <Pressable style={styles.backdrop} onPress={onClose} />
+
                 <View style={styles.sheet}>
                     {/* Header */}
                     <View style={styles.header}>
                         <Pressable onPress={onClose}>
                             <Ionicons name="close" size={24} color="#333" />
                         </Pressable>
+
                         <Text style={styles.title}>Chọn nhạc</Text>
+
                         <Pressable
                             onPress={() => {
-                                const music = MOCK_MUSIC.find(m => m.id === selectedId);
+                                const music = musicList.find(m => m.id === selectedId);
                                 if (music) {
                                     onSelect(music);
                                     onClose();
@@ -65,22 +93,36 @@ export default function MusicSheet({ visible, onClose, onSelect }: Props) {
                         </Pressable>
                     </View>
 
-                    {/* Search bar */}
+                    {/* Search input */}
                     <View style={styles.searchContainer}>
                         <Ionicons name="search-outline" size={20} color="#999" />
-                        <Text style={styles.searchPlaceholder}>Tìm kiếm bài hát...</Text>
+                        <TextInput
+                            placeholder="Tìm kiếm bài hát..."
+                            value={query}
+                            onChangeText={setQuery}
+                            style={{ flex: 1 }}
+                        />
                     </View>
 
-                    {/* Music list */}
+                    {/* List */}
                     <FlatList
-                        data={MOCK_MUSIC}
+                        data={musicList}
                         keyExtractor={(item) => item.id}
+                        ListEmptyComponent={
+                            <Text style={{ textAlign: "center", marginTop: 20, color: "#999" }}>
+                                {loading ? "Đang tải..." : "Không có bài hát"}
+                            </Text>
+                        }
                         renderItem={({ item }) => {
                             const isSelected = selectedId === item.id;
+
                             return (
                                 <Pressable
                                     style={[styles.musicItem, isSelected && styles.selectedItem]}
-                                    onPress={() => setSelectedId(item.id)}
+                                    onPress={() => {
+                                        setSelectedId(item.id);
+                                        playPreview(item.previewUrl);
+                                    }}
                                 >
                                     <View style={[styles.musicIcon, isSelected && styles.selectedMusicIcon]}>
                                         {isSelected ? (
@@ -89,13 +131,13 @@ export default function MusicSheet({ visible, onClose, onSelect }: Props) {
                                             <Ionicons name="musical-note" size={20} color="#666" />
                                         )}
                                     </View>
+
                                     <View style={styles.musicInfo}>
                                         <Text style={[styles.musicTitle, isSelected && styles.selectedText]}>
                                             {item.title}
                                         </Text>
                                         <Text style={styles.musicArtist}>{item.artist}</Text>
                                     </View>
-                                    <Text style={styles.musicDuration}>{item.duration}</Text>
                                 </Pressable>
                             );
                         }}

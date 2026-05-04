@@ -4,6 +4,7 @@ import { SocialService } from './social.service';
 import { SocialController } from './social.controller';
 import { Post, PostSchema, Comment, CommentSchema } from './schemas/post.schema';
 import { StorageModule } from 'src/common/storage/storage.module';
+import { SpotifyService } from './spotify.service';
 
 @Module({
     imports: [
@@ -14,7 +15,7 @@ import { StorageModule } from 'src/common/storage/storage.module';
         StorageModule,
     ],
     controllers: [SocialController],
-    providers: [SocialService],
+    providers: [SocialService, SpotifyService],
     exports: [SocialService],
 })
 export class SocialModule { }

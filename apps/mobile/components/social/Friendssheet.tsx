@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { Friend } from "../types";
+import { Friend } from "../../types/social.type";
 import { COLORS } from "@/constants/colors";
 
 interface Props {
