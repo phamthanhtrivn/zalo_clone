@@ -35,6 +35,7 @@ export interface MessagesType {
     text: string | null;
     icon: string | null;
     files: File[];
+    voiceDuration?: number | null;
   };
   pinned: boolean;
   recalled: boolean;

@@ -52,6 +52,9 @@ export class Conversation {
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }] })
   participants: Types.ObjectId[];
+
+  @Prop({ type: Types.ObjectId, ref: 'User', required: false })
+  targetUserId?: Types.ObjectId;
 }
 
 @Schema({ timestamps: true })

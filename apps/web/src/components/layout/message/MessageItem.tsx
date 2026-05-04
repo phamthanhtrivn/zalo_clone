@@ -13,7 +13,8 @@ import { RiUnpinLine } from "react-icons/ri";
 import { FaRegTrashAlt } from "react-icons/fa";
 import ViewDetailMessageModal from "./ViewDetailMessageModal";
 import { FaListCheck } from "react-icons/fa6";
-import { useAppSelector } from "@/store";
+import { useAppDispatch } from "@/store";
+import { setReplyingMessage } from "@/store/slices/conversationSlice";
 
 interface Props {
   message: MessagesType;
@@ -30,10 +31,7 @@ interface Props {
   setIsSelected: (isSelected: boolean) => void;
   selectedMessages: string[];
   toggleSelectMessage: (messageId: string) => void;
-  onForwardMessages: (
-    messageIds: string[],
-    targetConversationIds: string[],
-  ) => void;
+  onJumpToMessage?: (messageId: string) => void;
 
 }
 
@@ -52,11 +50,12 @@ export const MessageItem = ({
   setIsSelected,
   selectedMessages,
   toggleSelectMessage,
-  onForwardMessages,
+  onJumpToMessage,
 
 }: Props) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const dispatch = useAppDispatch();
 
 
   // const liveMessage = useAppSelector((state) =>
@@ -97,6 +96,7 @@ export const MessageItem = ({
             isSelected={isSelected}
             selectedMessages={selectedMessages}
             toggleSelectMessage={toggleSelectMessage}
+            onJumpToMessage={onJumpToMessage}
           />
 
           {!message.recalled && (
@@ -128,6 +128,10 @@ export const MessageItem = ({
           >
             <button
               title="Trả lời"
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatch(setReplyingMessage(message));
+              }}
               className="cursor-pointer w-7 h-7 flex items-center justify-center rounded-full bg-white shadow-sm border border-gray-100 text-gray-600 hover:bg-gray-50 hover:text-blue-500"
             >
               <Quote size={10} className="fill-current" />
@@ -245,3 +249,4 @@ export const MessageItem = ({
     </div>
   );
 };
+

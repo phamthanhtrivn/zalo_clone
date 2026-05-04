@@ -629,7 +629,7 @@ const ConversationInfoPanel = ({
   const handleTogglePolls = async () => {
     const willExpand = !expandedSections.polls;
     toggleSection("polls");
-    
+
     if (willExpand && conversation?.conversationId) {
       try {
         const res = await pollService.getPolls(conversation.conversationId);
@@ -714,13 +714,23 @@ const ConversationInfoPanel = ({
           <div className="relative group">
             <Avatar className="w-20 h-20 mb-3 border-2 border-white shadow-md">
               <AvatarImage src={currentConversation?.avatar} />
-              <AvatarFallback 
+              <AvatarFallback
                 className="text-2xl text-white font-bold"
-                style={{ backgroundColor: getColorByName(currentConversation?.name || "") }}
+                style={{
+                  backgroundColor: getColorByName(
+                    currentConversation?.name || "",
+                  ),
+                }}
               >
                 {(() => {
-                  const { initials, isGroupIcon } = getAvatarData(currentConversation?.name || "");
-                  return isGroupIcon ? <Users className="w-10 h-10" /> : initials;
+                  const { initials, isGroupIcon } = getAvatarData(
+                    currentConversation?.name || "",
+                  );
+                  return isGroupIcon ? (
+                    <Users className="w-10 h-10" />
+                  ) : (
+                    initials
+                  );
                 })()}
               </AvatarFallback>
             </Avatar>
@@ -870,7 +880,9 @@ const ConversationInfoPanel = ({
               <div className="w-10 h-10 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center group-hover:bg-gray-200 transition-colors">
                 <QrCode size={20} />
               </div>
-              <span className="text-[11px] font-medium text-gray-600">Mã QR</span>
+              <span className="text-[11px] font-medium text-gray-600">
+                Mã QR
+              </span>
             </button>
           )}
         </div>
@@ -1222,52 +1234,56 @@ const ConversationInfoPanel = ({
         </div>
 
         {/* POLL SECTION */}
-        <div className="bg-white border-t">
-          <button
-            onClick={handleTogglePolls}
-            className="h-12 w-full flex items-center justify-between px-4 hover:bg-gray-50 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <BarChart2 size={18} className="text-gray-600" />
-              <span className="text-[14px] font-medium text-gray-800">Bình chọn</span>
-            </div>
-            {expandedSections.polls ? (
-              <ChevronDown size={16} className="text-gray-500" />
-            ) : (
-              <ChevronRight size={16} className="text-gray-500" />
-            )}
-          </button>
-          
-          {expandedSections.polls && (
-            <div className="px-4 pb-4 space-y-2 animate-in fade-in duration-200">
-              {polls.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-2">
-                  Chưa có bình chọn nào
-                </p>
+        {isGroup && (
+          <div className="bg-white border-t">
+            <button
+              onClick={handleTogglePolls}
+              className="h-12 w-full flex items-center justify-between px-4 hover:bg-gray-50 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <BarChart2 size={18} className="text-gray-600" />
+                <span className="text-[14px] font-medium text-gray-800">
+                  Bình chọn
+                </span>
+              </div>
+              {expandedSections.polls ? (
+                <ChevronDown size={16} className="text-gray-500" />
               ) : (
-                polls.map((msg) => {
-                  const pollData = msg.poll;
-                  if (!pollData) return null;
-
-                  return (
-                    <div 
-                      key={msg._id} 
-                      onClick={() => setSelectedPollMsg(msg)}
-                      className="p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-all group/poll"
-                    >
-                      <p className="text-[13px] font-semibold text-gray-800 line-clamp-1 group-hover/poll:text-blue-700">
-                        {pollData.title || "Bình chọn không tiêu đề"}
-                      </p>
-                      <p className="text-[11px] text-gray-500 mt-1">
-                        {pollData.totalParticipants || 0} người đã bình chọn
-                      </p>
-                    </div>
-                  );
-                })
+                <ChevronRight size={16} className="text-gray-500" />
               )}
-            </div>
-          )}
-        </div>
+            </button>
+
+            {expandedSections.polls && (
+              <div className="px-4 pb-4 space-y-2 animate-in fade-in duration-200">
+                {polls.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-2">
+                    Chưa có bình chọn nào
+                  </p>
+                ) : (
+                  polls.map((msg) => {
+                    const pollData = msg.poll;
+                    if (!pollData) return null;
+
+                    return (
+                      <div
+                        key={msg._id}
+                        onClick={() => setSelectedPollMsg(msg)}
+                        className="p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-all group/poll"
+                      >
+                        <p className="text-[13px] font-semibold text-gray-800 line-clamp-1 group-hover/poll:text-blue-700">
+                          {pollData.title || "Bình chọn không tiêu đề"}
+                        </p>
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          {pollData.totalParticipants || 0} người đã bình chọn
+                        </p>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* MEMBERS SECTION */}
         {isGroup && (
@@ -1299,13 +1315,19 @@ const ConversationInfoPanel = ({
                   >
                     <Avatar className="w-10 h-10 border-0 shadow-sm">
                       <AvatarImage src={m.avatarUrl ?? ""} />
-                      <AvatarFallback 
+                      <AvatarFallback
                         className="text-white font-bold"
                         style={{ backgroundColor: getColorByName(m.name) }}
                       >
                         {(() => {
-                          const { initials, isGroupIcon } = getAvatarData(m.name);
-                          return isGroupIcon ? <Users className="w-5 h-5" /> : initials;
+                          const { initials, isGroupIcon } = getAvatarData(
+                            m.name,
+                          );
+                          return isGroupIcon ? (
+                            <Users className="w-5 h-5" />
+                          ) : (
+                            initials
+                          );
                         })()}
                       </AvatarFallback>
                     </Avatar>
@@ -1541,7 +1563,9 @@ const ConversationInfoPanel = ({
             <AlertDialogTitle>Giải tán nhóm?</AlertDialogTitle>
           </AlertDialogHeader>
           <AlertDialogDescription>
-            Hành động này không thể hoàn tác. Tất cả thành viên sẽ bị mời ra khỏi nhóm và tin nhắn sẽ bị xóa vĩnh viễn. Bạn chắc chắn muốn giải tán nhóm?
+            Hành động này không thể hoàn tác. Tất cả thành viên sẽ bị mời ra
+            khỏi nhóm và tin nhắn sẽ bị xóa vĩnh viễn. Bạn chắc chắn muốn giải
+            tán nhóm?
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel>Hủy</AlertDialogCancel>
@@ -1631,13 +1655,15 @@ const ConversationInfoPanel = ({
       </AlertDialog>
 
       {/* MODAL XEM CHI TIẾT POLL */}
-      {selectedPollMsg &&
+      {selectedPollMsg && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 animate-in fade-in backdrop-blur-sm px-4">
           <div className="bg-white rounded-2xl shadow-2xl relative max-w-[360px] w-full overflow-hidden transform animate-in zoom-in-95 duration-200">
             {/* Header Modal */}
             <div className="h-14 border-b flex items-center justify-between px-4 bg-gray-50/50">
-              <span className="text-[15px] font-bold text-gray-800">Chi tiết bình chọn</span>
-              <button 
+              <span className="text-[15px] font-bold text-gray-800">
+                Chi tiết bình chọn
+              </span>
+              <button
                 onClick={() => setSelectedPollMsg(null)}
                 className="p-1.5 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
               >
@@ -1646,15 +1672,19 @@ const ConversationInfoPanel = ({
             </div>
 
             <div className="p-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
-              <PollMessage 
-                pollId={selectedPollMsg.pollId._id || selectedPollMsg.pollId} 
-                conversationId={currentConversation?.conversationId || conversation?.conversationId || ""} 
+              <PollMessage
+                pollId={selectedPollMsg.pollId._id || selectedPollMsg.pollId}
+                conversationId={
+                  currentConversation?.conversationId ||
+                  conversation?.conversationId ||
+                  ""
+                }
                 initialPoll={selectedPollMsg.poll}
               />
             </div>
           </div>
         </div>
-      }
+      )}
     </div>
   );
 };

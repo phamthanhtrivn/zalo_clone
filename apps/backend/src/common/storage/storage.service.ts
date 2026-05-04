@@ -37,6 +37,8 @@ export class StorageService {
       return FileType.IMAGE;
     } else if (mimeType.startsWith('video/')) {
       return FileType.VIDEO;
+    } else if (mimeType.startsWith('audio/')) {
+      return FileType.VOICE;
     } else {
       return FileType.FILE;
     }

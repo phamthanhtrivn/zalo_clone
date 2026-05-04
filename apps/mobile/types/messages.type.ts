@@ -3,6 +3,7 @@ import type { File } from "./conversation-item.type";
 export interface MessagesType {
   _id: string;
   senderId: {
+    name: string;
     _id: string;
     profile: {
       name: string;
@@ -15,6 +16,7 @@ export interface MessagesType {
     text: string | null;
     icon: string | null;
     files: File[];
+    voiceDuration?: number | null;
   };
   pollId?: string;
   poll?: any;
@@ -29,6 +31,7 @@ export interface MessagesType {
     duration: number | null;
   } | null;
   expiresAt: string | null;
+  expired?: boolean;
   createdAt: string;
   updatedAt: string;
 }

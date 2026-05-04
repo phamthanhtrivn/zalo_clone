@@ -108,7 +108,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     dispatch(logout2());
     ToastAndroid.show(
       data.message ||
-        "Phiên đăng nhập đã hết hạn hoặc bạn bị đăng xuất từ nơi khác.",
+      "Phiên đăng nhập đã hết hạn hoặc bạn bị đăng xuất từ nơi khác.",
       ToastAndroid.LONG,
     );
 
@@ -118,7 +118,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   useEffect(() => {
-    if (!user?.userId || !apiUrl) return;
+    if (!user?.userId || !apiUrl) {
+      socketRef.current?.disconnect();
+      setSocket(null);
+      setIsConnected(false);
+      return;
+    }
 
     const initSocket = async () => {
       if (!socketRef.current) {
@@ -140,12 +145,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
       // --- CONNECTION ---
       const onConnect = () => {
-        console.log("Connected:", socketInstance.id);
         setIsConnected(true);
       };
 
       const onDisconnect = () => {
-        console.log("Disconnected");
         setIsConnected(false);
       };
 
@@ -170,7 +173,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         conversationId: string;
         unreadCount: number;
       }) => {
-        console.log("✅ mark_as_read:success", data);
         dispatch(
           setUnreadCount({
             conversationId: data.conversationId,
@@ -183,7 +185,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         conversationId: string;
         unreadCount: number;
       }) => {
-        console.log("✅ mark_as_unread:success", data);
         dispatch(
           setUnreadCount({
             conversationId: data.conversationId,
@@ -196,7 +197,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         conversationId: string;
         unreadCount: number;
       }) => {
-        console.log("📢 mark_as_read:broadcast", data);
         dispatch(
           setUnreadCount({
             conversationId: data.conversationId,
@@ -209,7 +209,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         conversationId: string;
         unreadCount: number;
       }) => {
-        console.log("📢 mark_as_unread:broadcast", data);
         dispatch(
           setUnreadCount({
             conversationId: data.conversationId,
@@ -222,7 +221,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         conversationId: string;
         unreadCount: number;
       }) => {
-        console.log("[SOCKET] conversation:update received:", data);
         if (data.unreadCount !== undefined) {
           dispatch(
             setUnreadCount({
@@ -234,7 +232,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       };
 
       const handleConversationUpdate = (data: any) => {
-        console.log("📢 conversation_setting:update received:", data);
         const patch: any = { conversationId: data.conversationId };
         if ("pinned" in data) patch.pinned = data.pinned;
         if ("hidden" in data) patch.hidden = data.hidden;
@@ -247,7 +244,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         if ("category" in data) patch.category = data.category;
         if ("expireDuration" in data) patch.expireDuration = data.expireDuration;
         if ("unreadCount" in data) {
-          console.log("📢 unreadCount from broadcast:", data.unreadCount);
           patch.unreadCount = data.unreadCount;
         }
         dispatch(updateConversationSetting(patch));
@@ -436,11 +432,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.on("update_profile", handleUpdateProfile);
 
       const handleUpdatePoll = (data: any) => {
-        console.log("🚀 [Mobile Socket] Nhận update_poll:", data);
         if (data.conversationId) {
           dispatch(updateConversation(data));
-        } else {
-          console.error("❌ [Mobile Socket] payload update_poll thiếu conversationId", data);
         }
       };
       socketInstance.on("update_poll", handleUpdatePoll);

@@ -2,6 +2,7 @@ import { Video, Search, Loader2 } from "lucide-react";
 import React, { useState } from "react";
 import { MdGroupAdd } from "react-icons/md";
 import { LuPanelRight, LuPanelRightClose } from "react-icons/lu";
+import { RiVerifiedBadgeFill } from "react-icons/ri";
 import type { ConversationItemType } from "@/types/conversation-item.type";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -42,9 +43,6 @@ const ChatHeader = ({
   const otherMemberId =
     conversation?.participants?.find((id: string) => id !== currentUserId) ||
     (conversation as any)?.otherMemberId;
-
-  console.log("CHECK: conversationId =", conversation.conversationId);
-  console.log("CHECK: otherMemberId =", otherMemberId);
 
   const handleVideoCall = async () => {
     if (
@@ -97,7 +95,7 @@ const ChatHeader = ({
         <div className="flex items-center gap-3">
           <Avatar className="w-10 h-10 border-0 shadow-sm">
             <AvatarImage src={conversation?.avatar} />
-            <AvatarFallback 
+            <AvatarFallback
               className="text-white font-bold"
               style={{ backgroundColor: getColorByName(conversation.name) }}
             >
@@ -109,8 +107,11 @@ const ChatHeader = ({
           </Avatar>
 
           <div className="min-w-0">
-            <h3 className="text-[16px] font-semibold text-gray-800 truncate">
+            <h3 className="text-[16px] font-semibold text-gray-800 truncate flex items-center gap-1">
               {conversation.name}
+              {conversation.type === "AI" && (
+                <RiVerifiedBadgeFill className="text-[#0091ff] shrink-0" size={16} />
+              )}
             </h3>
             <span className="text-[12px] text-gray-400"></span>
           </div>
@@ -134,9 +135,9 @@ const ChatHeader = ({
             )}
           </Button>
 
-          <Button 
-            variant={isSearchOpen ? "default" : "ghost"} 
-            size="icon" 
+          <Button
+            variant={isSearchOpen ? "default" : "ghost"}
+            size="icon"
             onClick={toggleSearch}
           >
             <Search color={isSearchOpen ? "white" : "currentColor"} />
