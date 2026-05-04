@@ -8,7 +8,7 @@ import { useEffect } from "react";
 import { restoreSession } from "@/store/auth/authThunk";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { SocketProvider } from "@/contexts/SocketContext";
-
+import Toast from "react-native-toast-message";
 export default function RootLayout() {
   return (
     <Provider store={store}>
@@ -17,6 +17,7 @@ export default function RootLayout() {
           <BottomSheetModalProvider>
             <SocketProvider>
               <AppNavigation />
+              <Toast />
             </SocketProvider>
           </BottomSheetModalProvider>
         </GestureHandlerRootView>

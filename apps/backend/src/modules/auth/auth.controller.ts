@@ -33,7 +33,7 @@ export class AuthController {
     private readonly authService: AuthService,
     private redisService: RedisService,
     private sessionService: SessionService,
-  ) {}
+  ) { }
 
   @Post('sign-up')
   @Public()
