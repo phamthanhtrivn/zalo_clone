@@ -24,7 +24,6 @@ import {
 } from "@/store/slices/conversationSlice";
 import { logout2 } from "@/store/auth/authThunk";
 import { getDeviceId } from "@/utils/device.util";
-import * as SecureStore from "expo-secure-store";
 
 interface SocketContextType {
   socket: Socket | null;
@@ -119,38 +118,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   useEffect(() => {
-    let isMounted = true;
-
     if (!user?.userId || !apiUrl) {
-      setSocketAuth(null);
-      return () => {
-        isMounted = false;
-      };
-    }
-
-    const loadSocketAuth = async () => {
-      const token = await SecureStore.getItemAsync("access_token");
-      const deviceId = await getDeviceId();
-
-      if (!isMounted) return;
-
-      if (!token || !deviceId) {
-        setSocketAuth(null);
-        return;
-      }
-
-      setSocketAuth({ token, deviceId });
-    };
-
-    void loadSocketAuth();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [apiUrl, user?.userId]);
-
-  useEffect(() => {
-    if (!user?.userId || !apiUrl || !socketAuth) {
       socketRef.current?.disconnect();
       setSocket(null);
       setIsConnected(false);

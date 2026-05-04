@@ -7,7 +7,7 @@ console.log(config.apiUrl);
 
 export const api = axios.create({
   baseURL: `${config.apiUrl}/api`,
-  timeout: 10000,
+  timeout: 20000,
 });
 
 // dùng instance riêng để refresh (tránh loop)
