@@ -1,4 +1,4 @@
-import { scale } from "@/utils/responsive";
+import { moderateScale, scale } from "@/utils/responsive";
 import { Ionicons } from "@expo/vector-icons";
 import { TouchableOpacity } from "react-native";
 
@@ -25,8 +25,8 @@ export default function OptionItem({
     >
       {children}
       {icon && (
-        <TouchableOpacity className="absolute right-0">
-          <Ionicons name={icon} size={scale(18)} color="gray" />
+        <TouchableOpacity className="absolute right-5">
+          <Ionicons name={icon} size={moderateScale(20)} color="gray" />
         </TouchableOpacity>
       )}
     </TouchableOpacity>

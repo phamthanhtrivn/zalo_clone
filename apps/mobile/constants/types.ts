@@ -1,4 +1,5 @@
-import { Gender } from "./../../../packages/shared-types/src/enums/gender";
+import { Gender } from "@/utils/types/enums/gender";
+
 export interface UserLogin {
   phone: string;
   password: string;
@@ -38,4 +39,14 @@ export interface ChangePassword {
   oldPassword: string;
   newPassword: string;
   confirmPassword: string;
+}
+
+export interface Session {
+  userId: string;
+  deviceId: string;
+  deviceName: string;
+  ip: string;
+  deviceType: string;
+  location: string;
+  createdAt: Date;
 }

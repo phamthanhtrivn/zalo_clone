@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import type { MessagesType } from '@/types/messages.type';
-import { formatTime } from '@/utils/format-message-time..util';
+import { formatTime } from '@/utils/format-message-time.util';
 
 interface Props {
   message: MessagesType;
@@ -43,4 +43,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default SystemMessage;
+export default React.memo(SystemMessage);

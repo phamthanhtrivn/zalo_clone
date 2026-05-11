@@ -29,7 +29,7 @@ export class AuthService {
     private chatGateway: ChatGateway,
     private authGateway: AuthGateway,
     private readonly storageService: StorageService,
-  ) {}
+  ) { }
 
   //tạo key để lưu otp trong redis
   private otpKey(phone: string) {
