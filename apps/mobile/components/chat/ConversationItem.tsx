@@ -318,12 +318,6 @@ const ConversationItem: React.FC<Props> = React.memo(({
     closeSheet(() => onSelectToggle?.(conversation.conversationId));
   };
 
-  // ConversationItem.tsx - Phần handleMarkUnread đã đúng
-  // ConversationItem.tsx - Handler đã đúng
-  // ConversationItem.tsx
-
-  // Sửa handleMarkUnread
-  // ConversationItem.tsx
   const handleMarkUnread = async () => {
     if (!user?.userId) return;
 
@@ -840,5 +834,4 @@ const Divider = () => (
   />
 );
 
-// export default React.memo(ConversationItem);
 export default ConversationItem;  

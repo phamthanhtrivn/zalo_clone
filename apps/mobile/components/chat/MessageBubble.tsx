@@ -512,7 +512,7 @@ const MessageBubble = React.memo(
             <View style={{ marginRight: 6 }}>
               <GroupAvatar
                 uri={message.senderId?.profile?.avatarUrl}
-                name={message.senderId?.name || "User"}
+                name={message.senderId?.profile.name}
                 size={32}
               />
             </View>

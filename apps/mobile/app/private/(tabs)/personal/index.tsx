@@ -2,6 +2,7 @@ import Container from "@/components/common/Container";
 import Header from "@/components/common/Header";
 import SearchIcon from "@/components/common/SearchIcon";
 import SearchLabel from "@/components/common/SearchLabel";
+import GroupAvatar from "@/components/ui/GroupAvatar";
 import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useAppDispatch, useAppSelector } from "@/store/store";
@@ -70,13 +71,10 @@ export default function Personal() {
             onPress={handleOnPressProfile}
             className="mt-2 mb-4 flex-row items-center p-4 border border-gray-100 rounded-md bg-white shadow-sm"
           >
-            <Image
-              source={{
-                uri: userInfo?.profile?.avatarUrl
-                  ? userInfo.profile.avatarUrl
-                  : "https://wp-cms-media.s3.ap-east-1.amazonaws.com/lay_anh_dai_dien_facebook_dep_4_aefd38b259.jpg",
-              }}
-              className="w-16 h-16 rounded-full"
+            <GroupAvatar
+              uri={userInfo?.profile?.avatarUrl}
+              name={userInfo?.profile?.name || "User"}
+              size={scale(72)}
             />
             <View className="flex-1 ml-4">
               <Text className="text-gray-500 text-[13px] mb-1">

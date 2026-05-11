@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons, MaterialIcons, AntDesign } from "@expo/vector-icons";
-import { Image } from "expo-image";
+import GroupAvatar from "../ui/GroupAvatar";
 import Header from "../common/Header";
 import { moderateScale } from "@/utils/responsive";
 
@@ -22,13 +22,11 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       back
       gradient
       leftChild={
-        <View className="w-[38px] h-[38px] rounded-full overflow-hidden bg-white/30">
-          <Image
-            source={{ uri: conversation?.avatar }}
-            style={{ width: "100%", height: "100%" }}
-            contentFit="cover"
-          />
-        </View>
+        <GroupAvatar
+          uri={conversation?.avatar}
+          name={conversation?.name || ""}
+          size={38}
+        />
       }
       centerChild={
         <View>
