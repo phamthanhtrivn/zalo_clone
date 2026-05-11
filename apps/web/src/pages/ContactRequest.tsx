@@ -1,4 +1,5 @@
 import { UserPlus } from "lucide-react";
+import Mailbox from "@/assets/Mailbox.svg";
 import { useEffect, useState } from "react";
 import { userService } from "@/services/user.service";
 import UserRequestCart from "@/components/layout/UserRequestCard";
@@ -7,91 +8,95 @@ import UserSuggestCart from "@/components/layout/UserSuggestCart";
 import { useSelector } from "react-redux";
 import { useSocket } from "@/contexts/SocketContext";
 import { toast } from "react-toastify";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const ContactRequest = () => {
-  const [receivedUsers, setReceivedUsers] = useState<any>([]);
-  const [sendUsers, setSendUsers] = useState<any>([]);
-  const [suggestUsers, setSuggestUsers] = useState<any>([]);
   const userId = useSelector((item: any) => item.auth.user.userId);
-
   const { socket } = useSocket();
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const getUsers = async () => {
-      try {
-        let data = await userService.receivedFriendRequests();
-        if (data?.data?.users) {
-          setReceivedUsers(data.data.users);
-        }
-        data = await userService.sentFriendRequests();
-        if (data?.data?.users) {
-          setSendUsers(data.data.users);
-        }
-        data = await userService.suggestFriend();
-        if (data?.data) {
-          setSuggestUsers(data.data);
-        }
-      } catch (err) {
-        console.log(err);
-      }
-    };
-    getUsers();
-  }, []);
+  // 1. Fetch Lời mời đã nhận
+  const { data: receivedUsers = [] } = useQuery({
+    queryKey: ["friendRequests", "received", userId],
+    queryFn: async () => {
+      const res = await userService.receivedFriendRequests();
+      return res?.data?.users || [];
+    },
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // 2. Fetch Lời mời đã gửi
+  const { data: sendUsers = [] } = useQuery({
+    queryKey: ["friendRequests", "sent", userId],
+    queryFn: async () => {
+      const res = await userService.sentFriendRequests();
+      return res?.data?.users || [];
+    },
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // 3. Fetch Gợi ý bạn bè
+  const { data: suggestUsers = [] } = useQuery({
+    queryKey: ["friendSuggestions", userId],
+    queryFn: async () => {
+      const res = await userService.suggestFriend();
+      return res?.data || [];
+    },
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5,
+  });
 
   useEffect(() => {
     if (!socket) return;
 
-    // 1. Xử lý khi có người khác gửi lời mời cho mình
     function handleReceiveRequest(data: any) {
-      setReceivedUsers((prev: any) => [data, ...prev]);
+      queryClient.setQueryData(["friendRequests", "received", userId], (old: any) => {
+        return [data, ...(old || [])];
+      });
       toast.info(`Bạn có lời mời kết bạn mới từ ${data.name}!`);
     }
 
-    // 2. Xử lý khi lời mời mình gửi đi được đối phương chấp nhận
     const handleFriendAccepted = (data: any) => {
-      setSendUsers((prev: any) =>
-        prev.filter((user: any) => user.friendId !== data.friendId),
-      );
+      queryClient.setQueryData(["friendRequests", "sent", userId], (old: any) => {
+        return (old || []).filter((user: any) => user.friendId !== data.friendId);
+      });
+      queryClient.invalidateQueries({ queryKey: ["friends"] }); // Cập nhật danh sách bạn bè chính
       toast.success(`${data.name} đã chấp nhận lời mời kết bạn!`);
     };
 
-    // 3. Xử lý khi lời mời mình gửi đi bị hủy
     const handleCancelFriendRequest = (friendId: string) => {
-      console.log("Cancel friend request:", friendId);
-      setReceivedUsers((prev: any) =>
-        prev.filter((user: any) => user.friendId !== friendId),
-      );
+      queryClient.setQueryData(["friendRequests", "received", userId], (old: any) => {
+        return (old || []).filter((user: any) => user.friendId !== friendId);
+      });
       toast.info("Lời mời kết bạn đã bị hủy!");
     };
 
-    // Đăng ký các sự kiện
     socket.on("receive_friend_request", handleReceiveRequest);
     socket.on("friend_accepted", handleFriendAccepted);
     socket.on("cancel_friend_request", handleCancelFriendRequest);
 
-    // Hàm cleanup
     return () => {
       socket.off("receive_friend_request", handleReceiveRequest);
       socket.off("friend_accepted", handleFriendAccepted);
       socket.off("cancel_friend_request", handleCancelFriendRequest);
     };
-  }, [socket]);
+  }, [socket, queryClient, userId]);
 
   const handelAccept = (id: string) => {
     const acceptFriend = async () => {
       try {
         const data = await userService.acceptFriend(id, userId);
         if (data.data) {
-          setReceivedUsers((prev: any) =>
-            prev.filter((item: any) => item.friendId != id),
-          );
+          queryClient.invalidateQueries({ queryKey: ["friendRequests", "received", userId] });
+          queryClient.invalidateQueries({ queryKey: ["friends"] });
           toast.success("Kết bạn thành công");
         }
       } catch (err) {
         console.log(err);
       }
     };
-
     acceptFriend();
   };
 
@@ -100,10 +105,8 @@ const ContactRequest = () => {
       try {
         const data = await userService.rejectFriend(id, userId);
         if (data.data) {
-          setReceivedUsers((prev: any) =>
-            prev.filter((item: any) => item.friendId != id),
-          );
-          toast.success("Từ chối thành công");
+          queryClient.invalidateQueries({ queryKey: ["friendRequests", "received", userId] });
+          toast.success("Đã từ chối lời mời");
         }
       } catch (err) {
         console.log(err);
@@ -111,15 +114,12 @@ const ContactRequest = () => {
     };
     rejectFriend();
   };
-
   const handelRecall = (id: string) => {
     const recallFriend = async () => {
       try {
         const data = await userService.cancelFriend(id, userId);
         if (data.data) {
-          setSendUsers((prev: any) =>
-            prev.filter((item: any) => item.friendId != id),
-          );
+          queryClient.invalidateQueries({ queryKey: ["friendRequests", "sent", userId] });
           toast.success("Thu hồi thành công");
         }
       } catch (err) {
@@ -134,11 +134,8 @@ const ContactRequest = () => {
       try {
         const data = await userService.addFriend(id, userId);
         if (data.data) {
-          const item = suggestUsers.find((user: any) => user.friendId == id);
-          setSuggestUsers((prev: any) =>
-            prev.filter((item: any) => item.friendId != id),
-          );
-          setSendUsers([...sendUsers, item]);
+          queryClient.invalidateQueries({ queryKey: ["friendRequests", "sent", userId] });
+          queryClient.invalidateQueries({ queryKey: ["friendSuggestions", userId] });
           toast.success("Thêm bạn thành công");
         }
       } catch (err) {
@@ -149,10 +146,10 @@ const ContactRequest = () => {
   };
 
   const handelSkip = (id: string) => {
+    queryClient.setQueryData(["friendSuggestions", userId], (old: any) => {
+      return (old || []).filter((item: any) => item.friendId !== id);
+    });
     toast.success("Bỏ qua thành công");
-    setSuggestUsers((prev: any) =>
-      prev.filter((item: any) => item.friendId != id),
-    );
   };
 
   return (
@@ -186,9 +183,9 @@ const ContactRequest = () => {
                 ))}
               </div>
             ) : (
-              <div className="flex-1 flex-column justify-content-center align-items-center text-center">
-                <UserPlus className="w-16 h-16 mx-auto opacity-20 mb-4" />
-                <p className="text-sm">Chưa có lời mời kết bạn nào</p>
+              <div className="flex-1 flex flex-col items-center justify-center text-center py-10">
+                <img src={Mailbox} alt="Empty mailbox" className="w-28 h-28 mx-auto mb-4 opacity-50" />
+                <p className="text-gray-400 text-sm">Chưa có lời mời kết bạn nào</p>
               </div>
             )}
           </div>
@@ -212,7 +209,10 @@ const ContactRequest = () => {
                 ))}
               </div>
             ) : (
-              <div className="flex-1 flex-column justify-content-center align-items-center text-center"></div>
+              <div className="flex-1 flex flex-col items-center justify-center text-center py-10">
+                <img src={Mailbox} alt="Empty mailbox" className="w-28 h-28 mx-auto mb-3 opacity-50" />
+                <p className="text-gray-400 text-sm">Chưa có lời mời kết bạn nào đã gửi</p>
+              </div>
             )}
           </div>
         </div>

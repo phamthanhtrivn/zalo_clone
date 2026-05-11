@@ -1,7 +1,7 @@
-import { Link, useLocation } from "react-router-dom";
-import { MessageSquare, Contact } from "lucide-react";
-import { cn } from "../../lib/utils";
-import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
+import { useLocation, useNavigate } from "react-router-dom";
+import { MessageCircleMore, Contact } from "lucide-react";
+import AppAvatar from "../common/AppAvatar";
+import SideBarItem from "../common/sidebar/SideBarItem";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useEffect, useState } from "react";
 import { userService } from "../../services/user.service";
@@ -17,12 +17,13 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { icon: MessageSquare, label: "Tin nhắn", path: "/" },
+  { icon: MessageCircleMore, label: "Tin nhắn", path: "/" },
   { icon: Contact, label: "Danh bạ", path: "/contacts" },
 ];
 
 export const SidebarPrimary = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [user, setUser] = useState<any>();
   const [open, setOpen] = useState<boolean>(false);
   const userId = useSelector((item: any) => item.auth.user.userId);
@@ -72,13 +73,12 @@ export const SidebarPrimary = () => {
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="relative cursor-pointer">
-              <Avatar
+              <AppAvatar
                 onClick={() => setOpen(true)}
+                src={user?.profile?.avatarUrl}
+                name={user?.profile?.name || "User"}
                 className="w-12 h-12 border border-white/10 hover:opacity-90 transition-opacity"
-              >
-                <AvatarImage src={user?.profile?.avatarUrl} alt="User" />
-                <AvatarFallback>FT</AvatarFallback>
-              </Avatar>
+              />
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#005AE0] rounded-full"></div>
             </div>
           </TooltipTrigger>
@@ -95,45 +95,29 @@ export const SidebarPrimary = () => {
         onClose={() => setOpen(false)}
       />
 
-      {/* Navigation Items */}
       <nav className="flex-1 w-full flex flex-col items-center space-y-1">
         {navItems.map((item) => {
           const isActive =
             item.path === "/"
               ? location.pathname === "/" ||
-                location.pathname.startsWith("/chat") ||
-                location.pathname.startsWith("/conversation")
+              location.pathname.startsWith("/chat") ||
+              location.pathname.startsWith("/conversation")
               : location.pathname.startsWith(item.path);
 
           return (
-            <Tooltip key={item.label}>
-              <TooltipTrigger asChild>
-                <Link
-                  to={item.path}
-                  className={cn(
-                    "w-full aspect-square flex items-center justify-center transition-colors relative group",
-                    isActive
-                      ? "bg-white/20 text-white"
-                      : "text-white/70 hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  <item.icon className="w-7.5 h-7.5 stroke-[1.5]" />
-                  <span className="sr-only">{item.label}</span>
-                  {isActive && (
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-white" />
-                  )}
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>{item.label}</p>
-              </TooltipContent>
-            </Tooltip>
+            <SideBarItem
+              key={item.label}
+              icon={item.icon}
+              label={item.label}
+              isActive={isActive}
+              onClick={() => navigate(item.path)}
+            />
           );
         })}
       </nav>
 
       <div className="mt-auto flex flex-col items-center">
-        <SettingDropdownSidebar />
+        <SettingDropdownSidebar onOpenProfile={() => setOpen(true)} />
       </div>
     </aside>
   );

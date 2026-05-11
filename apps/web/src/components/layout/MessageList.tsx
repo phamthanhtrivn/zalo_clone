@@ -5,7 +5,7 @@ import {
   getDateLabel,
   isSameHourAndMinute,
 } from "@/utils/format-message-time..util";
-import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
+import AppAvatar from "../common/AppAvatar";
 import type { MessagesType } from "@/types/messages.type";
 import type { RefObject } from "react";
 import { useSocket } from "@/contexts/SocketContext";
@@ -261,12 +261,11 @@ const MessageList = ({
               >
                 {!isMe &&
                   (showAvatar ? (
-                    <Avatar className="w-8 h-8">
-                      <AvatarImage src={message.senderId?.profile?.avatarUrl} />
-                      <AvatarFallback>
-                        {message.senderId?.profile?.name?.charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
+                    <AppAvatar
+                      src={message.senderId?.profile?.avatarUrl}
+                      name={message.senderId?.profile?.name || "User"}
+                      className="w-8 h-8 text-[10px]"
+                    />
                   ) : (
                     <div className="w-8" />
                   ))}
@@ -317,12 +316,12 @@ const MessageList = ({
                         if (readerId === currentUserId) return null;
 
                         return (
-                          <Avatar key={readerId} className="w-3.5 h-3.5 border border-white">
-                            <AvatarImage src={reader?.profile?.avatarUrl} />
-                            <AvatarFallback className="text-[6px]">
-                              {reader?.profile?.name?.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
+                          <AppAvatar
+                            key={readerId}
+                            src={reader?.profile?.avatarUrl}
+                            name={reader?.profile?.name || "User"}
+                            className="w-3.5 h-3.5 border border-white text-[5px]"
+                          />
                         );
                       })}
                     </div>

@@ -1,4 +1,5 @@
 import { MoreHorizontal } from "lucide-react";
+import AppAvatar from "../common/AppAvatar";
 import { useState } from "react";
 import { userService } from "@/services/user.service";
 import { useSelector } from "react-redux";
@@ -88,15 +89,11 @@ export const FriendItem = ({ item, setFriends }: any) => {
           className="flex items-center justify-between px-2 py-3 hover:bg-gray-50 rounded-lg mb-2"
         >
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full overflow-hidden">
-              <img
-                src={
-                  f?.avatarUrl ||
-                  "https://chiemtaimobile.vn/images/companies/1/%E1%BA%A2nh%20Blog/avatar-facebook-dep/Anh-avatar-hoat-hinh-de-thuong-doi-lot-soi.jpg"
-                }
-                className="w-full h-full object-fit-contain"
-              />
-            </div>
+            <AppAvatar
+              src={f?.avatarUrl}
+              name={f?.name || "User"}
+              className="w-12 h-12"
+            />
             <p className="font-medium">{f?.name}</p>
           </div>
 
