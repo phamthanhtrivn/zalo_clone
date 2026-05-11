@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import AppAvatar from "../common/AppAvatar";
 import { X, Camera, PenLine } from "lucide-react";
 import UpdateProfileModal from "./UpdateProfileModal";
 import { userService } from "../../services/user.service";
@@ -77,10 +78,10 @@ const ModelProfile = ({ user, open, onClose, setUser }: ModelProfileProps) => {
             <div className="flex items-end -mt-12">
               {/* Avatar */}
               <div className="relative z-10">
-                <img
+                <AppAvatar
                   src={user?.profile?.avatarUrl}
-                  alt="Avatar"
-                  className="w-24 h-24 rounded-full border-4 border-white object-cover bg-zinc-800"
+                  name={user?.profile?.name || "User"}
+                  className="w-24 h-24 border-4 border-white shadow-sm"
                 />
                 {/* Nút đổi avatar */}
                 <button

@@ -446,12 +446,12 @@ export class MessagesService {
     // 1. Lưu tin nhắn gửi của User (Thầm lặng hoặc Công khai)
     const userMessage = isPrivate
       ? await this.sendPrivateAiSummary(
-          conversationId,
-          senderId,
-          userText,
-          MessageType.PRIVATE,
-          senderId,
-        )
+        conversationId,
+        senderId,
+        userText,
+        MessageType.PRIVATE,
+        senderId,
+      )
       : await this.actionService.sendMessage(dto, files);
 
     // CHẠY NGẦM: Không dùng await cho phần xử lý AI phía dưới để tránh timeout cho Mobile
@@ -526,6 +526,13 @@ export class MessagesService {
             .populate('senderId', 'profile.name profile.avatarUrl')
             .lean();
 
+          if (populatedBotMsg?.senderId?.['profile']?.avatarUrl) {
+            const avatarUrl = populatedBotMsg.senderId['profile'].avatarUrl;
+            if (avatarUrl && !avatarUrl.startsWith('http')) {
+              populatedBotMsg.senderId['profile'].avatarUrl = this.storageService.signFileUrl(avatarUrl);
+            }
+          }
+
           await this.chatGateway.emitNewMessage(
             conversationId,
             populatedBotMsg,
@@ -560,6 +567,14 @@ export class MessagesService {
       .findById(message._id)
       .populate('senderId', 'profile.name profile.avatarUrl')
       .lean();
+
+    if (populatedMessage?.senderId?.['profile']?.avatarUrl) {
+      const avatarUrl = populatedMessage.senderId['profile'].avatarUrl;
+      if (avatarUrl && !avatarUrl.startsWith('http')) {
+        populatedMessage.senderId['profile'].avatarUrl =
+          this.storageService.signFileUrl(avatarUrl);
+      }
+    }
 
     await this.chatGateway.emitNewMessage(targetUserId, populatedMessage);
     return populatedMessage;

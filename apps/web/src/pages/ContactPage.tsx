@@ -1,52 +1,74 @@
 import { Users, Search, ArrowUpDown } from "lucide-react";
 import { userService } from "../services/user.service.ts";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FriendItem } from "../components/layout/FriendItem.tsx";
 import { useSelector } from "react-redux";
 import { useSocket } from "@/contexts/SocketContext.tsx";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const ContactPage = () => {
-  const [friends, setFriends] = useState<any>([]);
   const [keyword, setKeyword] = useState<string>("");
+  const [debouncedKeyword, setDebouncedKeyword] = useState<string>("");
   const userId = useSelector((item: any) => item.auth.user.userId);
   const { socket } = useSocket();
+  const queryClient = useQueryClient();
+  const [sortOrder, setSortOrder] = useState<string>("a-z");
 
+  // Debounce keyword
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      try {
-        const data = await userService.searchFriend(keyword, userId);
-        if (data?.data?.users) {
-          setFriends(data.data.users);
-        }
-      } catch (err) {
-        console.log(err);
-      }
+    const timer = setTimeout(() => {
+      setDebouncedKeyword(keyword);
     }, 500);
     return () => clearTimeout(timer);
-  }, [keyword, userId]);
+  }, [keyword]);
+
+  // Fetch friends with React Query
+  const { data: friendsData, isLoading } = useQuery({
+    queryKey: ["friends", debouncedKeyword, userId],
+    queryFn: async () => {
+      const res = await userService.searchFriend(debouncedKeyword, userId);
+      return res?.data?.users || [];
+    },
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5, // Cache trong 5 phút
+  });
+
+  const setFriends = (updater: any) => {
+    queryClient.setQueryData(["friends", debouncedKeyword, userId], (old: any) => {
+      if (typeof updater === "function") {
+        return updater(old);
+      }
+      return updater;
+    });
+  };
+
+  const friends = useMemo(() => {
+    let data = [...(friendsData || [])];
+    if (sortOrder) {
+      data = data.map((group) => ({
+        ...group,
+        friends: [...group.friends].sort((a, b) =>
+          sortOrder === "a-z"
+            ? a.name.localeCompare(b.name)
+            : b.name.localeCompare(a.name),
+        ),
+      }));
+
+      data.sort((a, b) =>
+        sortOrder === "a-z" ? a.key.localeCompare(b.key) : b.key.localeCompare(a.key),
+      );
+    }
+    return data;
+  }, [friendsData, sortOrder]);
 
   const countFriends = () => {
-    const count = friends?.reduce((sum: number, item: any) => {
+    return friendsData?.reduce((sum: number, item: any) => {
       return sum + (item.friends?.length || 0);
     }, 0);
-    return count;
   };
 
   const handelSort = (value: string) => {
-    const sorted = [...friends].map((group) => ({
-      ...group,
-      friends: [...group.friends].sort((a, b) =>
-        value === "a-z"
-          ? a.name.localeCompare(b.name)
-          : b.name.localeCompare(a.name),
-      ),
-    }));
-
-    sorted.sort((a, b) =>
-      value === "a-z" ? a.key.localeCompare(b.key) : b.key.localeCompare(a.key),
-    );
-
-    setFriends(sorted);
+    setSortOrder(value);
   };
 
   const handelSearch = (value: string) => {
@@ -56,32 +78,35 @@ const ContactPage = () => {
   useEffect(() => {
     if (!socket) return;
     const updateAvatar = (data: any) => {
-      setFriends((prev: any) =>
-        prev.map((group: any) => ({
+      queryClient.setQueryData(["friends", debouncedKeyword, userId], (old: any) => {
+        if (!old) return old;
+        return old.map((group: any) => ({
           ...group,
           friends: group.friends.map((friend: any) =>
             friend.friendId === data.userId
               ? {
-                  ...friend,
-                  name: data.name ?? friend.name,
-                  avatarUrl: data.avatarUrl ?? friend.avatarUrl,
-                }
+                ...friend,
+                name: data.name ?? friend.name,
+                avatarUrl: data.avatarUrl ?? friend.avatarUrl,
+              }
               : friend,
           ),
-        })),
-      );
+        }));
+      });
     };
+
     const handleCancelFriendRequest = (friendId: string) => {
-      setFriends((prev: any) =>
-        prev
+      queryClient.setQueryData(["friends", debouncedKeyword, userId], (old: any) => {
+        if (!old) return old;
+        return old
           .map((group: any) => ({
             ...group,
             friends: group.friends.filter(
               (friend: any) => friend.friendId !== friendId,
             ),
           }))
-          .filter((group: any) => group.friends.length > 0),
-      );
+          .filter((group: any) => group.friends.length > 0);
+      });
     };
 
     socket.on("update_profile", updateAvatar);
@@ -90,7 +115,7 @@ const ContactPage = () => {
       socket.off("update_profile", updateAvatar);
       socket.off("cancel_friend_request", handleCancelFriendRequest);
     };
-  }, [socket]);
+  }, [socket, queryClient, debouncedKeyword, userId]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -111,7 +136,7 @@ const ContactPage = () => {
           </span>
         </div>
 
-        <div className="flex-1 bg-white rounded-xl p-4 flex flex-col h-[600px]">
+        <div className="flex-1 bg-white rounded-md p-4 flex flex-col h-[600px]">
           {/* 1. Phần Search & Sort: Giữ nguyên nhưng bọc trong một div để cố định phía trên */}
           <div className="flex gap-4 mb-6">
             {/* SEARCH */}

@@ -27,24 +27,20 @@ export default function SideBarItem({
         <div
           onClick={onClick}
           className={cn(
-            "rounded-md p-3 group relative flex  w-full cursor-pointer items-center justify-center transition-all duration-200",
-            // Hiệu ứng background khi hover hoặc active
-            isActive ? "bg-blue-700" : "hover:bg-blue-800/50",
+            "rounded-lg p-3 group relative flex cursor-pointer items-center justify-center transition-all duration-200",
+            // Màu nền Zalo khi active
+            isActive ? "bg-[#0052cc]" : "hover:bg-white/5",
             className,
           )}
         >
-          {/* Icon chính */}
           <Icon
             size={26}
-            strokeWidth={1.5}
+            strokeWidth={2}
+            fill="none"
             className={cn(
-              "transition-colors",
-              isActive ? "text-white" : "text-blue-100 group-hover:text-white",
+              "transition-all duration-200 text-white",
             )}
           />
-
-          {/* Vạch trắng nhỏ bên cạnh khi Active (giống Zalo gốc) */}
-          {isActive && <div className="absolute left-0 h-full w-1 bg-white" />}
         </div>
       </TooltipTrigger>
 

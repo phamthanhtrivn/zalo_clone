@@ -14,7 +14,7 @@ import { useRouter } from "expo-router";
 import type { ConversationItemType } from "@/types/conversation-item.type";
 
 import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
-import { formatMessageTime } from "@/utils/format-message-time..util";
+import { formatMessageTime } from "@/utils/format-message-time.util";
 import {
   pinConversation,
   unpinConversation,
@@ -27,7 +27,6 @@ import {
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   updateConversationSetting,
-  hideConversationLocal,
   removeConversation,
   setUnreadCount,
 } from "@/store/slices/conversationSlice";
@@ -45,14 +44,13 @@ interface Props {
 
 type SubMenu = "mute" | null;
 
-const ConversationItem: React.FC<Props> = ({
+const ConversationItem: React.FC<Props> = React.memo(({
   conversation,
   currentUserId,
   isSelectMode = false,
   isSelected = false,
   onSelectToggle,
 }) => {
-  console.log(`🎨 [${conversation.name}] unreadCount = ${conversation.unreadCount}`);
   const { socket, markAsRead, markAsUnread } = useSocket();  // ✅ Lấy cả 3
   const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
@@ -320,55 +318,30 @@ const ConversationItem: React.FC<Props> = ({
     closeSheet(() => onSelectToggle?.(conversation.conversationId));
   };
 
-  // ConversationItem.tsx - Phần handleMarkUnread đã đúng
-  // ConversationItem.tsx - Handler đã đúng
-  // ConversationItem.tsx
-
-  // Sửa handleMarkUnread
-  // ConversationItem.tsx
   const handleMarkUnread = async () => {
-    console.log('🔵 handleMarkUnread called');
-    console.log('  - user?.userId:', user?.userId);
-    console.log('  - markAsRead function:', typeof markAsRead);
-    console.log('  - markAsUnread function:', typeof markAsUnread);
-
-    if (!user?.userId) {
-      console.log('❌ No user ID');
-      return;
-    }
+    if (!user?.userId) return;
 
     const isMarkRead = conversation.unreadCount > 0;
-    console.log(`📝 ${isMarkRead ? 'Mark as read' : 'Mark as unread'}`);
-    console.log('Current unreadCount:', conversation.unreadCount);
-
-    // Lưu giá trị cũ để rollback
     const oldUnreadCount = conversation.unreadCount;
 
-    // Optimistic update
     dispatch(setUnreadCount({
       conversationId: conversation.conversationId,
       unreadCount: isMarkRead ? 0 : 1,
     }));
 
     try {
-      let response;
       if (isMarkRead) {
-        console.log('Calling markAsRead...');
-        response = await markAsRead({
+        await markAsRead({
           userId: user.userId,
           conversationId: conversation.conversationId,
         });
       } else {
-        console.log('Calling markAsUnread...');
-        response = await markAsUnread({
+        await markAsUnread({
           userId: user.userId,
           conversationId: conversation.conversationId,
         });
       }
-      console.log('✅ Response:', response);
     } catch (error) {
-      console.error('❌ Error:', error);
-      // Rollback nếu lỗi
       dispatch(setUnreadCount({
         conversationId: conversation.conversationId,
         unreadCount: oldUnreadCount,
@@ -820,9 +793,7 @@ const ConversationItem: React.FC<Props> = ({
       </Modal>
     </>
   );
-};
-
-
+});
 
 const SheetItem = ({
   icon,
@@ -863,5 +834,4 @@ const Divider = () => (
   />
 );
 
-// export default React.memo(ConversationItem);
 export default ConversationItem;  

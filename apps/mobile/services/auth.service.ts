@@ -60,4 +60,16 @@ export const authService = {
     });
     return res.data;
   },
+  getSessions: async () => {
+    const res = await api.get("/auth/sessions");
+    return res.data;
+  },
+  logOutDevice: async (deviceId: string) => {
+    const res = await api.post("/auth/logout-device", { deviceId });
+    return res.data;
+  },
+  logOutOther: async () => {
+    const res = await api.post("/auth/logout-others");
+    return res.data;
+  },
 };

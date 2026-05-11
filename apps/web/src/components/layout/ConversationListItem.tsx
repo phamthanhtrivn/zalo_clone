@@ -17,10 +17,9 @@ import { RiVideoLine } from "react-icons/ri";
 import { LuSticker } from "react-icons/lu";
 import { HiMiniLink } from "react-icons/hi2";
 import { GoFileSymlinkFile } from "react-icons/go";
-import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { cn } from "@/lib/utils";
 import { formatMessageTime } from "@/utils/format-message-time..util";
-import { RiVerifiedBadgeFill } from "react-icons/ri";
+import AppAvatar from "../common/AppAvatar";
 import {
   pinConversation,
   unpinConversation,
@@ -41,7 +40,6 @@ import {
 } from "@/store/slices/conversationSlice";
 import { IoMicOutline } from "react-icons/io5";
 import { useSocket } from "@/contexts/SocketContext";
-import { getAvatarData, getColorByName } from "@/utils/avatar-utils";
 import type {
   ConversationCategory,
   ConversationItemType,
@@ -534,25 +532,12 @@ const ConversationListItem = ({
         isActive ? "bg-[#e5efff]" : "hover:bg-[#f3f5f6]",
       )}
     >
-      <div className="relative shrink-0">
-        <Avatar className="h-12 w-12">
-          <AvatarImage src={conversation.avatar} alt={conversation.name} />
-          <AvatarFallback
-            className="font-bold text-white"
-            style={{ backgroundColor: getColorByName(conversation.name) }}
-          >
-            {(() => {
-              const { initials, isGroupIcon } = getAvatarData(conversation.name);
-              return isGroupIcon ? <Users className="h-6 w-6" /> : initials;
-            })()}
-          </AvatarFallback>
-        </Avatar>
-        {conversation.type === "AI" && (
-          <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-white p-px">
-            <RiVerifiedBadgeFill className="h-full w-full text-[#0091ff]" />
-          </div>
-        )}
-      </div>
+      <AppAvatar
+        src={conversation.avatar}
+        name={conversation.name}
+        isAI={conversation.type === "AI"}
+        className="h-12 w-12"
+      />
 
       <div className="min-w-0 flex-1">
         <div className="mb-0.5 flex items-start justify-between gap-2">

@@ -25,6 +25,7 @@
     "@radix-ui/react-use-is-hydrated": "^0.1.0",
     "@radix-ui/react-use-size": "^1.1.1",
     "@reduxjs/toolkit": "^2.11.2",
+    "@tanstack/react-query": "^5.100.10",
     "axios": "^1.13.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

@@ -1,4 +1,4 @@
-import { Avatar, AvatarImage, AvatarFallback } from "../../ui/avatar";
+import AppAvatar from "@/components/common/AppAvatar";
 import { Quote, MoreHorizontal } from "lucide-react";
 import { MessageBubble } from "./MessageBubble";
 import { ReactionPicker } from "./ReactionPicker";
@@ -57,12 +57,6 @@ export const MessageItem = ({
   const [showDetailModal, setShowDetailModal] = useState(false);
   const dispatch = useAppDispatch();
 
-
-  // const liveMessage = useAppSelector((state) =>
-  //   state.message.messagesByConversation[message.conversationId]?.find(
-  //     (m) => m._id === message._id
-  //   )
-  // );
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
     window.addEventListener("click", handleClickOutside);
@@ -73,12 +67,12 @@ export const MessageItem = ({
     <div className={`flex items-end gap-2 ${isMe || message.expired ? "justify-end" : ""}`}>
       {!isMe &&
         (showAvatar ? (
-          <Avatar className="w-8 h-8">
-            <AvatarImage src={message.senderId.profile?.avatarUrl} />
-            <AvatarFallback>
-              {message.senderId.profile?.name?.charAt(0)}
-            </AvatarFallback>
-          </Avatar>
+          <AppAvatar
+            src={message.senderId?.profile?.avatarUrl}
+            name={message.senderId?.profile?.name || "User"}
+            className="h-8 w-8 text-[10px]"
+            isAI={message.type === "AI"}
+          />
         ) : (
           <div className="w-8" />
         ))}

@@ -18,7 +18,7 @@ import GroupAvatar from "../ui/GroupAvatar";
 import PollMessage from "./PollMessage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
-import { formatTime } from "@/utils/format-message-time..util";
+import { formatTime } from "@/utils/format-message-time.util";
 import type { MessagesType, ReactionType } from "@/types/messages.type";
 import ReactionSummary from "./ReactionSummary";
 import { truncateFileName } from "@/utils/render-file";
@@ -512,7 +512,7 @@ const MessageBubble = React.memo(
             <View style={{ marginRight: 6 }}>
               <GroupAvatar
                 uri={message.senderId?.profile?.avatarUrl}
-                name={message.senderId?.name || "User"}
+                name={message.senderId?.profile.name}
                 size={32}
               />
             </View>
@@ -1036,4 +1036,4 @@ const MessageBubble = React.memo(
 
 MessageBubble.displayName = "MessageBubble";
 
-export default MessageBubble;
+export default React.memo(MessageBubble);

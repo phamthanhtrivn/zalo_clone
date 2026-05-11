@@ -37,8 +37,6 @@ export default function Contact() {
         {activeTab === "friends" && <FriendsTab />}
         {activeTab === "groups" && <GroupsTab />}
       </View>
-
-
     </Container>
   );
 }

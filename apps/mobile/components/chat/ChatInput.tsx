@@ -18,6 +18,7 @@ import EmojiPicker from "rn-emoji-keyboard";
 import { Audio } from "expo-av";
 import { COLORS } from "@/constants/colors";
 import CreatePollModal from "./CreatePollModal";
+import { moderateScale } from "@/utils/responsive";
 
 interface SelectedFile {
   uri: string;
@@ -308,40 +309,25 @@ const ChatInput: React.FC<ChatInputProps> = ({
   if (isSelectMode) {
     return (
       <View
-        style={{
-          backgroundColor: "#fff",
-          borderTopWidth: 1,
-          borderTopColor: "#e5e7eb",
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-around",
-        }}
+        className="bg-white border-t border-[#e5e7eb] px-4 py-3 flex-row items-center justify-around"
       >
-        <TouchableOpacity onPress={onCancelSelect} style={{ padding: 4 }}>
-          <Text style={{ color: "#ef4444", fontWeight: "600", fontSize: 15 }}>
+        <TouchableOpacity onPress={onCancelSelect} className="p-1">
+          <Text className="text-[#ef4444] font-semibold text-[15px]">
             Hủy
           </Text>
         </TouchableOpacity>
 
-        <Text style={{ fontWeight: "600", fontSize: 15, color: "#1f2937" }}>
+        <Text className="font-semibold text-[15px] text-[#1f2937]">
           Đã chọn {selectedMessages.length}
         </Text>
 
         <TouchableOpacity
           onPress={onOpenForwardModal}
           disabled={selectedMessages.length === 0}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 6,
-            padding: 4,
-            opacity: selectedMessages.length === 0 ? 0.5 : 1,
-          }}
+          className={`flex-row items-center gap-1.5 p-1 ${selectedMessages.length === 0 ? "opacity-50" : "opacity-100"}`}
         >
           <Ionicons name="arrow-redo-outline" size={22} color="#0068ff" />
-          <Text style={{ color: "#0068ff", fontWeight: "600", fontSize: 15 }}>
+          <Text className="text-[#0068ff] font-semibold text-[15px]">
             Tiếp tục
           </Text>
         </TouchableOpacity>
@@ -350,44 +336,28 @@ const ChatInput: React.FC<ChatInputProps> = ({
   }
 
   return (
-    <View style={{ backgroundColor: "white" }}>
+    <View className="bg-white">
       {selectedFiles.length > 0 && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={{
-            maxHeight: 110,
-            paddingHorizontal: 10,
-            paddingVertical: 10,
-            borderTopWidth: 1,
-            borderTopColor: "#e5e7eb",
-          }}
-          contentContainerStyle={{ gap: 12, paddingRight: 20 }}
+          className="max-h-[110px] px-2.5 py-2.5 border-t border-[#e5e7eb]"
+          contentContainerClassName="gap-3 pr-5"
         >
           {selectedFiles.map((file, index) => (
             <View
               key={index}
-              style={{ width: 80, height: 80, position: "relative" }}
+              className="w-20 h-20 relative"
             >
               {file.type.startsWith("image/") ? (
                 <Image
                   source={{ uri: file.uri }}
-                  style={{ width: 80, height: 80, borderRadius: 8 }}
+                  className="w-20 h-20 rounded-lg"
                   contentFit="cover"
                 />
               ) : (
                 <View
-                  style={{
-                    width: 80,
-                    height: 80,
-                    borderRadius: 8,
-                    backgroundColor: "#f3f4f6",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    padding: 4,
-                    borderWidth: 1,
-                    borderColor: "#e5e7eb",
-                  }}
+                  className="w-20 h-20 rounded-lg bg-[#f3f4f6] justify-center items-center p-1 border border-[#e5e7eb]"
                 >
                   <Ionicons
                     name={
@@ -400,7 +370,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   />
                   <Text
                     numberOfLines={1}
-                    style={{ fontSize: 9, color: "#6b7280", marginTop: 4 }}
+                    className="text-[9px] text-[#6b7280] mt-1"
                   >
                     {file.name}
                   </Text>
@@ -408,18 +378,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
               )}
               <TouchableOpacity
                 onPress={() => removeFile(index)}
-                style={{
-                  position: "absolute",
-                  top: -6,
-                  right: -6,
-                  backgroundColor: "rgba(0,0,0,0.6)",
-                  borderRadius: 12,
-                  width: 22,
-                  height: 22,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  zIndex: 10,
-                }}
+                className="absolute -top-1.5 -right-1.5 bg-black/60 rounded-full w-[22px] h-[22px] justify-center items-center z-10"
               >
                 <Ionicons name="close" size={14} color="white" />
               </TouchableOpacity>
@@ -429,79 +388,92 @@ const ChatInput: React.FC<ChatInputProps> = ({
       )}
 
       <View
-        style={{
-          flexDirection: "row",
-          alignItems: "flex-end",
-          padding: 8,
-          borderTopWidth: 1,
-          borderTopColor: "#e5e7eb",
-        }}
+        className="flex-row items-center p-2 border-t border-[#e5e7eb]"
       >
-        <TouchableOpacity onPress={toggleEmoji} style={{ padding: 6 }}>
-          <Ionicons name="happy-outline" size={26} color="#6b7280" />
-        </TouchableOpacity>
-
-        <TextInput
-          ref={inputRef}
-          style={{
-            flex: 1,
-            backgroundColor: "#f3f4f6",
-            borderRadius: 20,
-            paddingHorizontal: 14,
-            paddingVertical: 8,
-            fontSize: 14,
-            maxHeight: 100,
-          }}
-          placeholder={chatName ? `Nhắn tin tới ${chatName}` : "Tin nhắn"}
-          value={text}
-          onChangeText={setText}
-          multiline
-          onFocus={() => {
-            setShowEmoji(false);
-            setVoiceModalVisible(false);
-          }}
-        />
-
-        <TouchableOpacity onPress={pickImages} style={{ padding: 6 }}>
-          <MaterialIcons name="image" size={26} color="#6b7280" />
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={pickDocuments} style={{ padding: 6 }}>
-          <Ionicons name="attach-outline" size={26} color="#6b7280" />
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={openVoiceModal} style={{ padding: 6 }}>
-          <Ionicons name="mic-outline" size={24} color={COLORS.primary} />
-        </TouchableOpacity>
-
-        {/* Poll (Group only) */}
-        {isGroup && (
-          <TouchableOpacity
-            onPress={() => setShowPollModal(true)}
-            style={{ padding: 6 }}
-          >
-            <Ionicons name="bar-chart-outline" size={26} color="#6b7280" />
+        <View className="h-[40px] justify-center">
+          <TouchableOpacity onPress={toggleEmoji} className="p-1.5">
+            <Ionicons name="happy-outline" size={moderateScale(26)} color="#6b7280" />
           </TouchableOpacity>
+        </View>
+
+        <View className="flex-1 bg-[#f3f4f6] rounded-[20px] px-3.5 py-2 justify-center min-h-[40px] max-h-[100px]">
+          {text === "" && (
+            <View className="absolute left-3.5 z-10 w-full pointer-events-none">
+              <Text
+                className="text-[#9ca3af] text-[14px]"
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {chatName ? `Nhắn tin tới ${chatName}` : "Tin nhắn"}
+              </Text>
+            </View>
+          )}
+          <TextInput
+            ref={inputRef}
+            className="text-[13px] p-0 m-0"
+            value={text}
+            onChangeText={setText}
+            multiline
+            onFocus={() => {
+              setShowEmoji(false);
+              setVoiceModalVisible(false);
+            }}
+          />
+        </View>
+
+        {!(text.trim() || selectedFiles.length > 0) ? (
+          <View className="flex-row items-center">
+            <TouchableOpacity onPress={pickImages} className="p-1.5">
+              <MaterialIcons name="image" size={moderateScale(25)} color="#6b7280" />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={pickDocuments} className="p-1.5">
+              <Ionicons name="attach-outline" size={moderateScale(25)} color="#6b7280" />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={openVoiceModal} className="p-1.5">
+              <Ionicons name="mic-outline" size={moderateScale(25)} color={COLORS.primary} />
+            </TouchableOpacity>
+
+            {/* Poll (Group only) */}
+            {isGroup && (
+              <TouchableOpacity
+                onPress={() => setShowPollModal(true)}
+                className="p-1.5"
+              >
+                <Ionicons name="bar-chart-outline" size={moderateScale(25)} color="#6b7280" />
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <View className="h-[40px] justify-center">
+            <TouchableOpacity
+              onPress={handleSend}
+              className="w-[38px] h-[38px] items-center justify-center"
+            >
+              <Ionicons
+                name="send"
+                size={moderateScale(22)}
+                color="#0068ff"
+              />
+            </TouchableOpacity>
+          </View>
         )}
 
-        {/* Send */}
-        <TouchableOpacity
-          onPress={handleSend}
-          disabled={!text.trim() && selectedFiles.length === 0}
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: 19,
-            backgroundColor:
-              text.trim() || selectedFiles.length > 0
-                ? COLORS.primary
-                : "#e5e7eb",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons name="send" size={18} color="white" />
-        </TouchableOpacity>
+        {!(text.trim() || selectedFiles.length > 0) && (
+          <View className="h-[40px] justify-center">
+            <TouchableOpacity
+              disabled
+              className="w-[38px] h-[38px] items-center justify-center"
+            >
+              <Ionicons
+                name="send"
+                size={moderateScale(20)}
+                color="#6b7280"
+              />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       <EmojiPicker
@@ -518,32 +490,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
       >
         <Pressable
           onPress={closeVoiceModal}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.2)",
-            justifyContent: "flex-end",
-          }}
+          className="flex-1 bg-black/20 justify-end"
         >
           <Pressable
             onPress={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: "white",
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              paddingHorizontal: 24,
-              paddingTop: 24,
-              paddingBottom: 36,
-              minHeight: 360,
-            }}
+            className="bg-white rounded-t-[24px] px-6 pt-6 pb-9 min-h-[360px]"
           >
             <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
+              className="flex-row justify-between items-center"
             >
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#111" }}>
+              <Text className="text-lg font-bold text-[#111]">
                 Gửi bản ghi âm
               </Text>
               <TouchableOpacity
@@ -555,12 +511,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             </View>
 
             <Text
-              style={{
-                textAlign: "center",
-                color: "#4b5563",
-                marginTop: 28,
-                fontSize: 16,
-              }}
+              className="text-center text-[#4b5563] mt-7 text-base"
             >
               {isRecording
                 ? "Đang ghi âm..."
@@ -569,17 +520,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   : "Bấm hoặc bấm giữ để ghi âm"}
             </Text>
 
-            <View style={{ alignItems: "center", marginTop: 28 }}>
+            <View className="items-center mt-7">
               <TouchableOpacity
                 onPress={toggleRecording}
-                style={{
-                  width: 120,
-                  height: 120,
-                  borderRadius: 60,
-                  backgroundColor: isRecording ? "#ef4444" : COLORS.primary,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
+                className={`w-[120px] h-[120px] rounded-[60px] items-center justify-center ${isRecording ? "bg-[#ef4444]" : "bg-[#0055ff]"
+                  }`}
               >
                 <Ionicons
                   name={isRecording ? "stop" : "mic"}
@@ -590,13 +535,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             </View>
 
             <Text
-              style={{
-                textAlign: "center",
-                fontSize: 28,
-                fontWeight: "700",
-                color: "#111827",
-                marginTop: 24,
-              }}
+              className="text-center text-[28px] font-bold text-[#111827] mt-6"
             >
               {formatVoiceDuration(
                 recordedVoice?.durationMs || recordingDurationMs,
@@ -604,11 +543,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             </Text>
 
             <View
-              style={{
-                flexDirection: "row",
-                marginTop: 30,
-                gap: 12,
-              }}
+              className="flex-row mt-[30px] gap-3"
             >
               <TouchableOpacity
                 disabled={isRecording || isSubmittingVoice}
@@ -616,16 +551,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   setRecordedVoice(null);
                   setRecordingDurationMs(0);
                 }}
-                style={{
-                  flex: 1,
-                  borderRadius: 18,
-                  paddingVertical: 14,
-                  alignItems: "center",
-                  backgroundColor: "#f3f4f6",
-                  opacity: !recordedVoice || isSubmittingVoice ? 0.5 : 1,
-                }}
+                className={`flex-1 rounded-[18px] py-3.5 items-center bg-[#f3f4f6] ${!recordedVoice || isSubmittingVoice ? "opacity-50" : "opacity-100"
+                  }`}
               >
-                <Text style={{ fontWeight: "600", color: "#374151" }}>
+                <Text className="font-semibold text-[#374151]">
                   Ghi lại
                 </Text>
               </TouchableOpacity>
@@ -633,34 +562,21 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <TouchableOpacity
                 disabled={!recordedVoice || isRecording || isSubmittingVoice}
                 onPress={handleSendVoice}
-                style={{
-                  flex: 1,
-                  borderRadius: 18,
-                  paddingVertical: 14,
-                  alignItems: "center",
-                  backgroundColor: COLORS.primary,
-                  opacity:
-                    !recordedVoice || isRecording || isSubmittingVoice
-                      ? 0.5
-                      : 1,
-                }}
+                className={`flex-1 rounded-[18px] py-3.5 items-center bg-[#0055ff] ${!recordedVoice || isRecording || isSubmittingVoice
+                  ? "opacity-50"
+                  : "opacity-100"
+                  }`}
               >
-                <Text style={{ fontWeight: "700", color: "white" }}>
+                <Text className="font-bold text-white">
                   {isSubmittingVoice ? "Đang gửi..." : "Gửi bản ghi âm"}
                 </Text>
               </TouchableOpacity>
             </View>
 
             <View
-              style={{
-                marginTop: 18,
-                paddingVertical: 12,
-                borderRadius: 18,
-                backgroundColor: "#f8fafc",
-                alignItems: "center",
-              }}
+              className="mt-[18px] py-3 rounded-[18px] bg-[#f8fafc] items-center"
             >
-              <Text style={{ color: "#6b7280", fontWeight: "600" }}>
+              <Text className="text-[#6b7280] font-semibold">
                 Chế độ hiện tại: {voiceMode === "audio" ? "Gửi audio" : ""}
               </Text>
             </View>

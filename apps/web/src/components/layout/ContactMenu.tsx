@@ -21,12 +21,19 @@ export const ContactMenu = () => {
             key={item.label}
             to={item.path}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 transition-colors group",
+              "mx-2 mt-1 flex items-center gap-3 p-2 rounded-md transition-colors group",
               isActive ? "bg-[#e5efff] text-[#005AE0]" : "hover:bg-[#f3f5f6] text-gray-700"
             )}
           >
-            <item.icon className="w-[22px] h-[22px]" />
-            <span className="text-[14px]">{item.label}</span>
+            <div className={cn(
+              "w-10 h-10 flex items-center justify-center shrink-0",
+            )}>
+              <item.icon className={cn(
+                "w-5 h-5",
+                isActive ? "text-[#005AE0]" : "text-gray-600"
+              )} />
+            </div>
+            <span className="text-sm">{item.label}</span>
           </Link>
         )
       })}

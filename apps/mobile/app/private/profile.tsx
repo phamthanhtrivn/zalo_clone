@@ -1,5 +1,6 @@
 import Container from "@/components/common/Container";
 import { Text, ScrollView, Image, View, TouchableOpacity } from "react-native";
+import GroupAvatar from "@/components/ui/GroupAvatar";
 import Header from "@/components/common/Header";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -41,13 +42,10 @@ export default function ProfileScreen() {
       <ScrollView className="flex-1 bg-white">
         {/* Phần Avatar */}
         <View className="items-center mt-8 mb-6">
-          <Image
-            source={{
-              uri: userInfo?.profile?.avatarUrl
-                ? userInfo.profile.avatarUrl
-                : "https://wp-cms-media.s3.ap-east-1.amazonaws.com/lay_anh_dai_dien_facebook_dep_4_aefd38b259.jpg",
-            }}
-            className="w-28 h-28 rounded-full"
+          <GroupAvatar
+            uri={userInfo?.profile?.avatarUrl}
+            name={userInfo?.profile?.name || "User"}
+            size={112}
           />
         </View>
 

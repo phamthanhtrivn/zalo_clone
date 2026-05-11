@@ -191,3 +191,39 @@ export const confirmLogin = createAsyncThunk(
     }
   },
 );
+
+export const getSessions = createAsyncThunk(
+  "auth/get-sessions",
+  async (_, thunkAPI) => {
+    try {
+      const res = await authService.getSessions();
+      return res;
+    } catch (err: any) {
+      return thunkAPI.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const logOutDevice = createAsyncThunk(
+  "auth/logout-device",
+  async (deviceId: string, thunkAPI) => {
+    try {
+      const res = await authService.logOutDevice(deviceId);
+      return res;
+    } catch (err: any) {
+      return thunkAPI.rejectWithValue(err.response?.data);
+    }
+  },
+);
+
+export const logOutOther = createAsyncThunk(
+  "auth/logout-other",
+  async (_, thunkAPI) => {
+    try {
+      const res = await authService.logOutOther();
+      return res;
+    } catch (err: any) {
+      return thunkAPI.rejectWithValue(err.response?.data);
+    }
+  },
+);

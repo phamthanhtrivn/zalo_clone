@@ -15,6 +15,7 @@ type ConversationState = {
   replyingMessage: any | null;
   loading: boolean;
   error: string | null;
+  cachedMessages: Record<string, any[]>;
 };
 
 const initialState: ConversationState = {
@@ -22,6 +23,7 @@ const initialState: ConversationState = {
   replyingMessage: null,
   loading: false,
   error: null,
+  cachedMessages: {},
 };
 
 // --- ASYNC THUNKS ---
@@ -198,6 +200,10 @@ const conversationSlice = createSlice({
       if (index !== -1) state.conversations.splice(index, 1);
       state.conversations = [newConv, ...state.conversations];
     },
+    // 10. Cache tin nhắn mới nhất
+    setCachedMessages(state, action: PayloadAction<{ conversationId: string; messages: any[] }>) {
+      state.cachedMessages[action.payload.conversationId] = action.payload.messages;
+    },
   },
 
   // 10. Extra Reducers cho AsyncThunk
@@ -229,6 +235,7 @@ export const {
   setReplyingMessage,
   clearReplyingMessage,
   addConversationToTop,
+  setCachedMessages,
 } = conversationSlice.actions;
 
 export default conversationSlice.reducer;

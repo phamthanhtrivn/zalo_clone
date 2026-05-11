@@ -36,7 +36,7 @@ import {
 } from "@floating-ui/react";
 
 // UI Components
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import AppAvatar from "@/components/common/AppAvatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -83,7 +83,6 @@ import PollMessage from "./PollMessage";
 import type { ConversationItemType } from "@/types/conversation-item.type";
 import { getFileIcon } from "@/utils/file-icon.util";
 import { getDateLabel } from "@/utils/format-message-time..util";
-import { getAvatarData, getColorByName } from "@/utils/avatar-utils";
 import { Users as UsersIcon } from "lucide-react";
 
 type ConversationMemberRow = {
@@ -121,8 +120,8 @@ const ConversationInfoPanel = ({
   const currentConversation = useAppSelector((state) =>
     conversation?.conversationId
       ? (state.conversation.conversations.find(
-          (c) => c.conversationId === conversation.conversationId,
-        ) ?? conversation)
+        (c) => c.conversationId === conversation.conversationId,
+      ) ?? conversation)
       : null,
   );
 
@@ -439,13 +438,13 @@ const ConversationInfoPanel = ({
     try {
       newStatus
         ? await pinConversation(
-            currentUserId,
-            currentConversation.conversationId,
-          )
+          currentUserId,
+          currentConversation.conversationId,
+        )
         : await unpinConversation(
-            currentUserId,
-            currentConversation.conversationId,
-          );
+          currentUserId,
+          currentConversation.conversationId,
+        );
     } catch {
       dispatch(
         updateConversationSetting({
@@ -486,14 +485,14 @@ const ConversationInfoPanel = ({
     try {
       isUnmuting
         ? await unmuteConversation(
-            currentUserId,
-            currentConversation.conversationId,
-          )
+          currentUserId,
+          currentConversation.conversationId,
+        )
         : await muteConversation(
-            currentUserId,
-            currentConversation.conversationId,
-            duration,
-          );
+          currentUserId,
+          currentConversation.conversationId,
+          duration,
+        );
     } catch {
       dispatch(
         updateConversationSetting({
@@ -712,28 +711,12 @@ const ConversationInfoPanel = ({
         {/* PROFILE SECTION */}
         <div className="bg-white flex flex-col items-center py-6 border-b">
           <div className="relative group">
-            <Avatar className="w-20 h-20 mb-3 border-2 border-white shadow-md">
-              <AvatarImage src={currentConversation?.avatar} />
-              <AvatarFallback
-                className="text-2xl text-white font-bold"
-                style={{
-                  backgroundColor: getColorByName(
-                    currentConversation?.name || "",
-                  ),
-                }}
-              >
-                {(() => {
-                  const { initials, isGroupIcon } = getAvatarData(
-                    currentConversation?.name || "",
-                  );
-                  return isGroupIcon ? (
-                    <Users className="w-10 h-10" />
-                  ) : (
-                    initials
-                  );
-                })()}
-              </AvatarFallback>
-            </Avatar>
+            <AppAvatar
+              src={currentConversation?.avatar}
+              name={currentConversation?.name || ""}
+              isAI={currentConversation?.type === "AI"}
+              className="w-20 h-20 mb-3 border-2 border-white shadow-md text-2xl"
+            />
             {isGroup && canManageMembers && (
               <>
                 <div
@@ -793,11 +776,10 @@ const ConversationInfoPanel = ({
               className="flex flex-col items-center gap-1.5 group cursor-pointer"
             >
               <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                  isMuted
-                    ? "bg-blue-50 text-blue-600"
-                    : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"
-                }`}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isMuted
+                  ? "bg-blue-50 text-blue-600"
+                  : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"
+                  }`}
               >
                 {isMuted ? <BellOff size={20} /> : <Bell size={20} />}
               </div>
@@ -831,11 +813,10 @@ const ConversationInfoPanel = ({
             className="flex flex-col items-center gap-1.5 flex-1 group cursor-pointer"
           >
             <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                isPinned
-                  ? "bg-blue-50 text-blue-600"
-                  : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"
-              }`}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isPinned
+                ? "bg-blue-50 text-blue-600"
+                : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"
+                }`}
             >
               {isPinned ? <PinOff size={20} /> : <Pin size={20} />}
             </div>
@@ -914,9 +895,11 @@ const ConversationInfoPanel = ({
                     className="flex items-center justify-between p-2 bg-blue-50/40 rounded-lg border border-blue-50"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <Avatar className="w-9 h-9 border border-white shadow-sm">
-                        <AvatarImage src={req.userId?.profile?.avatarUrl} />
-                      </Avatar>
+                      <AppAvatar
+                        src={req.userId?.profile?.avatarUrl}
+                        name={req.userId?.profile?.name || ""}
+                        className="w-9 h-9 border border-white shadow-sm text-sm"
+                      />
                       <div className="truncate">
                         <p className="text-xs font-bold text-gray-800 truncate">
                           {req.userId?.profile?.name}
@@ -1313,24 +1296,11 @@ const ConversationInfoPanel = ({
                     key={m.userId}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 group"
                   >
-                    <Avatar className="w-10 h-10 border-0 shadow-sm">
-                      <AvatarImage src={m.avatarUrl ?? ""} />
-                      <AvatarFallback
-                        className="text-white font-bold"
-                        style={{ backgroundColor: getColorByName(m.name) }}
-                      >
-                        {(() => {
-                          const { initials, isGroupIcon } = getAvatarData(
-                            m.name,
-                          );
-                          return isGroupIcon ? (
-                            <Users className="w-5 h-5" />
-                          ) : (
-                            initials
-                          );
-                        })()}
-                      </AvatarFallback>
-                    </Avatar>
+                    <AppAvatar
+                      src={m.avatarUrl ?? ""}
+                      name={m.name}
+                      className="w-10 h-10 border-0 shadow-sm text-sm"
+                    />
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 overflow-hidden">

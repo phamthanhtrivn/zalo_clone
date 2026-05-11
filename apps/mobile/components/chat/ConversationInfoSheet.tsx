@@ -10,10 +10,10 @@ import {
   Linking,
   ActivityIndicator,
   Alert,
-  StyleSheet,
   Switch,
   Dimensions,
   TextInput,
+  InteractionManager,
 } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -22,7 +22,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import type { ConversationItemType } from "@/types/conversation-item.type";
 import { messageService } from "@/services/message.service";
 import { useAppDispatch, useAppSelector } from "@/store/store";
-import { getDateLabel } from "@/utils/format-message-time..util";
+import { getDateLabel } from "@/utils/format-message-time.util";
 import {
   removeConversation,
   updateConversationSetting,
@@ -67,17 +67,11 @@ const SectionHeader = ({
 }) => (
   <TouchableOpacity
     onPress={onToggle}
-    style={{
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-    }}
+    className="flex-row items-center justify-between px-4 py-3.5"
   >
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+    <View className="flex-row items-center gap-2.5">
       {icon}
-      <Text style={{ fontSize: 14, fontWeight: "600", color: "#1f2937" }}>
+      <Text className="text-sm font-semibold text-[#1f2937]">
         {title}
       </Text>
     </View>
@@ -143,15 +137,19 @@ const ConversationInfoSheet: React.FC<Props> = ({
     (!currentConversation?.mutedUntil ||
       new Date(currentConversation.mutedUntil).getTime() > Date.now());
 
+  const [isReady, setIsReady] = useState(false);
+
   useEffect(() => {
-    if (!visible || !conversation?.conversationId || !currentUserId) return;
+    if (!visible) {
+      setIsReady(false);
+      return;
+    }
 
     const initData = async () => {
-      setLoading(true);
       try {
         const [mediaRes] = await Promise.all([
           messageService.getMediasPreview(
-            currentUserId,
+            currentUserId!,
             conversation.conversationId,
           ),
           isGroup ? fetchMembers() : Promise.resolve(null),
@@ -169,7 +167,14 @@ const ConversationInfoSheet: React.FC<Props> = ({
       }
     };
 
-    initData();
+    // Chạy ngay sau khi hiệu ứng mở Modal hoàn tất
+    const interaction = InteractionManager.runAfterInteractions(() => {
+      setIsReady(true);
+      setLoading(true);
+      initData();
+    });
+
+    return () => interaction.cancel();
   }, [visible, conversation?.conversationId, currentUserId]);
 
   useEffect(() => {
@@ -614,11 +619,11 @@ const ConversationInfoSheet: React.FC<Props> = ({
       Alert.alert(
         "Lỗi",
         err?.response?.data?.message ||
-          "Không thể thực hiện thao tác này. Vui lòng thử lại.",
+        "Không thể thực hiện thao tác này. Vui lòng thử lại.",
       );
     }
   };
- 
+
   const handleTogglePolls = async () => {
     const willExpand = !expandedPoll;
     setExpandedPoll(willExpand);
@@ -723,33 +728,17 @@ const ConversationInfoSheet: React.FC<Props> = ({
       onRequestClose={onClose}
     >
       <Pressable
-        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
+        className="flex-1 bg-black/40"
         onPress={onClose}
       >
         <Pressable
           onPress={(e) => e.stopPropagation()}
-          style={{
-            flex: 1,
-            backgroundColor: "#f7f8fa",
-            marginTop: 60,
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            overflow: "hidden",
-          }}
+          className="flex-1 bg-[#f7f8fa] mt-[60px] rounded-t-[20px] overflow-hidden"
         >
           <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingHorizontal: 16,
-              paddingVertical: 14,
-              backgroundColor: "white",
-              borderBottomWidth: 1,
-              borderBottomColor: "#f3f4f6",
-            }}
+            className="flex-row items-center justify-between px-4 py-3.5 bg-white border-b border-[#f3f4f6]"
           >
-            <Text style={{ fontSize: 16, fontWeight: "600" }}>
+            <Text className="text-base font-semibold text-[#1f2937]">
               Thông tin hội thoại
             </Text>
             <TouchableOpacity onPress={onClose}>
@@ -758,24 +747,8 @@ const ConversationInfoSheet: React.FC<Props> = ({
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
-            <View
-              style={{
-                backgroundColor: "white",
-                alignItems: "center",
-                paddingVertical: 20,
-                marginBottom: 8,
-              }}
-            >
-              <View
-                style={{
-                  width: 70,
-                  height: 70,
-                  borderRadius: 35,
-                  overflow: "hidden",
-                  backgroundColor: "#e5e7eb",
-                  marginBottom: 10,
-                }}
-              >
+            <View className="bg-white items-center py-5 mb-2">
+              <View className="w-[70px] h-[70px] rounded-full overflow-hidden bg-[#e5e7eb] mb-2.5 relative">
                 <GroupAvatar
                   uri={conversation?.avatar}
                   name={conversation?.name || "Group"}
@@ -783,17 +756,18 @@ const ConversationInfoSheet: React.FC<Props> = ({
                 />
                 {isGroup && (isOwner || isAdmin) && (
                   <TouchableOpacity
-                    style={styles.editAvatarBtn}
+                    className="absolute bottom-0 right-0 bg-white p-1.5 rounded-full border border-[#e5e7eb]"
+                    style={{ elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1 }}
                     onPress={handleAvatarPress}
                   >
                     <Ionicons name="camera" size={16} color="#4b5563" />
                   </TouchableOpacity>
                 )}
               </View>
-              <View style={styles.nameContainer}>
+              <View className="w-full items-center justify-center mt-2.5 px-5">
                 {editingName ? (
                   <TextInput
-                    style={styles.nameInput}
+                    className="text-lg font-bold border-b-2 border-[#0068ff] px-2.5 text-center min-w-[150px]"
                     value={tempName}
                     onChangeText={setTempName}
                     autoFocus
@@ -801,14 +775,8 @@ const ConversationInfoSheet: React.FC<Props> = ({
                     onSubmitEditing={handleSaveName}
                   />
                 ) : (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <Text style={styles.profileName}>
+                  <View className="flex-row items-center gap-2">
+                    <Text className="text-lg font-bold text-[#111827]">
                       {currentConversation?.name}
                     </Text>
                     {isGroup && (isOwner || isAdmin) && (
@@ -821,15 +789,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
               </View>
             </View>
 
-            <View
-              style={{
-                backgroundColor: "white",
-                flexDirection: "row",
-                justifyContent: "space-around",
-                paddingVertical: 14,
-                marginBottom: 8,
-              }}
-            >
+            <View className="bg-white flex-row justify-around py-3.5 mb-2">
               {[
                 {
                   icon: "notifications-outline",
@@ -873,32 +833,21 @@ const ConversationInfoSheet: React.FC<Props> = ({
                 <TouchableOpacity
                   key={action.label}
                   onPress={action.onPress}
-                  style={{ alignItems: "center", gap: 6, width: width / 4 }} // Chia đều độ rộng
+                  className="items-center gap-1.5"
+                  style={{ width: width / 4 }}
                 >
                   <View
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 20,
-                      backgroundColor: action.active ? "#dbeafe" : "#f3f4f6",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
+                    className={`w-10 h-10 rounded-full items-center justify-center ${action.active ? "bg-[#dbeafe]" : "bg-[#f3f4f6]"}`}
                   >
                     <Ionicons
                       name={action.icon as any}
                       size={20}
-                      color={action.active ? "#2563eb" : "#374151"}
+                      color={action.active ? "#0068ff" : "#374151"}
                     />
                   </View>
 
                   <Text
-                    style={{
-                      fontSize: 11,
-                      color: action.active ? "#2563eb" : "#374151",
-                      textAlign: "center",
-                      paddingHorizontal: 4,
-                    }}
+                    className={`text-[11px] text-center px-1 ${action.active ? "text-[#0068ff]" : "text-[#4b5563]"}`}
                     numberOfLines={2}
                   >
                     {action.label}
@@ -906,17 +855,8 @@ const ConversationInfoSheet: React.FC<Props> = ({
                 </TouchableOpacity>
               ))}
             </View>
-
-            {loading && (
-              <ActivityIndicator
-                style={{ marginVertical: 20 }}
-                color="#0068ff"
-              />
-            )}
-
-            {/* 1. YÊU CẦU THAM GIA */}
             {isGroup && (isOwner || isAdmin) && joinRequests.length > 0 && (
-              <View style={styles.whiteSection}>
+              <View className="bg-white mb-2">
                 <SectionHeader
                   icon={
                     <Ionicons name="person-add" size={18} color="#0068ff" />
@@ -926,29 +866,29 @@ const ConversationInfoSheet: React.FC<Props> = ({
                   onToggle={() => setExpandedRequests(!expandedRequests)}
                 />
                 {expandedRequests && (
-                  <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
+                  <View className="px-4 pb-2.5">
                     {joinRequests.map((req) => (
-                      <View key={req._id} style={styles.requestRow}>
+                      <View key={req._id} className="flex-row items-center py-2 bg-[#f0f7ff] px-2.5 rounded-lg mb-2">
                         <Image
                           source={{
                             uri:
                               req.userId?.profile?.avatarUrl ||
                               "https://via.placeholder.com/150",
                           }}
-                          style={styles.requestAvatar}
+                          className="w-9 h-9 rounded-full mr-2.5"
                         />
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.requestName} numberOfLines={1}>
+                        <View className="flex-1">
+                          <Text className="text-sm font-semibold text-[#111]" numberOfLines={1}>
                             {req.userId?.profile?.name}
                           </Text>
-                          <Text style={styles.requestSub}>
+                          <Text className="text-[11px] text-[#666] mt-0.5">
                             Mời bởi: {req.invitedBy?.profile?.name}
                           </Text>
                         </View>
-                        <View style={{ flexDirection: "row", gap: 8 }}>
+                        <View className="flex-row gap-2">
                           <TouchableOpacity
                             onPress={() => onHandleRequest(req._id, "APPROVED")}
-                            style={styles.approveBtn}
+                            className="w-[30px] h-[30px] rounded-full bg-[#0068ff] items-center justify-center"
                           >
                             <Ionicons
                               name="checkmark"
@@ -958,7 +898,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
                           </TouchableOpacity>
                           <TouchableOpacity
                             onPress={() => onHandleRequest(req._id, "REJECTED")}
-                            style={styles.rejectBtn}
+                            className="w-[30px] h-[30px] rounded-full bg-[#e5e7eb] items-center justify-center"
                           >
                             <Ionicons name="close" size={16} color="#666" />
                           </TouchableOpacity>
@@ -970,23 +910,22 @@ const ConversationInfoSheet: React.FC<Props> = ({
               </View>
             )}
 
-            {/* 2. CÀI ĐẶT QUẢN TRỊ NHÓM */}
             {isGroup && (isOwner || isAdmin) && (
-              <View style={styles.whiteSection}>
+              <View className="bg-white mb-2">
                 <SectionHeader
-                  icon={<Ionicons name="settings-outline" size={18} />}
+                  icon={<Ionicons name="settings-outline" size={18} color="#4b5563" />}
                   title="Cài đặt nhóm"
                   expanded={expandedManagement}
                   onToggle={() => setExpandedManagement(!expandedManagement)}
                 />
                 {expandedManagement && (
-                  <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
-                    <View style={styles.settingRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.settingTitle}>
+                  <View className="px-4 pb-4">
+                    <View className="flex-row items-center py-3 border-b border-[#f0f0f0]">
+                      <View className="flex-1">
+                        <Text className="text-sm font-medium text-[#333]">
                           Quyền mời thành viên
                         </Text>
-                        <Text style={styles.settingSub}>
+                        <Text className="text-[11px] text-[#888] mt-0.5">
                           Thành viên thường có thể mời người khác
                         </Text>
                       </View>
@@ -999,12 +938,12 @@ const ConversationInfoSheet: React.FC<Props> = ({
                       />
                     </View>
 
-                    <View style={styles.settingRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.settingTitle}>
+                    <View className="flex-row items-center py-3 border-b border-[#f0f0f0]">
+                      <View className="flex-1">
+                        <Text className="text-sm font-medium text-[#333]">
                           Quyền gửi tin nhắn
                         </Text>
-                        <Text style={styles.settingSub}>
+                        <Text className="text-[11px] text-[#888] mt-0.5">
                           Cho phép mọi người cùng nhắn tin
                         </Text>
                       </View>
@@ -1017,14 +956,12 @@ const ConversationInfoSheet: React.FC<Props> = ({
                       />
                     </View>
 
-                    <View style={styles.settingRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[styles.settingTitle, { color: "#0068ff" }]}
-                        >
+                    <View className="flex-row items-center py-3 border-b border-[#f0f0f0]">
+                      <View className="flex-1">
+                        <Text className="text-sm font-medium text-[#0068ff]">
                           Phê duyệt thành viên mới
                         </Text>
-                        <Text style={styles.settingSub}>
+                        <Text className="text-[11px] text-[#888] mt-0.5">
                           Admin cần duyệt trước khi vào nhóm
                         </Text>
                       </View>
@@ -1042,350 +979,259 @@ const ConversationInfoSheet: React.FC<Props> = ({
             )}
 
             {/* Media section */}
-            <View style={{ backgroundColor: "white", marginBottom: 2 }}>
-              <SectionHeader
-                icon={<MaterialIcons name="image" size={18} color="#374151" />}
-                title="Ảnh/Video"
-                expanded={expandedMedia}
-                onToggle={() => setExpandedMedia((v) => !v)}
-              />
-              {expandedMedia && (
-                <View style={{ paddingHorizontal: 12, paddingBottom: 16 }}>
-                  {medias.length === 0 ? (
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        color: "#9ca3af",
-                        textAlign: "center",
-                        paddingVertical: 8,
-                      }}
-                    >
-                      Chưa có ảnh/video trong cuộc trò chuyện
-                    </Text>
-                  ) : (
-                    <View
-                      style={{ flexDirection: "row", flexWrap: "wrap", gap: 2 }}
-                    >
-                      {medias.slice(0, 6).map((media, idx) => {
-                        const file = media?.content?.file;
-                        const isVideo = file?.type === "VIDEO";
+            {/* Media section */}
+            {isReady && (
+              <View className="bg-white mb-2">
+                <SectionHeader
+                  icon={<MaterialIcons name="image" size={18} color="#374151" />}
+                  title="Ảnh/Video"
+                  expanded={expandedMedia}
+                  onToggle={() => setExpandedMedia((v) => !v)}
+                />
+                {expandedMedia && (
+                  <View className="px-3 pb-4">
+                    {medias.length === 0 ? (
+                      <Text className="text-xs text-[#9ca3af] text-center py-2">
+                        Chưa có ảnh/video trong cuộc trò chuyện
+                      </Text>
+                    ) : (
+                      <View className="flex-row flex-wrap gap-0.5">
+                        {medias.slice(0, 6).map((media, idx) => {
+                          const file = media?.content?.file;
+                          const isVideo = file?.type === "VIDEO";
+                          return (
+                            <TouchableOpacity
+                              key={idx}
+                              onPress={() => setPreviewIndex(idx)}
+                              className="bg-[#e5e7eb] overflow-hidden"
+                              style={{ width: (width - 32 - 4) / 3, aspectRatio: 1 }}
+                            >
+                              {isVideo ? (
+                                <View className="flex-1 items-center justify-center bg-black">
+                                  <Ionicons
+                                    name="play-circle"
+                                    size={36}
+                                    color="white"
+                                  />
+                                </View>
+                              ) : (
+                                <Image
+                                  source={{ uri: file?.fileKey }}
+                                  style={{ width: "100%", height: "100%" }}
+                                  contentFit="cover"
+                                />
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {isReady && (
+              <View className="bg-white mb-2">
+                <SectionHeader
+                  icon={
+                    <MaterialIcons
+                      name="insert-drive-file"
+                      size={18}
+                      color="#374151"
+                    />
+                  }
+                  title="File"
+                  expanded={expandedFile}
+                  onToggle={() => setExpandedFile((v) => !v)}
+                />
+                {expandedFile && (
+                  <View className="px-3 pb-4">
+                    {files.length === 0 ? (
+                      <Text className="text-xs text-[#9ca3af] text-center py-2">
+                        Chưa có file trong cuộc trò chuyện
+                      </Text>
+                    ) : (
+                      files.slice(0, 6).map((item, idx) => {
+                        const file = item.content?.file;
                         return (
                           <TouchableOpacity
                             key={idx}
-                            onPress={() => setPreviewIndex(idx)}
-                            style={{
-                              width: "32%",
-                              aspectRatio: 1,
-                              backgroundColor: "#e5e7eb",
-                              overflow: "hidden",
-                            }}
+                            onPress={() => handleDownload(file)}
+                            disabled={downloadingId === file.fileKey}
+                            className="flex-row items-center p-2.5 rounded-xl bg-[#f9fafb] border border-[#f3f4f6] mb-2 gap-2.5"
                           >
-                            {isVideo ? (
-                              <View
-                                style={{
-                                  flex: 1,
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  backgroundColor: "#000",
-                                }}
+                            <View className="w-10 h-10 rounded-lg bg-[#dbeafe] items-center justify-center">
+                              <Text className="text-[10px] font-bold text-[#1d4ed8]">
+                                {getFileExt(file.fileName)}
+                              </Text>
+                            </View>
+                            <View className="flex-1">
+                              <Text
+                                numberOfLines={1}
+                                className="text-[13px] font-medium text-[#111]"
                               >
-                                <Ionicons
-                                  name="play-circle"
-                                  size={36}
-                                  color="white"
-                                />
-                              </View>
+                                {truncateFileName(file.fileName, 30)}
+                              </Text>
+                              <Text className="text-[11px] text-[#9ca3af]">
+                                {getDateLabel(item.createdAt)} •{" "}
+                                {formatFileSize(file.fileSize)}
+                              </Text>
+                            </View>
+                            {downloadingId === file.fileKey ? (
+                              <ActivityIndicator size="small" color="#0068ff" />
                             ) : (
-                              <Image
-                                source={{ uri: file?.fileKey }}
-                                style={{ width: "100%", height: "100%" }}
-                                contentFit="cover"
+                              <Ionicons
+                                name="download-outline"
+                                size={17}
+                                color="#0068ff"
                               />
                             )}
                           </TouchableOpacity>
                         );
-                      })}
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
+                      })
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
 
-            <View style={{ backgroundColor: "white", marginBottom: 2 }}>
-              <SectionHeader
-                icon={
-                  <MaterialIcons
-                    name="insert-drive-file"
-                    size={18}
-                    color="#374151"
-                  />
-                }
-                title="File"
-                expanded={expandedFile}
-                onToggle={() => setExpandedFile((v) => !v)}
-              />
-              {expandedFile && (
-                <View style={{ paddingHorizontal: 12, paddingBottom: 16 }}>
-                  {files.length === 0 ? (
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        color: "#9ca3af",
-                        textAlign: "center",
-                        paddingVertical: 8,
-                      }}
-                    >
-                      Chưa có file trong cuộc trò chuyện
-                    </Text>
-                  ) : (
-                    files.slice(0, 6).map((item, idx) => {
-                      const file = item.content?.file;
-                      return (
-                        <TouchableOpacity
-                          key={idx}
-                          onPress={() => handleDownload(file)}
-                          disabled={downloadingId === file.fileKey}
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            padding: 10,
-                            borderRadius: 10,
-                            backgroundColor: "#f9fafb",
-                            borderWidth: 1,
-                            borderColor: "#f3f4f6",
-                            marginBottom: 8,
-                            gap: 10,
-                          }}
-                        >
-                          <View
-                            style={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: 8,
-                              backgroundColor: "#dbeafe",
-                              alignItems: "center",
-                              justifyContent: "center",
+            {isReady && (
+              <View className="bg-white mb-2">
+                <SectionHeader
+                  icon={<MaterialIcons name="link" size={18} color="#374151" />}
+                  title="Link"
+                  expanded={expandedLink}
+                  onToggle={() => setExpandedLink((v) => !v)}
+                />
+                {expandedLink && (
+                  <View className="px-3 pb-4">
+                    {links.length === 0 ? (
+                      <Text className="text-xs text-[#9ca3af] text-center py-2">
+                        Chưa có link trong cuộc trò chuyện
+                      </Text>
+                    ) : (
+                      links.slice(0, 6).map((item, idx) => {
+                        const url = item.content?.text;
+                        let domain = url;
+                        try {
+                          domain = new URL(url).hostname.replace("www.", "");
+                        } catch { }
+                        return (
+                          <TouchableOpacity
+                            key={idx}
+                            onPress={() => Linking.openURL(url)}
+                            className="flex-row items-center p-2.5 rounded-xl bg-[#f9fafb] border border-[#f3f4f6] mb-2 gap-2.5"
+                          >
+                            <View className="w-10 h-10 rounded-lg bg-[#f3f4f6] items-center justify-center">
+                              <MaterialIcons
+                                name="link"
+                                size={20}
+                                color="#6b7280"
+                              />
+                            </View>
+                            <View className="flex-1">
+                              <Text
+                                numberOfLines={1}
+                                className="text-[13px] text-[#0068ff]"
+                              >
+                                {url}
+                              </Text>
+                              <Text className="text-[11px] text-[#9ca3af]">
+                                {domain}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {isReady && (
+              <View className="bg-white mb-2">
+                <SectionHeader
+                  icon={<Ionicons name="stats-chart" size={18} color="#374151" />}
+                  title="Bình chọn"
+                  expanded={expandedPoll}
+                  onToggle={handleTogglePolls}
+                />
+                {expandedPoll && (
+                  <View className="px-3 pb-4">
+                    {loadingPolls ? (
+                      <ActivityIndicator size="small" color="#0068ff" />
+                    ) : polls.length === 0 ? (
+                      <Text className="text-xs text-[#9ca3af] text-center py-2">
+                        Chưa có bình chọn nào trong cuộc trò chuyện
+                      </Text>
+                    ) : (
+                      polls.map((msg, idx) => {
+                        const pollData = msg.poll;
+                        if (!pollData) return null;
+                        return (
+                          <TouchableOpacity
+                            key={msg._id || idx}
+                            className="p-3 rounded-xl bg-[#f9fafb] border border-[#f3f4f6] mb-2"
+                            onPress={() => {
+                              onClose();
+                              router.push({
+                                pathname: "/private/chat/[id]",
+                                params: {
+                                  id: conversation.conversationId,
+                                  messageId: msg._id,
+                                },
+                              });
                             }}
                           >
-                            <Text
-                              style={{
-                                fontSize: 10,
-                                fontWeight: "700",
-                                color: "#1d4ed8",
-                              }}
-                            >
-                              {getFileExt(file.fileName)}
-                            </Text>
-                          </View>
-                          <View style={{ flex: 1 }}>
                             <Text
                               numberOfLines={1}
-                              style={{
-                                fontSize: 13,
-                                fontWeight: "500",
-                                color: "#111",
-                              }}
+                              className="text-sm font-semibold text-[#111] mb-1"
                             >
-                              {truncateFileName(file.fileName, 30)}
+                              {pollData.title || "Bình chọn không tiêu đề"}
                             </Text>
-                            <Text style={{ fontSize: 11, color: "#9ca3af" }}>
-                              {getDateLabel(item.createdAt)} •{" "}
-                              {formatFileSize(file.fileSize)}
+                            <Text className="text-[12px] text-[#6b7280]">
+                              {pollData.totalParticipants || 0} người đã bình chọn
                             </Text>
-                          </View>
-                          {downloadingId === file.fileKey ? (
-                            <ActivityIndicator size="small" color="blue" />
-                          ) : (
-                            <Ionicons
-                              name="download-outline"
-                              size={17}
-                              color="blue"
-                            />
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })
-                  )}
-                </View>
-              )}
-            </View>
-
-            <View style={{ backgroundColor: "white", marginBottom: 2 }}>
-              <SectionHeader
-                icon={<MaterialIcons name="link" size={18} color="#374151" />}
-                title="Link"
-                expanded={expandedLink}
-                onToggle={() => setExpandedLink((v) => !v)}
-              />
-              {expandedLink && (
-                <View style={{ paddingHorizontal: 12, paddingBottom: 16 }}>
-                  {links.length === 0 ? (
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        color: "#9ca3af",
-                        textAlign: "center",
-                        paddingVertical: 8,
-                      }}
-                    >
-                      Chưa có link trong cuộc trò chuyện
-                    </Text>
-                  ) : (
-                    links.slice(0, 6).map((item, idx) => {
-                      const url = item.content?.text;
-                      let domain = url;
-                      try {
-                        domain = new URL(url).hostname.replace("www.", "");
-                      } catch {}
-                      return (
-                        <TouchableOpacity
-                          key={idx}
-                          onPress={() => Linking.openURL(url)}
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            padding: 10,
-                            borderRadius: 10,
-                            backgroundColor: "#f9fafb",
-                            borderWidth: 1,
-                            borderColor: "#f3f4f6",
-                            marginBottom: 8,
-                            gap: 10,
-                          }}
-                        >
-                          <View
-                            style={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: 8,
-                              backgroundColor: "#f3f4f6",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <MaterialIcons
-                              name="link"
-                              size={20}
-                              color="#6b7280"
-                            />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text
-                              numberOfLines={1}
-                              style={{ fontSize: 13, color: "#0068ff" }}
-                            >
-                              {url}
-                            </Text>
-                            <Text style={{ fontSize: 11, color: "#9ca3af" }}>
-                              {domain}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })
-                  )}
-                </View>
-              )}
-            </View>
-
-            <View style={{ backgroundColor: "white", marginBottom: 2 }}>
-              <SectionHeader
-                icon={<Ionicons name="stats-chart" size={18} color="#374151" />}
-                title="Bình chọn"
-                expanded={expandedPoll}
-                onToggle={handleTogglePolls}
-              />
-              {expandedPoll && (
-                <View style={{ paddingHorizontal: 12, paddingBottom: 16 }}>
-                  {loadingPolls ? (
-                    <ActivityIndicator size="small" color="#0068ff" />
-                  ) : polls.length === 0 ? (
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        color: "#9ca3af",
-                        textAlign: "center",
-                        paddingVertical: 8,
-                      }}
-                    >
-                      Chưa có bình chọn nào trong cuộc trò chuyện
-                    </Text>
-                  ) : (
-                    polls.map((msg, idx) => {
-                      const pollData = msg.poll;
-                      if (!pollData) return null;
-                      return (
-                        <TouchableOpacity
-                          key={msg._id || idx}
-                          style={{
-                            padding: 12,
-                            borderRadius: 10,
-                            backgroundColor: "#f9fafb",
-                            borderWidth: 1,
-                            borderColor: "#f3f4f6",
-                            marginBottom: 8,
-                          }}
-                          onPress={() => {
-                            onClose();
-                            router.push({
-                              pathname: "/private/chat/[id]",
-                              params: {
-                                id: conversation.conversationId,
-                                messageId: msg._id,
-                              },
-                            });
-                          }}
-                        >
-                          <Text
-                            numberOfLines={1}
-                            style={{
-                              fontSize: 14,
-                              fontWeight: "600",
-                              color: "#111",
-                              marginBottom: 4,
-                            }}
-                          >
-                            {pollData.title || "Bình chọn không tiêu đề"}
-                          </Text>
-                          <Text style={{ fontSize: 12, color: "#6b7280" }}>
-                            {pollData.totalParticipants || 0} người đã bình chọn
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })
-                  )}
-                </View>
-              )}
-            </View>
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* 3. DANH SÁCH THÀNH VIÊN */}
-            {isGroup && (
-              <View style={styles.whiteSection}>
+            {isGroup && isReady && (
+              <View className="bg-white mb-2">
                 <SectionHeader
-                  icon={<Ionicons name="people-outline" size={18} />}
+                  icon={<Ionicons name="people-outline" size={18} color="#4b5563" />}
                   title={`Thành viên (${members.length})`}
                   expanded={expandedMembers}
                   onToggle={() => setExpandedMembers(!expandedMembers)}
                 />
                 {expandedMembers && (
-                  <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
-                    {members.map((m) => (
+                  <View className="px-4 pb-2.5">
+                    {/* Chỉ render tối đa 15 người ở màn hình preview để đảm bảo độ mượt */}
+                    {members.slice(0, 15).map((m) => (
                       <TouchableOpacity
                         key={m.userId}
-                        style={styles.memberRow}
+                        className="flex-row items-center py-3 border-b border-[#f3f4f6]"
                         onPress={() => handleMemberAction(m)}
                       >
                         <GroupAvatar
-                          uri={m.avatarUrl}
-                          name={m.name || "User"}
+                          uri={m.profile?.avatarUrl}
+                          name={m.profile?.name || "User"}
                           size={44}
                         />
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.memberName}>
-                            {m.name} {m.userId === currentUserId && "(Bạn)"}
+                        <View className="flex-1 ml-3">
+                          <Text className="text-[15px] font-medium text-[#1f2937]">
+                            {m.profile?.name} {m.userId === currentUserId && "(Bạn)"}
                           </Text>
                           {m.role !== "MEMBER" && (
-                            <Text style={styles.roleLabel}>
+                            <Text className="text-[11px] text-[#0068ff] font-semibold mt-0.5">
                               {m.role === "OWNER" ? "Trưởng nhóm" : "Phó nhóm"}
                             </Text>
                           )}
@@ -1399,33 +1245,41 @@ const ConversationInfoSheet: React.FC<Props> = ({
                         )}
                       </TouchableOpacity>
                     ))}
+                    {members.length > 15 && (
+                      <TouchableOpacity
+                        className="py-3 items-center"
+                        onPress={() => {/* Logic mở full danh sách thành viên */ }}
+                      >
+                        <Text className="text-[#0068ff] text-sm">Xem tất cả ({members.length})</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 )}
               </View>
             )}
 
-            <View style={[styles.whiteSection, { marginTop: 10 }]}>
+            <View className="bg-white mb-2 py-1">
               {isGroup && isOwner && (
                 <TouchableOpacity
-                  style={styles.dangerBtn}
+                  className="flex-row items-center px-4 py-4 border-b border-[#f3f4f6]"
                   onPress={handleDeleteGroup}
                 >
                   <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                  <Text style={styles.dangerText}>Giải tán nhóm</Text>
+                  <Text className="ml-3 text-[15px] text-[#ef4444] font-semibold">Giải tán nhóm</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                style={styles.dangerBtn}
+                className="flex-row items-center px-4 py-4"
                 onPress={handleLeaveGroup}
               >
                 <Ionicons name="log-out-outline" size={20} color="#ef4444" />
-                <Text style={styles.dangerText}>
+                <Text className="ml-3 text-[15px] text-[#ef4444] font-semibold">
                   {isGroup ? "Rời nhóm" : "Xóa lịch sử chat"}
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <View style={{ height: 40 }} />
+            <View className="h-10" />
           </ScrollView>
 
           {previewIndex !== null && (
@@ -1435,33 +1289,16 @@ const ConversationInfoSheet: React.FC<Props> = ({
               animationType="fade"
               onRequestClose={() => setPreviewIndex(null)}
             >
-              <View
-                style={{
-                  flex: 1,
-                  backgroundColor: "rgba(0,0,0,0.95)",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
+              <View className="flex-1 bg-black/95 items-center justify-center">
                 <TouchableOpacity
-                  style={{
-                    position: "absolute",
-                    top: 50,
-                    right: 20,
-                    zIndex: 10,
-                  }}
+                  className="absolute top-[50px] right-5 z-10"
                   onPress={() => setPreviewIndex(null)}
                 >
                   <Ionicons name="close" size={30} color="white" />
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={{
-                    position: "absolute",
-                    top: 48,
-                    left: 20,
-                    zIndex: 10,
-                  }}
+                  className="absolute top-12 left-5 z-10"
                   onPress={() => {
                     const file = medias[previewIndex!]?.content?.file;
                     if (file) handleDownload(file);
@@ -1472,7 +1309,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
                   }
                 >
                   {downloadingId ===
-                  medias[previewIndex!]?.content?.file?.fileKey ? (
+                    medias[previewIndex!]?.content?.file?.fileKey ? (
                     <ActivityIndicator color="white" />
                   ) : (
                     <Ionicons name="download-outline" size={28} color="white" />
@@ -1481,12 +1318,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
 
                 {previewIndex > 0 && (
                   <TouchableOpacity
-                    style={{
-                      position: "absolute",
-                      left: 20,
-                      top: "90%",
-                      zIndex: 10,
-                    }}
+                    className="absolute left-5 top-[90%] z-10"
                     onPress={() =>
                       setPreviewIndex((p) => (p !== null ? p - 1 : p))
                     }
@@ -1497,12 +1329,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
 
                 {previewIndex < medias.length - 1 && (
                   <TouchableOpacity
-                    style={{
-                      position: "absolute",
-                      right: 20,
-                      top: "90%",
-                      zIndex: 10,
-                    }}
+                    className="absolute right-5 top-[90%] z-10"
                     onPress={() =>
                       setPreviewIndex((p) => (p !== null ? p + 1 : p))
                     }
@@ -1518,7 +1345,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
                     <Video
                       source={{ uri: file.fileKey }}
                       useNativeControls
-                      style={{ width: "90%", aspectRatio: 16 / 9 }}
+                      className="w-[90%] aspect-video"
                     />
                   ) : (
                     <Image
@@ -1540,28 +1367,15 @@ const ConversationInfoSheet: React.FC<Props> = ({
         onRequestClose={() => setShowMuteOptions(false)}
       >
         <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
+          className="flex-1 bg-black/40"
           onPress={() => setShowMuteOptions(false)}
         >
           <Pressable
             onPress={(e) => e.stopPropagation()}
-            style={{
-              position: "absolute",
-              bottom: 0,
-              width: "100%",
-              backgroundColor: "white",
-              borderTopLeftRadius: 16,
-              borderTopRightRadius: 16,
-              paddingBottom: 20,
-            }}
+            className="absolute bottom-0 w-full bg-white rounded-t-2xl pb-7"
           >
             <Text
-              style={{
-                textAlign: "center",
-                fontSize: 15,
-                fontWeight: "600",
-                paddingVertical: 14,
-              }}
+              className="text-center text-[15px] font-semibold py-3.5"
             >
               Tắt thông báo
             </Text>
@@ -1578,31 +1392,19 @@ const ConversationInfoSheet: React.FC<Props> = ({
                   handleMute(item.duration);
                   setShowMuteOptions(false);
                 }}
-                style={{
-                  paddingVertical: 14,
-                  paddingHorizontal: 20,
-                  borderTopWidth: 1,
-                  borderTopColor: "#f3f4f6",
-                }}
+                className="py-3.5 px-5 border-t border-[#f3f4f6]"
               >
-                <Text style={{ fontSize: 14, color: "#111" }}>
+                <Text className="text-sm text-[#111]">
                   {item.label}
                 </Text>
               </TouchableOpacity>
             ))}
 
-            {/* Cancel */}
             <TouchableOpacity
               onPress={() => setShowMuteOptions(false)}
-              style={{
-                marginTop: 8,
-                paddingVertical: 14,
-                alignItems: "center",
-                borderTopWidth: 6,
-                borderTopColor: "#f3f4f6",
-              }}
+              className="mt-2 py-3.5 items-center border-t-[6px] border-[#f3f4f6]"
             >
-              <Text style={{ fontSize: 14, color: "#ef4444" }}>Hủy</Text>
+              <Text className="text-sm text-[#ef4444]">Hủy</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -1665,191 +1467,5 @@ const ConversationInfoSheet: React.FC<Props> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)" },
-  sheetContainer: {
-    flex: 1,
-    backgroundColor: "#f0f2f5",
-    marginTop: 50,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    overflow: "hidden",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "white",
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#e5e7eb",
-  },
-  headerTitle: { fontSize: 16, fontWeight: "bold" },
-  profileSection: {
-    backgroundColor: "white",
-    alignItems: "center",
-    paddingVertical: 25,
-    marginBottom: 8,
-  },
-  largeAvatar: { width: 80, height: 80, borderRadius: 40, marginBottom: 12 },
-  profileName: { fontSize: 18, fontWeight: "bold" },
-  quickActions: {
-    backgroundColor: "white",
-    flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 15,
-    marginBottom: 8,
-  },
-  actionBtn: { alignItems: "center" },
-  iconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#f3f4f6",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
-  },
-  actionLabel: { fontSize: 12, color: "#4b5563" },
-  whiteSection: { backgroundColor: "white", marginBottom: 8 },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-  },
-  sectionTitle: { fontSize: 15, fontWeight: "600" },
-  mediaGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 2,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  mediaItem: {
-    width: (width - 36) / 3,
-    aspectRatio: 1,
-    backgroundColor: "#eee",
-  },
-  mediaImg: { width: "100%", height: "100%" },
-  emptyText: {
-    textAlign: "center",
-    color: "#9ca3af",
-    width: "100%",
-    padding: 20,
-  },
-  memberRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  memberAvatar: { width: 44, height: 44, borderRadius: 22 },
-  memberName: { fontSize: 15, fontWeight: "500" },
-  roleLabel: { fontSize: 11, color: "#0068ff", fontWeight: "600" },
-  dangerBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    gap: 12,
-    borderTopWidth: 0.5,
-    borderTopColor: "#f3f4f6",
-  },
-  dangerText: { fontSize: 15, color: "#ef4444", fontWeight: "600" },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end",
-  },
-  muteSheet: {
-    backgroundColor: "white",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingBottom: 30,
-  },
-  muteTitle: {
-    textAlign: "center",
-    fontSize: 15,
-    fontWeight: "600",
-    padding: 15,
-  },
-  muteOpt: { padding: 15, borderTopWidth: 1, borderTopColor: "#f3f4f6" },
-  muteCancel: {
-    marginTop: 10,
-    padding: 15,
-    alignItems: "center",
-    borderTopWidth: 6,
-    borderTopColor: "#f3f4f6",
-  },
-  requestRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    backgroundColor: "#f0f7ff",
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  requestAvatar: { width: 36, height: 36, borderRadius: 18, marginRight: 10 },
-  requestName: { fontSize: 14, fontWeight: "600", color: "#111" },
-  requestSub: { fontSize: 11, color: "#666", marginTop: 2 },
-  approveBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#0068ff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rejectBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#e5e7eb",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  settingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#f0f0f0",
-  },
-  settingTitle: { fontSize: 14, fontWeight: "500", color: "#333" },
-  settingSub: { fontSize: 11, color: "#888", marginTop: 2 },
-  avatarContainer: {
-    position: "relative",
-    marginBottom: 12,
-  },
-  editAvatarBtn: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    backgroundColor: "white",
-    padding: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    elevation: 2,
-  },
-  nameContainer: {
-    width: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 10,
-    paddingHorizontal: 20,
-  },
-  nameInput: {
-    fontSize: 18,
-    fontWeight: "bold",
-    borderBottomWidth: 2,
-    borderBottomColor: "#0068ff",
-    paddingHorizontal: 10,
-    textAlign: "center",
-    minWidth: 150,
-  },
-});
 
 export default ConversationInfoSheet;

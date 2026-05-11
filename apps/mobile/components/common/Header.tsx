@@ -1,7 +1,7 @@
 import { Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { moderateScale } from "@/utils/responsive";
+import { moderateScale, verticalScale } from "@/utils/responsive";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "@/constants/colors";
 
@@ -23,7 +23,8 @@ export default function Header({
   const router = useRouter();
   return (
     <LinearGradient
-      className="flex flex-row items-center h-14 px-screen-edge"
+      className="flex flex-row gap-2 items-center px-screen-edge"
+      style={{ height: 50 }}
       start={[0, 0]}
       end={[1, 0]}
       // Background Linear Gradient
@@ -34,8 +35,7 @@ export default function Header({
       }
     >
       {/* Phần bên trái của Header */}
-      <View className="w-12 flex-none">
-        {leftChild}
+      <View className="flex-none flex-row items-center gap-2.5">
         {back && (
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons
@@ -45,11 +45,12 @@ export default function Header({
             />
           </TouchableOpacity>
         )}
+        {leftChild}
       </View>
       {/* Phần giữa */}
       <View className="flex-1">{centerChild}</View>
       {/* Phần bên phải */}
-      <View className="flex-none w-12 items-end">{rightChild}</View>
+      <View className="flex-none flex-row items-center">{rightChild}</View>
     </LinearGradient>
   );
 }

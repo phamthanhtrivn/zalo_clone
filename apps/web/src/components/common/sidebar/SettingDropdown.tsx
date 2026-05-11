@@ -19,7 +19,11 @@ import { useAppDispatch } from "@/store";
 import { useState } from "react";
 import { SettingsModal } from "@/components/layout/setting/SettingModal";
 
-export default function SettingDropdownSidebar() {
+export default function SettingDropdownSidebar({
+  onOpenProfile,
+}: {
+  onOpenProfile?: () => void;
+}) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const dispatch = useAppDispatch();
 
@@ -42,7 +46,10 @@ export default function SettingDropdownSidebar() {
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-50 bg-white" align="start">
           <DropdownMenuGroup>
-            <DropdownMenuItem className="hover:cursor-pointer p-3">
+            <DropdownMenuItem
+              className="hover:cursor-pointer p-3"
+              onClick={onOpenProfile}
+            >
               <User />
               Thông tin tài khoản
             </DropdownMenuItem>
