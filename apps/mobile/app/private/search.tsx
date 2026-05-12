@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Platform,
   ScrollView,
   Text,
@@ -16,7 +15,10 @@ import Container from "@/components/common/Container";
 import Header from "@/components/common/Header";
 import { conversationService } from "@/services/conversation.service";
 import { messageService } from "@/services/message.service";
-import { useAppSelector } from "@/store/store";
+import { userService } from "@/services/user.service";
+import { fetchConversations } from "@/store/slices/conversationSlice";
+import { useAppDispatch, useAppSelector } from "@/store/store";
+import { showToast } from "@/utils/toast";
 
 import { useQuery } from "@tanstack/react-query";
 import GroupAvatar from "@/components/ui/GroupAvatar";
@@ -32,6 +34,7 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export default function SearchScreen() {
+  const dispatch = useAppDispatch();
   const router = useRouter();
   const { conversationId: targetConversationId } = useLocalSearchParams<{
     conversationId?: string;
@@ -43,6 +46,7 @@ export default function SearchScreen() {
   const [scope, setScope] = useState<TabId>("all");
   const [selectedSenderId, setSelectedSenderId] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(-1);
+  const [friendRequestingIds, setFriendRequestingIds] = useState<string[]>([]);
 
   const flatListRef = useRef<FlatList>(null);
 
@@ -154,6 +158,56 @@ export default function SearchScreen() {
     });
   };
 
+  const openDirectConversation = async (targetUserId: string) => {
+    try {
+      const response: any = await conversationService.getOrCreateDirect(targetUserId);
+      const conversationId =
+        response?.data?._id ||
+        response?.data?.conversationId ||
+        response?._id ||
+        response?.conversationId;
+
+      if (!conversationId) {
+        throw new Error("Missing conversation id");
+      }
+
+      try {
+        await dispatch(fetchConversations()).unwrap();
+      } catch {
+        // The chat can still open using the returned conversation id.
+      }
+
+      router.push({
+        pathname: "/private/chat/[id]",
+        params: { id: conversationId, otherUserId: targetUserId },
+      });
+    } catch (error) {
+      showToast(
+        (error as any)?.response?.data?.message ||
+          "Không thể mở cuộc trò chuyện, vui lòng thử lại",
+      );
+    }
+  };
+
+  const handleAddFriendFromSearch = async (targetUserId: string) => {
+    if (!userId || !targetUserId || friendRequestingIds.includes(targetUserId)) {
+      return;
+    }
+
+    try {
+      setFriendRequestingIds((prev) => [...prev, targetUserId]);
+      const response = await userService.addFriend(targetUserId, userId);
+      showToast(response?.message || "Đã gửi lời mời kết bạn");
+    } catch (error) {
+      showToast(
+        (error as any)?.response?.data?.message ||
+          "Không thể gửi lời mời kết bạn",
+      );
+    } finally {
+      setFriendRequestingIds((prev) => prev.filter((id) => id !== targetUserId));
+    }
+  };
+
   const navigateToResult = (direction: "up" | "down") => {
     if (filteredMessages.length === 0) return;
 
@@ -186,13 +240,10 @@ export default function SearchScreen() {
         if (item.conversationId) {
           router.push({
             pathname: "/private/chat/[id]",
-            params: { id: item.conversationId },
+            params: { id: item.conversationId, otherUserId: item.userId },
           });
         } else {
-          router.push({
-            pathname: "/private/chat/new",
-            params: { targetUserId: item.userId },
-          });
+          void openDirectConversation(item.userId);
         }
         return;
       }
@@ -240,6 +291,14 @@ export default function SearchScreen() {
       icon = <Ionicons name="document-outline" size={14} color="#6b7280" />;
     }
 
+    const isSendingFriendRequest = friendRequestingIds.includes(item.userId);
+    const canAddFriend =
+      isContact &&
+      !item.isFriend &&
+      !!item.userId &&
+      item.status !== "PENDING" &&
+      item.status !== "REQUESTED";
+
     return (
       <TouchableOpacity
         className="flex-row items-center px-4 py-3 bg-white border-b border-gray-100"
@@ -265,6 +324,23 @@ export default function SearchScreen() {
             {subLabel}
           </Text>
         </View>
+        {canAddFriend && (
+          <TouchableOpacity
+            disabled={isSendingFriendRequest}
+            onPress={() => handleAddFriendFromSearch(item.userId)}
+            className={`ml-3 px-3 py-2 rounded-full ${
+              isSendingFriendRequest ? "bg-[#dbeafe]" : "bg-[#0091ff]"
+            }`}
+          >
+            <Text
+              className={`text-[12px] font-semibold ${
+                isSendingFriendRequest ? "text-[#0a67d8]" : "text-white"
+              }`}
+            >
+              {isSendingFriendRequest ? "Đang gửi" : "Kết bạn"}
+            </Text>
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
     );
   };

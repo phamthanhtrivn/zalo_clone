@@ -49,15 +49,11 @@ export class SocialService {
 
         return this.postModel.create({
             authorId: new Types.ObjectId(userId),
-
             content: {
                 text: dto.text,
                 media,
             },
-
             visibility: dto.visibility || 'PUBLIC',
-
-            // 🔥 NEW FEATURES
             location: dto.location,
             music: dto.music,
             taggedFriends: dto.taggedFriends?.map(id => new Types.ObjectId(id)) || [],
@@ -93,54 +89,62 @@ export class SocialService {
                     ]
                 }
             },
-
-            // JOIN USER
             {
                 $lookup: {
-                    from: 'users', // collection name
+                    from: 'users',
                     localField: 'authorId',
                     foreignField: '_id',
                     as: 'author'
                 }
             },
-
             { $unwind: { path: '$author', preserveNullAndEmptyArrays: true } },
-
             {
                 $project: {
                     id: '$_id',
                     authorId: '$authorId',
                     text: '$content.text',
                     media: '$content.media',
-                    likes: { $size: { $ifNull: ['$reactions', []] } },
+                    reactions: '$reactions',
                     comments: '$commentCount',
                     createdAt: 1,
-
                     name: '$author.profile.name',
                     avatar: '$author.profile.avatarUrl'
                 }
             },
-
             { $sort: { createdAt: -1 } }
         ]);
 
-        return posts.map(post => ({
-            id: post.id.toString(),
-            authorId: post.authorId?.toString(),
-            name: post.name || 'User',
-            avatar: post.avatar
-                ? this.storageService.signFileUrl(post.avatar)
-                : '',
-            text: post.text || '',
-            images: (post.media || []).map(m =>
-                this.storageService.signFileUrl(m.url)
-            ),
-            likes: post.likes || 0,
-            comments: post.comments || 0,
-            createdAt: post.createdAt,
-            music: post.music,
-            location: post.location,
-        }));
+        return posts.map(post => {
+            const reactionCounts: Record<string, number> = {};
+            let myReaction: string | null = null;
+
+            for (const r of (post.reactions || [])) {
+                reactionCounts[r.type] = (reactionCounts[r.type] || 0) + 1;
+                if (r.userId?.toString() === userId) {
+                    myReaction = r.type;
+                }
+            }
+
+            return {
+                id: post.id.toString(),
+                authorId: post.authorId?.toString(),
+                name: post.name || 'User',
+                avatar: post.avatar
+                    ? this.storageService.signFileUrl(post.avatar)
+                    : '',
+                text: post.text || '',
+                images: (post.media || []).map(m =>
+                    this.storageService.signFileUrl(m.url)
+                ),
+                likes: (post.reactions || []).length,
+                reactionCounts,
+                myReaction,
+                comments: post.comments || 0,
+                createdAt: post.createdAt,
+                music: post.music,
+                location: post.location,
+            };
+        });
     }
 
     // ================= REACTION =================
@@ -165,7 +169,23 @@ export class SocialService {
             });
         }
 
-        return post.save();
+        await post.save();
+
+        const reactionCounts: Record<string, number> = {};
+        let myReaction: string | null = null;
+        for (const r of post.reactions) {
+            reactionCounts[r.type] = (reactionCounts[r.type] || 0) + 1;
+            if (r.userId?.toString() === userId) {
+                myReaction = r.type;
+            }
+        }
+
+        return {
+            postId,
+            likes: post.reactions.length,
+            reactionCounts,
+            myReaction,
+        };
     }
 
     // ================= COMMENT =================
@@ -193,6 +213,7 @@ export class SocialService {
             id: comment._id,
             content: comment.content,
             parentId: comment.parentId,
+            createdAt: (comment as any).createdAt,
             user: {
                 id: user._id,
                 name: user.profile?.name || '',
@@ -203,10 +224,25 @@ export class SocialService {
         };
     }
 
-    // ================= GET COMMENTS =================
-    async getComments(postId: string) {
+    // ================= GET COMMENTS (filtered by friends) =================
+    async getComments(postId: string, viewerId: string) {
+        // Lấy danh sách bạn bè của viewer
+        const viewer = await this.postModel.db
+            .collection('users')
+            .findOne({ _id: new Types.ObjectId(viewerId) });
+
+        const friendIds: Types.ObjectId[] = (viewer?.friends || [])
+            .filter((f: any) => f.status === 'ACCEPTED')
+            .map((f: any) => new Types.ObjectId(f.friendId));
+
+        // Thêm chính viewer vào danh sách được phép xem
+        friendIds.push(new Types.ObjectId(viewerId));
+
         const comments = await this.commentModel
-            .find({ postId })
+            .find({
+                postId: new Types.ObjectId(postId),
+                userId: { $in: friendIds },
+            })
             .populate('userId', 'profile.name profile.avatarUrl')
             .sort({ createdAt: 1 })
             .lean();
@@ -214,22 +250,37 @@ export class SocialService {
         return comments.map((c: any) => ({
             id: c._id,
             content: c.content,
-            parentId: c.parentId,
+            parentId: c.parentId || null,
             createdAt: c.createdAt,
             user: {
                 id: c.userId?._id,
-                name: c.userId?.profile?.name,
+                name: c.userId?.profile?.name || '',
                 avatar: c.userId?.profile?.avatarUrl
-                    ? this.storageService.signFileUrl(
-                        c.userId.profile.avatarUrl,
-                    )
+                    ? this.storageService.signFileUrl(c.userId.profile.avatarUrl)
                     : '',
             },
         }));
     }
-    searchTrack(query: string) {
-        return this.spotifyService.searchTrack(query);
+
+    // ================= DELETE COMMENT =================
+    async deleteComment(commentId: string, userId: string) {
+        const comment = await this.commentModel.findOneAndDelete({
+            _id: new Types.ObjectId(commentId),
+            userId: new Types.ObjectId(userId),
+        }).lean();
+
+        if (!comment) throw new NotFoundException('Bình luận không tồn tại hoặc không có quyền xoá');
+
+        await this.postModel.updateOne(
+            { _id: (comment as any).postId },
+            { $inc: { commentCount: -1 } },
+        );
+
+        return { success: true };
     }
 
 
+    searchTrack(query: string) {
+        return this.spotifyService.searchTrack(query);
+    }
 }
