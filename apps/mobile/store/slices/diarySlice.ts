@@ -1,18 +1,37 @@
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice } from "@reduxjs/toolkit";
 import {
     fetchDiaryPosts,
     reactPostThunk,
     commentPostThunk,
+    fetchCommentsThunk,
+    deleteCommentThunk,
 } from "./diaryThunk";
+
+interface CommentUser {
+    id: string;
+    name: string;
+    avatar: string;
+}
+
+export interface CommentItem {
+    id: string;
+    content: string;
+    parentId: string | null;
+    createdAt: string;
+    user: CommentUser;
+}
 
 interface Post {
     id: string;
+    _id?: string;
     userId: string;
     name: string;
     avatar: string;
     text: string;
     images: string[];
     likes: number;
+    reactionCounts: Record<string, number>;
+    myReaction: string | null;
     comments: number;
     createdAt: string;
 }
@@ -21,12 +40,17 @@ interface DiaryState {
     posts: Post[];
     loading: boolean;
     error: string | null;
+    /** comments theo postId */
+    commentsByPost: Record<string, CommentItem[]>;
+    commentLoading: Record<string, boolean>;
 }
 
 const initialState: DiaryState = {
     posts: [],
     loading: false,
     error: null,
+    commentsByPost: {},
+    commentLoading: {},
 };
 
 const diarySlice = createSlice({
@@ -35,37 +59,68 @@ const diarySlice = createSlice({
     reducers: {},
     extraReducers: (builder) => {
         builder
-            // FETCH
+            // FETCH POSTS
             .addCase(fetchDiaryPosts.pending, (state) => {
                 state.loading = true;
             })
             .addCase(fetchDiaryPosts.fulfilled, (state, action) => {
                 state.loading = false;
-                state.posts = action.payload;
+                state.posts = action.payload ?? [];
             })
             .addCase(fetchDiaryPosts.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload as string;
             })
 
-            // LIKE
+            // REACT
             .addCase(reactPostThunk.fulfilled, (state, action) => {
                 const post = state.posts.find(
-                    (p) => p.id === action.payload.postId
+                    (p) => p.id === action.payload.postId || p._id === action.payload.postId
                 );
                 if (post) {
                     post.likes = action.payload.likes;
+                    post.reactionCounts = action.payload.reactionCounts;
+                    post.myReaction = action.payload.myReaction;
                 }
             })
 
-            // COMMENT
+            // COMMENT (gửi mới)
             .addCase(commentPostThunk.fulfilled, (state, action) => {
-                const post = state.posts.find(
-                    (p) => p.id === action.payload.postId
-                );
-                if (post) {
-                    post.comments += 1;
+                const { postId, comment } = action.payload;
+                const post = state.posts.find((p) => p.id === postId);
+                if (post) post.comments += 1;
+
+                if (comment && comment.id) {
+                    if (!state.commentsByPost[postId]) {
+                        state.commentsByPost[postId] = [];
+                    }
+                    state.commentsByPost[postId].push(comment as CommentItem);
                 }
+            })
+
+            // FETCH COMMENTS
+            .addCase(fetchCommentsThunk.pending, (state, action) => {
+                state.commentLoading[action.meta.arg] = true;
+            })
+            .addCase(fetchCommentsThunk.fulfilled, (state, action) => {
+                const { postId, comments } = action.payload;
+                state.commentsByPost[postId] = comments ?? [];
+                state.commentLoading[postId] = false;
+            })
+            .addCase(fetchCommentsThunk.rejected, (state, action) => {
+                state.commentLoading[action.meta.arg] = false;
+            })
+
+            // DELETE COMMENT
+            .addCase(deleteCommentThunk.fulfilled, (state, action) => {
+                const { postId, commentId } = action.payload;
+                if (state.commentsByPost[postId]) {
+                    state.commentsByPost[postId] = state.commentsByPost[postId].filter(
+                        (c) => c.id.toString() !== commentId
+                    );
+                }
+                const post = state.posts.find((p) => p.id === postId);
+                if (post && post.comments > 0) post.comments -= 1;
             });
     },
 });

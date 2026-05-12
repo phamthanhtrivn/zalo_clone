@@ -19,9 +19,8 @@ export default function SocialScreen() {
 
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
-  const { posts = [], loading = false } = useAppSelector(
-    (state: any) => state.diary || {}
-  );
+  const posts = useAppSelector((state: any) => state.diary?.posts ?? []);
+  const loading = useAppSelector((state: any) => state.diary?.loading ?? false);
 
   // Kiểm tra avatarUrl ở cả root (từ Auth) và profile (từ User model)
   const avatar = user?.avatarUrl || user?.profile?.avatarUrl || null;
