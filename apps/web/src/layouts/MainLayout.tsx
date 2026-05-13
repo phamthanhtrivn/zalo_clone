@@ -5,13 +5,19 @@ import { TooltipProvider } from '../components/ui/tooltip'
 import IncomingCall from "../components/video-call/IncomingCall";
 import OutgoingCall from "../components/video-call/OutgoingCall";
 import VideoCallOverlay from "../components/video-call/VideoCallOverlay";
+import { useCall } from "@/contexts/VideoCallContext";
 
 const MainLayout = () => {
+  const { callMode } = useCall();
   return (
     <TooltipProvider>
       <div className="flex h-screen w-full bg-[#f4f7f9] overflow-hidden font-sans">
-        <IncomingCall />
-        <OutgoingCall />
+        {callMode === 'DIRECT' && (
+          <>
+            <IncomingCall />
+            <OutgoingCall />
+          </>
+        )}
         <VideoCallOverlay />
         {/* Primary Sidebar - Zalo Style (Blue) */}
         <SidebarPrimary />

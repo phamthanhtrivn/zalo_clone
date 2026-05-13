@@ -233,6 +233,20 @@ export const messageService = {
     return response.data;
   },
 
+  initiateGroupCall: async (data: {
+    conversationId: string;
+    senderId: string;
+    type: "VIDEO" | "VOICE";
+  }) => {
+    const response = await api.post(`/messages/call/group/initiate`, data);
+    return response.data;
+  },
+
+  joinGroupCall: async (sessionId: string) => {
+    const response = await api.post(`/messages/call/group/join`, { sessionId });
+    return response.data;
+  },
+
   updateCallStatus: async (data: {
     messageId: string;
     conversationId: string;

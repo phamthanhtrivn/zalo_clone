@@ -196,16 +196,16 @@ const MessageList = ({
                         receipt.userId?.avatarUrl
                       ),
                   ).length > 3 && (
-                    <div className="w-4 h-4 rounded-full bg-gray-300 text-[10px] flex items-center justify-center border border-white">
-                      +{message.readReceipts.filter(
-                        (receipt: any) =>
-                          !!(
-                            receipt.userId?.profile?.avatarUrl ||
-                            receipt.userId?.avatarUrl
-                          ),
-                      ).length - 3}
-                    </div>
-                  )}
+                      <div className="w-4 h-4 rounded-full bg-gray-300 text-[10px] flex items-center justify-center border border-white">
+                        +{message.readReceipts.filter(
+                          (receipt: any) =>
+                            !!(
+                              receipt.userId?.profile?.avatarUrl ||
+                              receipt.userId?.avatarUrl
+                            ),
+                        ).length - 3}
+                      </div>
+                    )}
                 </div>
               </div>
             )}
