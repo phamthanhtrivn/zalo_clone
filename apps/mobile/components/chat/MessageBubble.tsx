@@ -12,6 +12,7 @@ import {
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
+import { useVideoCall } from "@/contexts/VideoCallContext";
 import GroupAvatar from "../ui/GroupAvatar";
 import PollMessage from "./PollMessage";
 import * as FileSystem from "expo-file-system/legacy";
@@ -45,6 +46,7 @@ type Props = {
   isHighlighted?: boolean;
   onReplyPress?: (messageId: string) => void;
   isGroup: boolean;
+  onJoinGroupCall?: (sessionId: string, conversationId: string, type: "VIDEO" | "VOICE") => void;
 };
 
 const TextWithLinks = ({ text }: { text: string }) => {
@@ -117,7 +119,10 @@ const MessageBubble = React.memo(({
   isHighlighted = false,
   onReplyPress,
   isGroup,
+  onJoinGroupCall,
 }: Props) => {
+  const { callMode } = useVideoCall();
+  const isInAnotherCall = callMode !== 'NONE';
   const content = message.content;
   const files = content?.files || [];
   const call = message.call;
@@ -134,6 +139,51 @@ const MessageBubble = React.memo(({
   const docFiles = files.filter((f: any) => f.type === "FILE");
 
   const renderCallContent = () => {
+    if (message.type === "GROUP_CALL" || message.callSessionId) {
+      const isVideo = message.call?.type === "VIDEO" || true;
+      const status = message.call?.status || "ACTIVE";
+      return (
+        <View style={{ alignItems: "center", gap: 8, paddingVertical: 8, width: 180 }}>
+          <View style={{ padding: 12, borderRadius: 24, backgroundColor: "rgba(255,255,255,0.5)" }}>
+            <Ionicons name={isGroup ? "people" : (isVideo ? "videocam" : "call")} size={24} color="#0068ff" />
+          </View>
+          <View style={{ alignItems: "center" }}>
+            <Text style={{ fontSize: 14, fontWeight: "500", textAlign: "center" }}>
+              Cuộc gọi {isGroup ? "nhóm " : ""}{isVideo ? "video" : "thoại"}
+            </Text>
+            <Text style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
+              {status === "ENDED"
+                ? `Cuộc gọi đã kết thúc${message.call?.duration ? ` • ${Math.floor(message.call.duration / 60).toString().padStart(2, '0')}:${(message.call.duration % 60).toString().padStart(2, '0')}` : ''}`
+                : (status === "ACTIVE" || status === "RINGING" || status === "CALLING" ? "Đang diễn ra..." : "Cuộc gọi nhóm")}
+            </Text>
+          </View>
+          {status !== "ENDED" && message.callSessionId && message.conversationId && (
+            <TouchableOpacity
+              onPress={() => {
+                if (isInAnotherCall) {
+                  Alert.alert("Thông báo", "Bạn cần kết thúc cuộc gọi hiện tại để tham gia nhóm.");
+                  return;
+                }
+                onJoinGroupCall?.(message.callSessionId as string, message.conversationId, isVideo ? "VIDEO" : "VOICE");
+              }}
+              style={{
+                marginTop: 8,
+                width: "100%",
+                paddingVertical: 8,
+                backgroundColor: isInAnotherCall ? "#94a3b8" : "#0068ff",
+                borderRadius: 8,
+                alignItems: "center"
+              }}
+            >
+              <Text style={{ color: "white", fontSize: 14, fontWeight: "600" }}>
+                {isInAnotherCall ? "Đang bận gọi" : "Tham gia"}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      );
+    }
+
     if (!call) return null;
     const isVideo = call.type === "VIDEO";
     let statusText = "";
@@ -441,7 +491,7 @@ const MessageBubble = React.memo(({
           }}
         >
           {/* NỘI DUNG CHÍNH */}
-          {call ? (
+          {call || message.type === "GROUP_CALL" || message.callSessionId ? (
             renderCallContent()
           ) : (
             <>

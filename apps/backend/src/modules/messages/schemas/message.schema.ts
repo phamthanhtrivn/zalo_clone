@@ -110,6 +110,9 @@ export class Message {
   @Prop({ type: Call })
   call?: Call;
 
+  @Prop({ type: Types.ObjectId, ref: 'CallSession', required: false })
+  callSessionId?: Types.ObjectId;
+
  @Prop({ type: Types.ObjectId, ref: 'Poll', required: false })
   pollId?: Types.ObjectId;
 

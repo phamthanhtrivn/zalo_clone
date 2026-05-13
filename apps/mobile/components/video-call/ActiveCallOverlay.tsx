@@ -1,17 +1,16 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, memo } from "react";
 import { 
   Modal, 
   TouchableOpacity, 
   View, 
   Text, 
   Dimensions, 
-  Animated, 
-  PanResponder,
   SafeAreaView,
   StyleSheet
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoCall } from "@/contexts/VideoCallContext";
+import { conversationService } from "@/services/conversation.service";
 
 // Safe WebRTC Import
 let RTCView: any = View;
@@ -23,71 +22,160 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 function CallTimer({ isOpen }: { isOpen: boolean }) {
   const [seconds, setSeconds] = useState(0);
-
   useEffect(() => {
-    if (!isOpen) {
-      setSeconds(0);
-      return;
-    }
+    if (!isOpen) { setSeconds(0); return; }
     const t = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(t);
   }, [isOpen]);
 
   const formatDuration = (s: number) => {
-    const hh = Math.floor(s / 3600);
-    const mm = Math.floor((s % 3600) / 60);
+    const mm = Math.floor(s / 60);
     const ss = s % 60;
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return hh > 0 ? `${pad(hh)}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
+    return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
   };
 
-  return (
-    <Text className="text-white font-mono text-lg tabular-nums">
-      {formatDuration(seconds)}
-    </Text>
-  );
+  return <Text className="text-white font-mono text-lg">{formatDuration(seconds)}</Text>;
 }
+
+const ParticipantView = memo(({ stream, name, isLocal, camOn = true, micOn = true, style }: any) => {
+  return (
+    <View style={[styles.participantContainer, style]}>
+      {stream && camOn ? (
+        <RTCView
+          streamURL={stream.toURL()}
+          style={StyleSheet.absoluteFillObject}
+          objectFit="cover"
+          zOrder={isLocal ? 1 : 0}
+          mirror={isLocal}
+        />
+      ) : (
+        <View className="flex-1 bg-slate-900 items-center justify-center">
+           <View className="w-20 h-20 rounded-full bg-slate-800 items-center justify-center border border-white/10">
+              <Ionicons name="person" size={40} color="#475569" />
+           </View>
+           {!camOn && <Text className="text-slate-500 text-xs mt-3">Camera tắt</Text>}
+        </View>
+      )}
+      
+      <View style={styles.nameLabel}>
+        <View className="flex-row items-center gap-1.5">
+           {!micOn && <Ionicons name="mic-off" size={12} color="#ef4444" />}
+           <Text className="text-white text-[10px] font-medium" numberOfLines={1}>
+             {isLocal ? "Bạn" : name}
+           </Text>
+        </View>
+      </View>
+    </View>
+  );
+});
+
+// --- Layouts ---
+
+const DirectLayout = ({ localStream, remoteStream, partnerName, camOn, micOn }: any) => (
+  <View style={styles.flex1}>
+    {/* Remote (Full) */}
+    <ParticipantView stream={remoteStream} name={partnerName} isLocal={false} style={styles.flex1} />
+    {/* Local (PiP) */}
+    <View style={styles.pipContainer}>
+      <ParticipantView 
+        stream={localStream} 
+        name="Bạn" 
+        isLocal={true} 
+        camOn={camOn} 
+        micOn={micOn}
+        style={styles.flex1} 
+      />
+    </View>
+  </View>
+);
+
+const GroupGrid = ({ localStream, remoteStreams, getName, camOn, micOn, isWaiting }: any) => {
+  const remoteEntries = Object.entries(remoteStreams);
+  const isAlone = remoteEntries.length === 0;
+  const isTwo = remoteEntries.length === 1; // local + 1 remote = 2 total
+
+  if (isAlone) {
+    return (
+      <View style={styles.flex1}>
+        {/* Local camera fullscreen */}
+        <ParticipantView stream={localStream} name="Bạn" isLocal={true} camOn={camOn} micOn={micOn} style={styles.flex1} />
+        {/* Waiting overlay label */}
+        <View style={{ position: 'absolute', top: 60, left: 0, right: 0, alignItems: 'center' }}>
+          <View style={{ backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons name="people-outline" size={16} color="#94a3b8" />
+            <Text style={{ color: '#94a3b8', fontSize: 13 }}>Đang chờ người khác tham gia...</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={isTwo ? styles.gridContainer : styles.wrapContainer}>
+      {remoteEntries.map(([uid, stream]) => (
+        <ParticipantView key={uid} stream={stream} name={getName(uid)} isLocal={false} style={isTwo ? styles.halfScreen : styles.gridItem} />
+      ))}
+      <ParticipantView 
+        stream={localStream} 
+        name="Bạn" 
+        isLocal={true} 
+        camOn={camOn} 
+        micOn={micOn}
+        style={isTwo ? styles.halfScreen : styles.gridItem} 
+      />
+    </View>
+  );
+};
+
+// --- Main Overlay ---
 
 export default function ActiveCallOverlay() {
   const { 
+    callMode,
     sessionState, 
     videoCallData, 
     localStream, 
-    remoteStream, 
+    remoteStream,
+    remoteStreams, 
     leaveCall 
   } = useVideoCall();
 
-  const isOpen = sessionState === "CONNECTED";
+  const isOpen = sessionState === "CONNECTED" || sessionState === "IN_GROUP_CALL" || (callMode === 'GROUP' && sessionState === 'CALLING');
+  const isWaiting = callMode === 'GROUP' && sessionState === 'CALLING';
   const isVideo = videoCallData?.callType === "VIDEO";
 
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+  const [members, setMembers] = useState<any[]>([]);
 
-  // Draggable PIP Logic
-  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
-      onPanResponderRelease: () => {
-        pan.extractOffset();
-      },
-    })
-  ).current;
+  useEffect(() => {
+    if (isOpen && videoCallData?.conversationId) {
+      conversationService.getListMembers(videoCallData.conversationId)
+        .then(res => res?.data && setMembers(res.data))
+        .catch(() => {});
+    }
+  }, [isOpen, videoCallData?.conversationId]);
+
+  const getName = (id: string) => {
+    const member = members.find(m => m.userId === id);
+    return member?.name || videoCallData?.fromName || `User_${id.substring(id.length - 4)}`;
+  };
 
   useEffect(() => {
     if (localStream) {
-      setMicOn(localStream.getAudioTracks()?.[0]?.enabled ?? false);
-      setCamOn(localStream.getVideoTracks()?.[0]?.enabled ?? false);
+      const aEnabled = localStream.getAudioTracks()?.[0]?.enabled ?? true;
+      const vEnabled = localStream.getVideoTracks()?.[0]?.enabled ?? true;
+      setMicOn(aEnabled);
+      setCamOn(vEnabled);
     }
-  }, [localStream]);
+  }, [localStream, isOpen]);
 
   const toggleMic = () => {
     if (localStream) {
       const track = localStream.getAudioTracks()[0];
-      if (track) {
-        track.enabled = !track.enabled;
-        setMicOn(track.enabled);
+      if (track) { 
+        track.enabled = !track.enabled; 
+        setMicOn(track.enabled); 
       }
     }
   };
@@ -95,92 +183,46 @@ export default function ActiveCallOverlay() {
   const toggleCam = () => {
     if (localStream) {
       const track = localStream.getVideoTracks()[0];
-      if (track) {
-        track.enabled = !track.enabled;
-        setCamOn(track.enabled);
+      if (track) { 
+        track.enabled = !track.enabled; 
+        setCamOn(track.enabled); 
       }
     }
   };
 
   if (!isOpen) return null;
 
-  const displayName = videoCallData.fromName || "Người dùng";
-
   return (
     <Modal visible={isOpen} animationType="fade" transparent={false}>
-      <View className="flex-1 bg-black">
-        {/* 1. REMOTE VIDEO (FULL SCREEN) */}
-        <View style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT, backgroundColor: "black" }}>
-          {isVideo && remoteStream ? (
-            <RTCView
-              key={remoteStream.id || "remote-video"}
-              streamURL={remoteStream.toURL()}
-              style={StyleSheet.absoluteFillObject}
-              objectFit="cover"
-              zOrder={1}
-            />
-          ) : (
-            <View style={StyleSheet.absoluteFillObject} className="items-center justify-center">
-              <View className="w-32 h-32 rounded-full bg-blue-600 items-center justify-center shadow-2xl">
-                <Text className="text-4xl text-white font-bold">
-                  {displayName.charAt(0)}
-                </Text>
-              </View>
-              <Text className="text-white text-2xl font-medium mt-6">
-                {displayName}
-              </Text>
-              <Text className="text-white/50 mt-2">Đang trò chuyện...</Text>
-            </View>
-          )}
-        </View>
-
-        {/* 2. LOCAL VIDEO (DRAGGABLE PIP) */}
-        {isVideo && localStream && (
-          <Animated.View
-            {...panResponder.panHandlers}
-            style={[
-              {
-                position: "absolute",
-                top: 60,
-                right: 20,
-                width: 120, // Explicit width
-                height: 180, // Explicit height
-                borderRadius: 16,
-                overflow: "hidden",
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.2)",
-                backgroundColor: "black",
-                zIndex: 100, // Ensure it's above everything
-                transform: [{ translateX: pan.x }, { translateY: pan.y }],
-              },
-            ]}
-          >
-            {camOn ? (
-              <RTCView
-                key={localStream.id || "local-video"} // Force re-render
-                streamURL={localStream.toURL()}
-                style={StyleSheet.absoluteFillObject}
-                objectFit="cover"
-                zOrder={2} // Layer 2: Top
-                mirror={true}
-              />
-            ) : (
-              <View style={StyleSheet.absoluteFillObject} className="items-center justify-center bg-slate-800">
-                <Ionicons name="videocam-off" size={24} color="white" />
-              </View>
-            )}
-          </Animated.View>
+      <View style={styles.container}>
+        {/* Conditional Rendering */}
+        {callMode === 'DIRECT' ? (
+          <DirectLayout 
+            localStream={localStream} 
+            remoteStream={remoteStream} 
+            partnerName={getName(videoCallData.from)} 
+            camOn={camOn}
+            micOn={micOn}
+          />
+        ) : (
+          <GroupGrid 
+            localStream={localStream} 
+            remoteStreams={remoteStreams} 
+            getName={getName} 
+            camOn={camOn}
+            micOn={micOn}
+          />
         )}
 
-        {/* 3. CONTROLS */}
-        <SafeAreaView className="absolute bottom-0 w-full">
-          <View className="mx-6 mb-10 p-6 bg-white/10 rounded-[32px] border border-white/10 backdrop-blur-2xl flex-row items-center justify-between shadow-2xl">
+        {/* SHARED CONTROLS */}
+        <SafeAreaView style={styles.controlsLayer}>
+          <View style={styles.controlsWrapper}>
             <CallTimer isOpen={isOpen} />
 
-            <View className="flex-row items-center gap-4">
+            <View style={styles.actionsRow}>
               <TouchableOpacity
                 onPress={toggleMic}
-                className={`w-12 h-12 rounded-full items-center justify-center ${micOn ? "bg-white/10" : "bg-red-500"}`}
+                style={[styles.btn, !micOn && styles.btnRed]}
               >
                 <Ionicons name={micOn ? "mic" : "mic-off"} size={24} color="white" />
               </TouchableOpacity>
@@ -188,7 +230,7 @@ export default function ActiveCallOverlay() {
               {isVideo && (
                 <TouchableOpacity
                   onPress={toggleCam}
-                  className={`w-12 h-12 rounded-full items-center justify-center ${camOn ? "bg-white/10" : "bg-red-500"}`}
+                  style={[styles.btn, !camOn && styles.btnRed]}
                 >
                   <Ionicons name={camOn ? "videocam" : "videocam-off"} size={24} color="white" />
                 </TouchableOpacity>
@@ -196,15 +238,33 @@ export default function ActiveCallOverlay() {
 
               <TouchableOpacity
                 onPress={() => leaveCall()}
-                className="w-12 h-12 rounded-full bg-red-600 items-center justify-center shadow-lg shadow-red-600/30"
+                style={[styles.btn, styles.btnHangup]}
               >
                 <Ionicons name="call" size={24} color="white" style={{ transform: [{ rotate: "135deg" }] }} />
               </TouchableOpacity>
             </View>
-            <View className="w-10" />
+            <View style={{ width: 40 }} />
           </View>
         </SafeAreaView>
       </View>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "black" },
+  flex1: { flex: 1 },
+  gridContainer: { flex: 1 },
+  wrapContainer: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center" },
+  halfScreen: { flex: 1, borderWidth: 0.5, borderColor: "#1e293b" },
+  gridItem: { width: "50%", height: "33.3%", borderWidth: 0.5, borderColor: "#1e293b" },
+  pipContainer: { position: "absolute", top: 60, right: 20, width: 120, height: 180, borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.5, shadowRadius: 10 },
+  participantContainer: { backgroundColor: "#020617", overflow: "hidden", position: "relative" },
+  nameLabel: { position: "absolute", bottom: 10, left: 10, backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  controlsLayer: { position: "absolute", bottom: 0, width: "100%", zIndex: 99 },
+  controlsWrapper: { marginHorizontal: 20, marginBottom: 40, padding: 20, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 40, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  actionsRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  btn: { width: 50, height: 50, borderRadius: 25, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" },
+  btnRed: { backgroundColor: "#ef4444" },
+  btnHangup: { backgroundColor: "#dc2626" }
+});

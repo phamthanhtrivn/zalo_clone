@@ -20,6 +20,7 @@ import { ConversationSetting } from '../conversation-settings/schemas/conversati
 import { Poll, PollSchema } from './schemas/poll.schema';
 import { PollVote, PollVoteSchema } from './schemas/poll-vote.schema';
 import { PollService } from './services/poll.service';
+import { CallSession, CallSessionSchema } from './schemas/call-session.schema';
 
 import { MessagesQueryService } from './services/query.service';
 import { MessagesActionService } from './services/action.service';
@@ -36,6 +37,7 @@ import { MessagesTransformService } from './services/transform.service';
       
       { name: Poll.name, schema: PollSchema },
       { name: PollVote.name, schema: PollVoteSchema },
+      { name: CallSession.name, schema: CallSessionSchema },
     ]),
     forwardRef(() => ChatModule), 
     forwardRef(() => ConversationsModule),

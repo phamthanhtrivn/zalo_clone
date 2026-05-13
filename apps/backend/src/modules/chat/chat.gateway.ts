@@ -68,7 +68,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  handleDisconnect(socket: Socket) {
+  async handleDisconnect(socket: Socket) {
+    const userId = socket.data?.userId;
+    if (userId) {
+      try {
+        const leftSessions = await this.messagesCallService.leaveAllActiveGroupCalls(userId);
+        for (const session of leftSessions) {
+          this.server.to(session.conversationId).emit('call:group:leave', {
+            sessionId: session.sessionId,
+            conversationId: session.conversationId,
+            userId: userId
+          });
+        }
+      } catch (err) {
+        console.error('Error handling ghost participant disconnect:', err);
+      }
+    }
     console.log(`User ${socket.data?.userId} disconnected (${socket.id})`);
   }
 
@@ -379,5 +394,50 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       ...data,
       from: client.data.userId,
     });
+  }
+
+  // --- Group Call WebRTC Signaling Handlers ---
+
+  @SubscribeMessage('call:group:join')
+  async handleGroupCallJoin(@MessageBody() data: { sessionId: string; conversationId: string }, @ConnectedSocket() client: Socket) {
+    const userId = client.data.userId;
+    try {
+      const existingParticipants = await this.messagesCallService.joinGroupCall(userId, data.sessionId);
+      
+      this.server.to(data.conversationId).emit('call:group:join', {
+        sessionId: data.sessionId,
+        conversationId: data.conversationId,
+        userId: userId,
+      });
+
+      return { success: true, existingParticipants };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  @SubscribeMessage('call:group:signal')
+  handleGroupCallSignal(@MessageBody() data: { toUserId: string; signalData: any; sessionId: string }, @ConnectedSocket() client: Socket) {
+    this.server.to(data.toUserId).emit('call:group:signal', {
+      fromUserId: client.data.userId,
+      signalData: data.signalData,
+      sessionId: data.sessionId,
+    });
+  }
+
+  @SubscribeMessage('call:group:leave')
+  async handleGroupCallLeave(@MessageBody() data: { sessionId: string; conversationId: string }, @ConnectedSocket() client: Socket) {
+    const userId = client.data.userId;
+    try {
+      await this.messagesCallService.leaveGroupCall(userId, data.sessionId);
+      
+      this.server.to(data.conversationId).emit('call:group:leave', {
+        sessionId: data.sessionId,
+        conversationId: data.conversationId,
+        userId: userId,
+      });
+    } catch (err) {
+      console.warn('[Socket] Failed to leave group call:', err.message);
+    }
   }
 }

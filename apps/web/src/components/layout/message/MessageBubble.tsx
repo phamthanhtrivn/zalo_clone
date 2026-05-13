@@ -14,6 +14,7 @@ import PollMessage from "./PollMessage";
 import CallContent from "./sub-components/CallContent";
 import MediaGrid from "./sub-components/MediaGrid";
 import DocumentList from "./sub-components/DocumentList";
+import { useAppSelector } from "@/store";
 
 interface Props {
   message: MessagesType;
@@ -56,6 +57,10 @@ export const MessageBubble = ({
 }: Props) => {
   const content = message.content;
   const call = message.call;
+  const conversation = useAppSelector((state) =>
+    state.conversation.conversations.find((c) => c.conversationId === message.conversationId)
+  );
+  const isGroupChat = conversation?.type === "GROUP";
 
   // Hỗ trợ cả 2 chuẩn: array files (mới) và single file (cũ)
   const files = content?.files || (content?.file ? [content.file] : []);
@@ -195,12 +200,16 @@ export const MessageBubble = ({
         )}
 
         {/* MAIN CONTENT */}
-        {message.call ? (
+        {message.call || message.type === "GROUP_CALL" || message.callSessionId ? (
           <CallContent
-            type={message.call.type}
-            status={message.call.status}
-            duration={message.call.duration}
+            type={message.call?.type || "VIDEO"}
+            status={message.call?.status || "ACTIVE"}
+            duration={message.call?.duration || null}
             isMe={isMe}
+            isGroupCall={message.type === "GROUP_CALL" || !!message.callSessionId}
+            isGroupChat={isGroupChat}
+            sessionId={message.callSessionId}
+            conversationId={message.conversationId}
           />
         ) : (
           <>

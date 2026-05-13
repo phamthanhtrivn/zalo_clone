@@ -402,6 +402,18 @@ const ConversationPage = () => {
       }
     };
 
+    // ✅ Cuộc gọi nhóm cập nhật (ENDED)
+    const handleGroupCallUpdated = (data: any) => {
+      console.log("👥 [Web Socket] Group Call Updated:", data);
+      if (data.conversationId === id) {
+        dispatch(updateCallStatus({
+          conversationId: id,
+          messageId: data.messageId,
+          status: data.status,
+        }));
+      }
+    };
+
     socket.on("new_message", handleNewMessage);
     socket.on("message_reacted", handleMessageReacted);
     socket.on("message_recalled", handleMessageRecalled);
@@ -409,6 +421,7 @@ const ConversationPage = () => {
     socket.on("messages_expired", handleMessagesExpired);
     socket.on("read_receipt", handleReadReceipt);
     socket.on("call_updated", handleCallUpdated);
+    socket.on("group_call_updated", handleGroupCallUpdated);
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -418,6 +431,7 @@ const ConversationPage = () => {
       socket.off("messages_expired", handleMessagesExpired);
       socket.off("read_receipt", handleReadReceipt);
       socket.off("call_updated", handleCallUpdated);
+      socket.off("group_call_updated", handleGroupCallUpdated);
       socket.emit("leave_room", id);
     };
   }, [socket, id, dispatch, handleMessagesExpired, handleReadReceipt]);

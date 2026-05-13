@@ -35,7 +35,7 @@ const ChatHeader = ({
   isSearchOpen,
   toggleSearch,
 }: ChatHeaderProps) => {
-  const { callUser } = useCall();
+  const { startGroupCall, startDirectCall } = useCall();
   const currentUserId = useAppSelector((state) => state.auth.user?.userId);
   const [isInitializingCall, setIsInitializingCall] = useState(false);
 
@@ -43,13 +43,9 @@ const ChatHeader = ({
     conversation?.participants?.find((id: string) => id !== currentUserId) ||
     (conversation as any)?.otherMemberId;
 
-  console.log("CHECK: conversationId =", conversation.conversationId);
-  console.log("CHECK: otherMemberId =", otherMemberId);
-
   const handleVideoCall = async () => {
     if (
       !conversation.conversationId ||
-      !otherMemberId ||
       !currentUserId ||
       isInitializingCall
     ) {
@@ -59,31 +55,20 @@ const ChatHeader = ({
 
     setIsInitializingCall(true);
     try {
-      console.log("1. Đang tạo bản ghi cuộc gọi trong DB");
-
-      const response = await messageService.createCallMessage({
-        conversationId: conversation.conversationId,
-        senderId: currentUserId,
-        type: CallType.VIDEO,
-      });
-
-      const messageId =
-        response.data?._id || response.data?.id || response?._id;
-
-      if (!messageId) {
-        throw new Error("Không nhận được messageId từ server");
+      if (conversation.type === "GROUP") {
+        await startGroupCall(
+          conversation.conversationId,
+          CallType.VIDEO
+        );
+      } else {
+        await startDirectCall(
+          otherMemberId,
+          conversation.conversationId,
+          CallType.VIDEO,
+          conversation.name,
+          conversation.avatar
+        );
       }
-
-      console.log("2. Đã có messageId:", messageId, "Bắt đầu kết nối WebRTC");
-
-      callUser(
-        otherMemberId,
-        conversation.conversationId,
-        CallType.VIDEO,
-        messageId,
-        conversation.name,
-        conversation.avatar,
-      );
     } catch (error) {
       console.log("Lỗi khi khởi tạo cuộc gọi:", error);
     } finally {

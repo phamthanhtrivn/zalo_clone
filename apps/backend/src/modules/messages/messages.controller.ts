@@ -32,13 +32,17 @@ import { SearchMessagesDto } from './dto/search-messages.dto';
 import { PollService } from './services/poll.service';
 import { CreatePollDto } from './dto/create-poll.dto';
 import { VotePollDto } from './dto/vote-poll.dto';
+import { InitiateGroupCallDto } from './dto/initiate-group-call.dto';
+import { MessagesCallService } from './services/call.service';
 import { Req } from '@nestjs/common'; 
 import { JwtAuthGuard } from '../auth/passport/jwt-auth.guard';
 
 @Controller('messages')
 export class MessagesController {
-  constructor(private readonly messagesService: MessagesService,
+  constructor(
+    private readonly messagesService: MessagesService,
     private readonly pollService: PollService,
+    private readonly messagesCallService: MessagesCallService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -144,6 +148,18 @@ export class MessagesController {
   @Patch('call')
   async updateCallMessage(@Body() updateCallMessageDto: UpdateCallMessageDto) {
     return this.messagesService.updateCallMessage(updateCallMessageDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('call/group/initiate')
+  async initiateGroupCall(@Body() dto: InitiateGroupCallDto) {
+    return this.messagesCallService.initiateGroupCall(dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('call/group/join')
+  async joinGroupCall(@Body('sessionId') sessionId: string, @Req() req: any) {
+    return this.messagesCallService.joinGroupCall(req.user.userId, sessionId);
   }
 
   @Patch('pinned')
