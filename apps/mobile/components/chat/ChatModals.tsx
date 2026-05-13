@@ -38,6 +38,7 @@ interface ChatModalsProps {
   conversation: any;
   showInfoSheet: boolean;
   setShowInfoSheet: (val: boolean) => void;
+  openedFromSearch?: boolean;
 
   // Context Menu
   contextMenuMsg: MessagesType | null;
@@ -57,6 +58,7 @@ const ChatModals: React.FC<ChatModalsProps> = ({
   reactionModalData, setReactionModalData, showForwardModal, setShowForwardModal,
   conversations, selectedMessages, handleForward, loadingForward,
   detailMessage, setDetailMessage, conversation, showInfoSheet, setShowInfoSheet,
+  openedFromSearch,
   contextMenuMsg, setContextMenuMsg, isPinned, handleTogglePin, handleRecall, handleDeleteForMe,
   dispatch, setReplyingMessage, setIsSelectMode, toggleSelectMessage
 }) => {
@@ -108,6 +110,7 @@ const ChatModals: React.FC<ChatModalsProps> = ({
           visible={showInfoSheet}
           onClose={() => setShowInfoSheet(false)}
           conversation={conversation}
+          openedFromSearch={openedFromSearch}
         />
       )}
 

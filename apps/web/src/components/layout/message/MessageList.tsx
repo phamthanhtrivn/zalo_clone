@@ -1,4 +1,5 @@
 import { memo, useState, useEffect } from "react";
+import AppAvatar from "@/components/common/AppAvatar";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -160,37 +161,51 @@ const MessageList = ({
             {isLastMessage && !message.recalled && message.readReceipts && message.readReceipts.length > 0 && (
               <div className={`flex ${isMe ? "justify-end" : "justify-start ml-11"} mt-1 pr-1`}>
                 <div className="flex items-center">
-                  {message.readReceipts.slice(0, 3).map((receipt: any, idx: number) => {
-                    const avatarUrl = receipt.userId?.profile?.avatarUrl;
-                    const userName = receipt.userId?.profile?.name || 'User';
+                  {message.readReceipts
+                    .filter(
+                      (receipt: any) =>
+                        !!(
+                          receipt.userId?.profile?.avatarUrl ||
+                          receipt.userId?.avatarUrl
+                        ),
+                    )
+                    .slice(0, 3)
+                    .map((receipt: any, idx: number) => {
+                      const avatarUrl =
+                        receipt.userId?.profile?.avatarUrl ||
+                        receipt.userId?.avatarUrl ||
+                        "";
+                      const userName =
+                        receipt.userId?.profile?.name ||
+                        receipt.userId?.name ||
+                        "User";
 
-                    if (avatarUrl && avatarUrl.trim() !== "") {
                       return (
-                        <img
+                        <AppAvatar
                           key={idx}
                           src={avatarUrl}
-                          className="w-4 h-4 rounded-full border border-white object-cover"
-                          alt={userName}
-                          title={userName}
+                          name={userName}
+                          className="w-4 h-4 border border-white text-[8px]"
                         />
                       );
-                    }
-
-                    return (
-                      <div 
-                        key={idx} 
-                        className="w-4 h-4 rounded-full bg-gray-400 border border-white flex items-center justify-center text-[8px] text-white"
-                        title={userName}
-                      >
-                        {userName.charAt(0).toUpperCase()}
+                    })}
+                  {message.readReceipts.filter(
+                    (receipt: any) =>
+                      !!(
+                        receipt.userId?.profile?.avatarUrl ||
+                        receipt.userId?.avatarUrl
+                      ),
+                  ).length > 3 && (
+                      <div className="w-4 h-4 rounded-full bg-gray-300 text-[10px] flex items-center justify-center border border-white">
+                        +{message.readReceipts.filter(
+                          (receipt: any) =>
+                            !!(
+                              receipt.userId?.profile?.avatarUrl ||
+                              receipt.userId?.avatarUrl
+                            ),
+                        ).length - 3}
                       </div>
-                    );
-                  })}
-                  {message.readReceipts.length > 3 && (
-                    <div className="w-4 h-4 rounded-full bg-gray-300 text-[10px] flex items-center justify-center border border-white">
-                      +{message.readReceipts.length - 3}
-                    </div>
-                  )}
+                    )}
                 </div>
               </div>
             )}

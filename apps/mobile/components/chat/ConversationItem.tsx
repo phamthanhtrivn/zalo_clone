@@ -56,6 +56,7 @@ const ConversationItem: React.FC<Props> = React.memo(({
   const [menuVisible, setMenuVisible] = useState(false);
   const [subMenu, setSubMenu] = useState<SubMenu>(null);
   const user = useAppSelector((state) => state.auth.user);
+  const authUserId = user?.userId || (user as any)?._id || "";
   const dispatch = useAppDispatch();
   const isUnread = (conversation.unreadCount ?? 0) > 0;
   const lastMessage = conversation.lastMessage;
@@ -64,6 +65,11 @@ const ConversationItem: React.FC<Props> = React.memo(({
   const preview = useMemo(() => {
     const lastMsg = conversation.lastMessage;
     const content = lastMsg?.content;
+    const call = (lastMsg as any)?.call;
+
+    if (!lastMsg) {
+      return { icon: null, text: "Chưa có tin nhắn" };
+    }
 
     if (isRecall) {
       return {
@@ -78,7 +84,58 @@ const ConversationItem: React.FC<Props> = React.memo(({
       };
     }
 
-    if (!content) return { icon: null, text: "" };
+    if (call) {
+      const isVideo = call.type === "VIDEO";
+      if (call.status === "MISSED" || call.status === "REJECTED") {
+        return {
+          icon: (
+            <Ionicons
+              name={isVideo ? "videocam-outline" : "call-outline"}
+              size={14}
+              color="#ef4444"
+            />
+          ),
+          text: "Cuộc gọi nhỡ",
+        };
+      }
+      if (call.status === "BUSY") {
+        return {
+          icon: (
+            <Ionicons
+              name={isVideo ? "videocam-outline" : "call-outline"}
+              size={14}
+              color="#f59e0b"
+            />
+          ),
+          text: "Cuộc gọi bận",
+        };
+      }
+      return {
+        icon: (
+          <Ionicons
+            name={isVideo ? "videocam-outline" : "call-outline"}
+            size={14}
+            color="#6b7280"
+          />
+        ),
+        text: `Cuộc gọi ${isVideo ? "video" : "thoại"}`,
+      };
+    }
+
+    if ((lastMsg as any)?.type === "SYSTEM") {
+      return {
+        icon: (
+          <Ionicons
+            name="information-circle-outline"
+            size={14}
+            color="#6b7280"
+          />
+        ),
+        text: content?.text || "Tin nhắn hệ thống",
+      };
+    }
+
+    if (!content) return { icon: null, text: "Tin nhắn" };
 
     if (content.text && /https?:\/\//.test(content.text)) {
       return {
@@ -119,7 +176,7 @@ const ConversationItem: React.FC<Props> = React.memo(({
             text: "Tin nhắn thoại",
           };
         default:
-          return { icon: null, text: "" };
+          return { icon: null, text: "Tin nhắn" };
       }
     }
 
@@ -130,12 +187,19 @@ const ConversationItem: React.FC<Props> = React.memo(({
       };
     }
 
-    return { icon: null, text: "" };
+    return { icon: null, text: "Tin nhắn" };
   }, [lastMessage]);
 
   const isOwn =
     lastMessage?.senderId === currentUserId ||
     lastMessage?.senderName === "Bạn";
+  const isSystemMessage = (lastMessage as any)?.type === "SYSTEM";
+  const senderPrefix =
+    isSystemMessage || !lastMessage?.senderName
+      ? ""
+      : conversation.type === "PRIVATE" && !isOwn
+        ? ""
+        : `${isOwn ? "Bạn" : lastMessage?.senderName}: `;
 
   // ── Animation ──
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -221,8 +285,8 @@ const ConversationItem: React.FC<Props> = React.memo(({
     closeSheet(async () => {
       try {
         newPinned
-          ? await pinConversation(user?.userId, conversation.conversationId)
-          : await unpinConversation(user?.userId, conversation.conversationId);
+          ? await pinConversation(authUserId, conversation.conversationId)
+          : await unpinConversation(authUserId, conversation.conversationId);
       } catch (err) {
         // Rollback nếu lỗi
 
@@ -254,10 +318,10 @@ const ConversationItem: React.FC<Props> = React.memo(({
     closeSheet(async () => {
       try {
         duration === 0
-          ? await unmuteConversation(user?.userId, conversation.conversationId)
+          ? await unmuteConversation(authUserId, conversation.conversationId)
 
           : await muteConversation(
-            user?.userId,
+            authUserId,
             conversation.conversationId,
             duration,
           );
@@ -288,8 +352,8 @@ const ConversationItem: React.FC<Props> = React.memo(({
     closeSheet(async () => {
       try {
         newHidden
-          ? await hideConversation(user?.userId, conversation.conversationId)
-          : await unhideConversation(user?.userId, conversation.conversationId);
+          ? await hideConversation(authUserId, conversation.conversationId)
+          : await unhideConversation(authUserId, conversation.conversationId);
       } catch (err) {
 
         dispatch(
@@ -306,7 +370,7 @@ const ConversationItem: React.FC<Props> = React.memo(({
   const handleDelete = () => {
     closeSheet(async () => {
       try {
-        await deleteConversation(user?.userId, conversation.conversationId);
+        await deleteConversation(authUserId, conversation.conversationId);
         dispatch(removeConversation(conversation.conversationId));
       } catch (err) {
         console.error(err);
@@ -319,7 +383,7 @@ const ConversationItem: React.FC<Props> = React.memo(({
   };
 
   const handleMarkUnread = async () => {
-    if (!user?.userId) return;
+    if (!authUserId) return;
 
     const isMarkRead = conversation.unreadCount > 0;
     const oldUnreadCount = conversation.unreadCount;
@@ -332,12 +396,12 @@ const ConversationItem: React.FC<Props> = React.memo(({
     try {
       if (isMarkRead) {
         await markAsRead({
-          userId: user.userId,
+          userId: authUserId,
           conversationId: conversation.conversationId,
         });
       } else {
         await markAsUnread({
-          userId: user.userId,
+          userId: authUserId,
           conversationId: conversation.conversationId,
         });
       }
@@ -359,9 +423,9 @@ const ConversationItem: React.FC<Props> = React.memo(({
             return;
           }
           // ✅ Optimistic: clear unread badge ngay lập tức
-          if (isUnread && user?.userId) {
+          if (isUnread && authUserId) {
             dispatch(setUnreadCount({ conversationId: conversation.conversationId, unreadCount: 0 }));
-            markAsRead({ userId: user.userId, conversationId: conversation.conversationId }).catch(() => { });
+            markAsRead({ userId: authUserId, conversationId: conversation.conversationId }).catch(() => { });
           }
           router.push(`/private/chat/${conversation.conversationId}`);
         }}
@@ -528,9 +592,7 @@ const ConversationItem: React.FC<Props> = React.memo(({
                 fontWeight: isUnread ? "600" : "400",
               }}
             >
-              {conversation.type === "PRIVATE" && !isOwn
-                ? ""
-                : `${isOwn ? "Bạn" : lastMessage?.senderName}: `}
+              {senderPrefix}
             </Text>
 
             {/* preview */}

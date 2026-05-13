@@ -69,6 +69,7 @@ import {
   unpinConversation,
   muteConversation,
   unmuteConversation,
+  unhideConversation,
 } from "@/services/conversation-settings.service";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { useSocket } from "@/contexts/SocketContext";
@@ -102,12 +103,14 @@ const MUTE_OPTIONS = [
 interface ConversationInfoPanelProps {
   isOpen: boolean;
   conversation: ConversationItemType | null;
+  openedFromSearch?: boolean;
   onClose?: () => void;
 }
 
 const ConversationInfoPanel = ({
   isOpen,
   conversation,
+  openedFromSearch = false,
   onClose,
 }: ConversationInfoPanelProps) => {
   const dispatch = useAppDispatch();
@@ -169,6 +172,7 @@ const ConversationInfoPanel = ({
   const [leaveGroupErrorMessage, setLeaveGroupErrorMessage] = useState("");
   const [deleteGroupDialogOpen, setDeleteGroupDialogOpen] = useState(false);
   const [isDeletingGroup, setIsDeletingGroup] = useState(false);
+  const [isUnhiding, setIsUnhiding] = useState(false);
 
   const [preview, setPreview] = useState<{ isOpen: boolean; index: number }>({
     isOpen: false,
@@ -198,6 +202,8 @@ const ConversationInfoPanel = ({
 
   const canInvite =
     currentConversation?.group?.allowMembersInvite || canManageMembers;
+  const shouldShowUnhideButton =
+    openedFromSearch && !isGroup && !!currentConversation?.hidden;
 
   // --- FETCH DATA ---
 
@@ -607,6 +613,43 @@ const ConversationInfoPanel = ({
     } finally {
       setIsDeletingGroup(false);
       setDeleteGroupDialogOpen(false);
+    }
+  };
+
+  const handleUnhideConversation = async () => {
+    if (!currentConversation?.conversationId || !currentUserId || isUnhiding) {
+      return;
+    }
+
+    setIsUnhiding(true);
+    dispatch(
+      updateConversationSetting({
+        conversationId: currentConversation.conversationId,
+        hidden: false,
+      }),
+    );
+
+    try {
+      const res = await unhideConversation(
+        currentUserId,
+        currentConversation.conversationId,
+      );
+      if (!res?.success) {
+        throw new Error(res?.message || "Unhide failed");
+      }
+      toast.success("Đã gỡ ẩn cuộc trò chuyện");
+    } catch (error: any) {
+      dispatch(
+        updateConversationSetting({
+          conversationId: currentConversation.conversationId,
+          hidden: true,
+        }),
+      );
+      toast.error(
+        error?.response?.data?.message || "Không thể gỡ ẩn cuộc trò chuyện",
+      );
+    } finally {
+      setIsUnhiding(false);
     }
   };
 
@@ -1385,6 +1428,23 @@ const ConversationInfoPanel = ({
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {shouldShowUnhideButton && (
+          <div className="bg-white mt-2 border-y">
+            <button
+              onClick={handleUnhideConversation}
+              disabled={isUnhiding}
+              className="h-12 w-full flex items-center px-4 gap-3 text-[#0b63ce] hover:bg-blue-50 transition-colors cursor-pointer disabled:opacity-70"
+            >
+              {isUnhiding ? (
+                <div className="w-[18px] h-[18px] border-2 border-[#0b63ce] border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <UserCheck size={18} />
+              )}
+              <span className="text-sm font-semibold">Gỡ ẩn trò chuyện</span>
+            </button>
           </div>
         )}
 

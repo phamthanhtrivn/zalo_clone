@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Users } from "lucide-react";
 import { RiVerifiedBadgeFill } from "react-icons/ri";
@@ -20,6 +20,15 @@ const AppAvatar: React.FC<AppAvatarProps> = ({
   isAI = false,
   onClick
 }) => {
+  const [stableSrc, setStableSrc] = useState<string>("");
+
+  useEffect(() => {
+    if (src && src.trim().length > 0) {
+      setStableSrc(src);
+    }
+  }, [src]);
+
+  const displaySrc = src && src.trim().length > 0 ? src : stableSrc;
   const { initials, isGroupIcon } = getAvatarData(name);
   const backgroundColor = getColorByName(name);
 
@@ -29,7 +38,7 @@ const AppAvatar: React.FC<AppAvatarProps> = ({
         className={cn("h-12 w-12 cursor-pointer", className)}
         onClick={onClick}
       >
-        <AvatarImage src={src} alt={name} className="object-cover" />
+        <AvatarImage src={displaySrc} alt={name} className="object-cover" />
         <AvatarFallback
           className="font-bold text-white"
           style={{ backgroundColor }}

@@ -39,7 +39,9 @@ const ViewDetailMessageModal = ({
           </div>
 
           <div className="grid grid-cols-3 gap-3 max-h-60 overflow-y-auto">
-            {selectedMessage.readReceipts?.map((r, index) => {
+            {selectedMessage.readReceipts
+              ?.filter((r: any) => !!r?.userId?.profile?.avatarUrl)
+              .map((r, index) => {
               const user = r.userId;
 
               return (

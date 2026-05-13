@@ -309,7 +309,7 @@ const MessageList = ({
                   {/* ✅ Hiển thị Avatar những người đã đọc (Read Receipts) */}
                   {!isExpired && !isRecalled && message.readReceipts && message.readReceipts.length > 0 && (
                     <div className={`flex items-center gap-0.5 mt-0.5 ${isMe ? "justify-end" : "justify-start"}`}>
-                      {message.readReceipts.map((receipt: any) => {
+                      {message.readReceipts.filter((receipt: any) => !!receipt?.userId?.profile?.avatarUrl).map((receipt: any) => {
                         const reader = receipt.userId;
                         const readerId = reader?._id || reader;
                         // Không hiện avatar của chính mình dưới tin nhắn mình đã đọc

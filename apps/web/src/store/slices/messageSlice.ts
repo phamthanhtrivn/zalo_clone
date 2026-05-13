@@ -80,9 +80,13 @@ const messageSlice = createSlice({
                 messageId: string;
                 userId: string;
                 type: "read" | "unread";
+                profile?: {
+                    name?: string;
+                    avatarUrl?: string;
+                };
             }>
         ) {
-            const { conversationId, messageId, userId, type } = action.payload;
+            const { conversationId, messageId, userId, type, profile } = action.payload;
 
             const messages = state.messagesByConversation[conversationId];
             if (!messages) return;
@@ -93,16 +97,35 @@ const messageSlice = createSlice({
             if (!msg.readReceipts) msg.readReceipts = [];
 
             if (type === "read") {
-                const exists = msg.readReceipts.some(
+                const existing = msg.readReceipts.find(
                     (r) => r.userId._id === userId || (r.userId as any) === userId
                 );
+                const hasProfilePayload = !!(profile?.name || profile?.avatarUrl);
 
-                if (!exists) {
+                if (!existing) {
+                    if (!hasProfilePayload) {
+                        return;
+                    }
                     msg.readReceipts.push({
-                        userId: { _id: userId, profile: { name: "", avatarUrl: "" } } as any,
+                        userId: {
+                            _id: userId,
+                            profile: {
+                                name: profile?.name || "",
+                                avatarUrl: profile?.avatarUrl || "",
+                            },
+                        } as any,
                         createdAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString(),
                     });
+                } else if (
+                    (existing.userId as any)?.profile &&
+                    (profile?.name || profile?.avatarUrl)
+                ) {
+                    (existing.userId as any).profile = {
+                        ...(existing.userId as any).profile,
+                        ...(profile?.name ? { name: profile.name } : {}),
+                        ...(profile?.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),
+                    };
                 }
             } else {
                 msg.readReceipts = msg.readReceipts.filter(

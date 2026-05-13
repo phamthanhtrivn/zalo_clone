@@ -465,8 +465,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   //AI event
   //Dùng để ngắt AI trả lời
+  }
+
   @SubscribeMessage('stop_ai_generation')
-  handleStopAi(socket: Socket, payload: { conversationId: string }) {
+  handleStopAi(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() payload: { conversationId: string },
+  ) {
     this.eventEmitter.emit('ai.stop_generation', {
       conversationId: payload.conversationId,
       userId: socket.data.userId as string,
