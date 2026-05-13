@@ -9,7 +9,14 @@ export default function SocialLayout() {
         options={{
           headerShown: false,
           title: "Tạo bài viết",
-          headerBackTitle: "Hủy"
+          headerBackTitle: "Hủy",
+        }}
+      />
+      <Stack.Screen
+        name="view-story"
+        options={{
+          headerShown: false,
+          title: "Xem tin",
         }}
       />
     </Stack>

@@ -29,9 +29,70 @@ export class SocialController {
         return this.socialService.createPost(req.user.userId, dto, files);
     }
 
+    @Post('/stories')
+    @UseInterceptors(FilesInterceptor('files'))
+    createStory(
+        @Req() req,
+        @Body() dto: any,
+        @UploadedFiles() files: Express.Multer.File[],
+    ) {
+        return this.socialService.createStory(req.user.userId, dto, files);
+    }
+
+    @Get('/stories')
+    getStories(@Req() req) {
+        return this.socialService.getStories(req.user.userId);
+    }
+
+    @Get('/notifications')
+    getNotifications(@Req() req) {
+        return this.socialService.getNotifications(req.user.userId);
+    }
+
+    @Post('/notifications/:id/read')
+    markNotificationRead(@Param('id') id: string, @Req() req) {
+        return this.socialService.markNotificationRead(id, req.user.userId);
+    }
+
+    @Public()
+    @Get('/stories/music')
+    getStoryMusic(@Query('q') q?: string) {
+        return this.socialService.getStoryMusicSuggestions(q || '');
+    }
+
+    @Delete('/stories/:id')
+    deleteStory(@Param('id') id: string, @Req() req) {
+        return this.socialService.deleteStory(id, req.user.userId);
+    }
+
+    @Post('/stories/:id/view')
+    markStoryViewed(@Param('id') id: string, @Req() req) {
+        return this.socialService.markStoryViewed(id, req.user.userId);
+    }
+
+    @Get('/stories/:id/viewers')
+    getStoryViewers(@Param('id') id: string, @Req() req) {
+        return this.socialService.getStoryViewers(id, req.user.userId);
+    }
+
+    @Post('/stories/:id/react')
+    reactStory(@Param('id') id: string, @Req() req, @Body('type') type: string) {
+        return this.socialService.reactStory(id, req.user.userId, type);
+    }
+
+    @Post('/stories/:id/reply')
+    replyStory(@Param('id') id: string, @Req() req, @Body('content') content: string) {
+        return this.socialService.replyStory(id, req.user.userId, content);
+    }
+
     @Get('/feed')
     getFeed(@Req() req) {
         return this.socialService.getFeed(req.user.userId);
+    }
+
+    @Get('/detail/:id')
+    getPostDetail(@Param('id') id: string, @Req() req) {
+        return this.socialService.getPostDetail(id, req.user.userId);
     }
 
     @Post('/:id/react')
@@ -67,4 +128,4 @@ export class SocialController {
     search(@Query('q') q: string) {
         return this.socialService.searchTrack(q);
     }
-}
+}

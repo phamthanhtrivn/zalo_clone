@@ -70,16 +70,16 @@ function ToolbarBtn({
 const styles = StyleSheet.create({
     container: {
         borderTopWidth: 0.5,
-        borderTopColor: "#ddd",
+        borderTopColor: "#e5e7eb",
         flexDirection: "row",
         justifyContent: "space-around",
         alignItems: "center",
-        paddingVertical: 10,
+        paddingVertical: 8,
         backgroundColor: "#fff",
     },
     btn: {
         padding: 8,
-        borderRadius: 8,
+        borderRadius: 999,
         backgroundColor: "transparent",
         alignItems: "center",
         justifyContent: "center",

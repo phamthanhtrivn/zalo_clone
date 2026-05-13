@@ -6,6 +6,7 @@ import { Visibility } from "../../types/social.type";
 interface Props {
     visibility: Visibility;
     canPost: boolean;
+    posting?: boolean;
     onBack: () => void;
     onPost: () => void;
     onFont?: () => void;
@@ -33,6 +34,7 @@ const ICON: Record<Visibility, any> = {
 export default function PostHeader({
     visibility,
     canPost,
+    posting = false,
     onBack,
     onPost,
     onFont,
@@ -42,10 +44,11 @@ export default function PostHeader({
         <View style={{
             flexDirection: "row",
             alignItems: "center",
-            paddingHorizontal: 12,
-            paddingVertical: 10,
+            paddingHorizontal: 14,
+            paddingVertical: 12,
             borderBottomWidth: 0.5,
-            borderBottomColor: "#ddd",
+            borderBottomColor: "#e5e7eb",
+            backgroundColor: "#fff",
         }}>
             {/* Back */}
             <Pressable onPress={onBack} style={{ padding: 4 }}>
@@ -56,17 +59,16 @@ export default function PostHeader({
             <View style={{ flex: 1, marginLeft: 8 }}>
                 <Pressable
                     onPress={onChangeVisibility}
-                    style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
                 >
                     <Ionicons name={ICON[visibility]} size={16} color="#555" />
-                    <Text style={{ fontSize: 15, fontWeight: "700" }}>
+                    <Text style={{ fontSize: 17, fontWeight: "700", color: "#111827" }}>
                         {LABEL[visibility]}
                     </Text>
-                    <Ionicons name="caret-down" size={14} color="#0068FF" />
+                    <Ionicons name="chevron-down" size={14} color="#6b7280" />
                 </Pressable>
 
-                {/* 👇 FIX: hiển thị theo từng mode */}
-                <Text style={{ fontSize: 11, color: "#999" }}>
+                <Text style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
                     {DESC[visibility]}
                 </Text>
             </View>
@@ -77,32 +79,34 @@ export default function PostHeader({
                 style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    backgroundColor: "#0068FF",
-                    borderRadius: 20,
-                    paddingHorizontal: 4,
-                    paddingVertical: 3,
-                    marginRight: 10,
+                    backgroundColor: "#1398ff",
+                    borderRadius: 999,
+                    paddingHorizontal: 5,
+                    paddingVertical: 4,
+                    marginRight: 12,
                 }}
             >
                 <View style={{
                     backgroundColor: "#fff",
-                    borderRadius: 16,
-                    paddingHorizontal: 8,
-                    paddingVertical: 3,
+                    borderRadius: 999,
+                    paddingHorizontal: 12,
+                    paddingVertical: 5,
                 }}>
-                    <Text style={{ color: "#0068FF", fontWeight: "700" }}>Aa</Text>
+                    <Text style={{ color: "#1398ff", fontWeight: "700", fontSize: 16 }}>Aa</Text>
                 </View>
-                <Ionicons name="pencil" size={14} color="#fff" />
+                <View style={{ paddingHorizontal: 10 }}>
+                    <Ionicons name="brush" size={16} color="#fff" />
+                </View>
             </Pressable>
 
             {/* Post */}
-            <Pressable onPress={onPost} disabled={!canPost}>
+            <Pressable onPress={onPost} disabled={!canPost || posting}>
                 <Text style={{
-                    fontSize: 15,
-                    fontWeight: "600",
-                    color: canPost ? "#0068FF" : "#bbb",
+                    fontSize: 17,
+                    fontWeight: "700",
+                    color: canPost && !posting ? "#0068FF" : "#c7c9d1",
                 }}>
-                    Đăng
+                    {posting ? "Dang..." : "Dang"}
                 </Text>
             </Pressable>
         </View>

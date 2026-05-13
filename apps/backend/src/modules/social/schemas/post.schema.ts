@@ -60,6 +60,64 @@ export class Post extends Document {
 
     @Prop()
     fontColor?: string;
+
+    createdAt?: Date;
+    updatedAt?: Date;
+
+    @Prop({ enum: ['POST', 'STORY'], default: 'POST', index: true })
+    postType?: string;
+
+    @Prop({ type: Date, default: null, index: true })
+    expiresAt?: Date | null;
+
+    @Prop({
+        type: {
+            mode: { type: String, enum: ['friends', 'include', 'exclude'], default: 'friends' },
+            includeUserIds: [{ type: Types.ObjectId, ref: 'User' }],
+            excludeUserIds: [{ type: Types.ObjectId, ref: 'User' }],
+        },
+        default: null,
+    })
+    storyPrivacy?: {
+        mode: 'friends' | 'include' | 'exclude';
+        includeUserIds?: Types.ObjectId[];
+        excludeUserIds?: Types.ObjectId[];
+    } | null;
+
+    @Prop({
+        type: [
+            {
+                userId: { type: Types.ObjectId, ref: 'User' },
+                viewedAt: { type: Date, default: Date.now },
+            },
+        ],
+        default: [],
+    })
+    storyViews?: Array<{ userId: Types.ObjectId; viewedAt: Date }>;
+
+    @Prop({
+        type: [
+            {
+                userId: { type: Types.ObjectId, ref: 'User' },
+                type: { type: String, enum: ['LIKE', 'HEART', 'HAHA', 'WOW', 'SAD'], default: 'LIKE' },
+                createdAt: { type: Date, default: Date.now },
+            },
+        ],
+        default: [],
+    })
+    storyReactions?: Array<{ userId: Types.ObjectId; type: string; createdAt: Date }>;
+
+    @Prop({
+        type: [
+            {
+                userId: { type: Types.ObjectId, ref: 'User' },
+                content: { type: String },
+                createdAt: { type: Date, default: Date.now },
+            },
+        ],
+        default: [],
+    })
+    storyReplies?: Array<{ userId: Types.ObjectId; content: string; createdAt: Date }>;
 }
 
 @Schema({ timestamps: true })

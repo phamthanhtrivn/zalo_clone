@@ -38,6 +38,7 @@ import AiTypingIndicator from "@/components/chat/AiTypingIndicator";
 import ChatModals from "@/components/chat/ChatModals";
 import ChatHeader from "@/components/chat/ChatHeader";
 import FriendBanner from "@/components/chat/FriendBanner";
+import { getStories } from "@/services/social.service";
 
 export default function ChatWindow() {
   const conversationState = useAppSelector((state) => state.conversation);
@@ -611,6 +612,48 @@ export default function ChatWindow() {
     }
   };
 
+  const handleOpenStoryLink = async (storyId: string) => {
+    if (!storyId) return;
+    try {
+      const res: any = await getStories();
+      const groups = Array.isArray(res?.data) ? res.data : [];
+      const groupIndex = groups.findIndex((group: any) =>
+        (group.stories || []).some((story: any) => String(story.id) === String(storyId)),
+      );
+
+      if (groupIndex < 0) {
+        Alert.alert("Thong bao", "Story nay da het han hoac khong con kha dung.");
+        return;
+      }
+
+      const targetGroup = groups[groupIndex];
+      const storyIndex = (targetGroup.stories || []).findIndex(
+        (story: any) => String(story.id) === String(storyId),
+      );
+
+      if (storyIndex < 0) {
+        Alert.alert("Thong bao", "Khong tim thay story.");
+        return;
+      }
+
+      router.push({
+        pathname: "/private/story-viewer",
+        params: {
+          authorId: targetGroup.authorId,
+          userName: targetGroup.userName,
+          userAvatar: targetGroup.userAvatar,
+          hoursAgo: "",
+          storiesJson: JSON.stringify(targetGroup.stories || []),
+          startIndex: String(storyIndex),
+          groupsJson: JSON.stringify(groups),
+          groupIndex: String(groupIndex),
+        },
+      });
+    } catch {
+      Alert.alert("Loi", "Khong mo duoc story nay.");
+    }
+  };
+
   const handleVideoCall = () => {
     console.log("🎥 [handleVideoCall] conversation:", conversation?.name, "type:", conversation?.type, "isGroup:", isGroup);
     // 1. Kiểm tra sự tồn tại của đối tượng conversation
@@ -1081,11 +1124,12 @@ export default function ChatWindow() {
             onReplyPress={handleJumpToMessage}
             isGroup={isGroup}
             onJoinGroupCall={joinGroupCall}
+            onOpenStoryLink={handleOpenStoryLink}
           />
         )}
       </View>
     );
-  }, [messages, authUserId, selectedMessages, isSelectMode, highlightedMessageId, isGroup, latestSentMessageId]);
+  }, [messages, authUserId, selectedMessages, isSelectMode, highlightedMessageId, isGroup, latestSentMessageId, handleJumpToMessage, handleOpenStoryLink, joinGroupCall, user?.userId]);
 
   return (
     <Container edges={["top", "left", "right", "bottom"]}>

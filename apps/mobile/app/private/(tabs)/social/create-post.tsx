@@ -1,18 +1,21 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
     View,
     ScrollView,
     Alert,
     KeyboardAvoidingView,
     Platform,
+    ActivityIndicator,
+    Modal,
+    Pressable,
+    Text,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as ExpoLocation from "expo-location";
 import { userService } from "../../../../services/user.service"
 import { Visibility, BottomSheet, Friend, Location } from "../../../../types/social.type";
-import { Modal, Pressable, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import PostHeader from "../../../../components/social/PostHeader";
 import PostBody from "../../../../components/social/Postbody";
@@ -28,6 +31,15 @@ import { createPost } from "@/services/social.service";
 
 export default function CreatePostScreen() {
     const router = useRouter();
+    const {
+        mode,
+        assetUri,
+        assetType,
+    } = useLocalSearchParams<{
+        mode?: string;
+        assetUri?: string;
+        assetType?: string;
+    }>();
 
     // ── Core state
     const [text, setText] = useState("");
@@ -36,7 +48,6 @@ export default function CreatePostScreen() {
     const [visibility, setVisibility] = useState<Visibility>("FRIENDS");
     const [bottomSheet, setBottomSheet] = useState<BottomSheet>("none");
     const [activeIcon, setActiveIcon] = useState<string | null>(null);
-    const [video, setVideo] = useState<string | null>(null);
     const [loadingLocation, setLoadingLocation] = useState(false);
     const [showVisibilitySheet, setShowVisibilitySheet] = useState(false);
     // State quản lý bạn bè
@@ -51,9 +62,24 @@ export default function CreatePostScreen() {
     const [selectedFontStyle, setSelectedFontStyle] = useState<any>(null);
     const [selectedFontColor, setSelectedFontColor] = useState<any>(null);
     const [selectedMusic, setSelectedMusic] = useState<any>(null);
+    const [posting, setPosting] = useState(false);
 
+    const isTextMode = mode === "text";
     const canPost = text.trim().length > 0 || selectedImages.length > 0;
     const selectedFriends = friends.filter(f => f.selected);
+    const bodyMinHeight = useMemo(() => (selectedImages.length > 0 ? 220 : 420), [selectedImages.length]);
+
+    useEffect(() => {
+        if (assetUri && typeof assetUri === "string") {
+            setSelectedImages((prev) => (prev.includes(assetUri) ? prev : [assetUri, ...prev]));
+        }
+    }, [assetUri]);
+
+    useEffect(() => {
+        if (mode === "text") {
+            setSelectedImages([]);
+        }
+    }, [mode]);
 
     // Fetch danh sách bạn bè từ Backend
     useEffect(() => {
@@ -121,7 +147,6 @@ export default function CreatePostScreen() {
         });
         if (!result.canceled) {
             const uri = result.assets[0].uri;
-            setVideo(uri);
             setSelectedImages(prev => [...prev, uri]);
         }
     };
@@ -159,7 +184,9 @@ export default function CreatePostScreen() {
     };
 
     const handlePost = async () => {
+        if (!canPost || posting) return;
         try {
+            setPosting(true);
             const formData = new FormData();
 
             // TEXT
@@ -199,21 +226,34 @@ export default function CreatePostScreen() {
             // FILES
             selectedImages.forEach((uri, index) => {
                 const fileName = uri.split("/").pop() || `file-${index}.jpg`;
+                const normalizedAssetType = String(assetType || "").toLowerCase();
+                const isVideoFile =
+                    normalizedAssetType === "video" ||
+                    uri.toLowerCase().endsWith(".mp4") ||
+                    uri.toLowerCase().endsWith(".mov") ||
+                    uri.toLowerCase().endsWith(".mkv") ||
+                    uri.toLowerCase().endsWith(".webm");
 
                 formData.append("files", {
                     uri: Platform.OS === "android" ? uri : uri.replace("file://", ""),
                     name: fileName,
-                    type: uri.endsWith(".mp4") ? "video/mp4" : "image/jpeg",
+                    type: isVideoFile ? "video/mp4" : "image/jpeg",
                 } as any);
             });
 
             await createPost(formData);
 
-            Alert.alert("✅ Thành công", "Đăng bài OK");
+            Alert.alert("Thanh cong", "Dang bai thanh cong");
             router.back();
 
         } catch (err: any) {
-            console.log("❌ ERROR:", err?.response?.data);
+            console.log("POST ERROR:", err?.response?.data || err?.message || err);
+            Alert.alert(
+                "Loi",
+                err?.response?.data?.message || "Khong the dang bai luc nay.",
+            );
+        } finally {
+            setPosting(false);
         }
     };
 
@@ -226,6 +266,7 @@ export default function CreatePostScreen() {
                 <PostHeader
                     visibility={visibility}
                     canPost={canPost}
+                    posting={posting}
                     onBack={() => router.back()}
                     onPost={handlePost}
                     onFont={() => openSheet("font")}
@@ -249,6 +290,8 @@ export default function CreatePostScreen() {
                         fontColor={selectedFontColor?.color}
                         selectedMusic={selectedMusic}
                         onRemoveMusic={handleRemoveMusic}
+                        minHeight={bodyMinHeight}
+                        textMode={isTextMode}
                     />
                     <QuickActions
                         onMusic={() => openSheet("music")}
@@ -258,13 +301,19 @@ export default function CreatePostScreen() {
                     />
                 </ScrollView>
 
-                <BottomToolbar
-                    activeIcon={activeIcon}
-                    onMedia={() => openSheet("media", "image")}
-                    onVideo={handlePickVideo}
-                    onLocation={handleGetCurrentLocation}
-                    loadingLocation={loadingLocation}
-                />
+                {!posting ? (
+                    <BottomToolbar
+                        activeIcon={activeIcon}
+                        onMedia={() => openSheet("media", "image")}
+                        onVideo={handlePickVideo}
+                        onLocation={handleGetCurrentLocation}
+                        loadingLocation={loadingLocation}
+                    />
+                ) : (
+                    <View style={{ paddingVertical: 18, alignItems: "center", borderTopWidth: 0.5, borderTopColor: "#ddd" }}>
+                        <ActivityIndicator size="small" color="#0068FF" />
+                    </View>
+                )}
 
                 <FontSheet
                     visible={bottomSheet === "font"}

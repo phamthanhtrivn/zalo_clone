@@ -8,7 +8,17 @@ import StoriesStrip from "./StoriesStrip";
 import PostCard from "./PostCard";
 import SectionDivider from "./SectionDivider";
 
-export default function DiaryContent({ avatar, posts, loading, onRefresh, refreshing }: any) {
+export default function DiaryContent({
+    avatar,
+    posts,
+    loading,
+    onRefresh,
+    refreshing,
+    onOpenStoryCreator,
+    onOpenStoryCamera,
+    onOpenStoryViewer,
+    stories,
+}: any) {
     return (
         <ScrollView
             className="flex-1 bg-[#eef2f7]"
@@ -22,11 +32,15 @@ export default function DiaryContent({ avatar, posts, loading, onRefresh, refres
         >
             <PromoBanner />
             <SectionDivider />
-            <Composer avatar={avatar} />
+            <Composer avatar={avatar} onOpenStoryCreator={onOpenStoryCreator} />
             <SectionDivider />
-            <StatusPill />
+            <StatusPill onPress={() => onOpenStoryCreator?.("camera")} />
             <SectionDivider />
-            <StoriesStrip />
+            <StoriesStrip
+                onCreateStory={onOpenStoryCamera}
+                onOpenStory={onOpenStoryViewer}
+                stories={stories}
+            />
             <SectionDivider />
 
             {loading && (
