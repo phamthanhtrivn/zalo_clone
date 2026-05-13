@@ -154,7 +154,7 @@ export default function SearchScreen() {
 
     router.replace({
       pathname: "/private/chat/[id]",
-      params: { id: chatId, messageId },
+      params: { id: chatId, messageId, fromSearch: "1" },
     });
   };
 
@@ -179,7 +179,7 @@ export default function SearchScreen() {
 
       router.push({
         pathname: "/private/chat/[id]",
-        params: { id: conversationId, otherUserId: targetUserId },
+        params: { id: conversationId, otherUserId: targetUserId, fromSearch: "1" },
       });
     } catch (error) {
       showToast(
@@ -240,7 +240,7 @@ export default function SearchScreen() {
         if (item.conversationId) {
           router.push({
             pathname: "/private/chat/[id]",
-            params: { id: item.conversationId, otherUserId: item.userId },
+            params: { id: item.conversationId, otherUserId: item.userId, fromSearch: "1" },
           });
         } else {
           void openDirectConversation(item.userId);
@@ -255,18 +255,29 @@ export default function SearchScreen() {
 
       router.push({
         pathname: "/private/chat/[id]",
-        params: { id: conversationId },
+        params: { id: conversationId, fromSearch: "1" },
       });
     };
 
     let displayName = "Người dùng";
-    let avatarSource = "https://avatar.iran.liara.run/public/0";
+    const resolveAvatar = (...values: Array<any>) => {
+      const found = values.find(
+        (v) => typeof v === "string" && v.trim().length > 0,
+      );
+      return found || "";
+    };
+    let avatarSource = "";
     let subLabel = "";
     let icon = null;
 
     if (isContact) {
       displayName = item.name || item.phone || "Người dùng";
-      avatarSource = item.avatar || avatarSource;
+      avatarSource = resolveAvatar(
+        item.avatar,
+        item.avatarUrl,
+        item.profile?.avatarUrl,
+        item.user?.profile?.avatarUrl,
+      );
       if (item.isFriend) {
         subLabel = "Bạn bè";
       } else if (item.isExistingConversation) {
@@ -276,17 +287,32 @@ export default function SearchScreen() {
       }
     } else if (isGroup) {
       displayName = item.name || "Nhóm";
-      avatarSource = item.avatar || avatarSource;
+      avatarSource = resolveAvatar(
+        item.avatar,
+        item.avatarUrl,
+        item.groupAvatar,
+        item.profile?.avatarUrl,
+      );
       subLabel = "Nhóm";
       icon = <Ionicons name="people" size={14} color="#6b7280" />;
     } else if (isMessage) {
       displayName = item.conversationName || "Cuộc trò chuyện";
-      avatarSource = item.conversationAvatar || avatarSource;
+      avatarSource = resolveAvatar(
+        item.conversationAvatar,
+        item.avatar,
+        item.avatarUrl,
+        item.senderAvatar,
+      );
       subLabel = `${item.senderName || "Người dùng"}: ${item.text || ""}`;
       icon = <Ionicons name="chatbubble-outline" size={14} color="#6b7280" />;
     } else if (isFile) {
       displayName = item.conversationName || "Cuộc trò chuyện";
-      avatarSource = item.conversationAvatar || avatarSource;
+      avatarSource = resolveAvatar(
+        item.conversationAvatar,
+        item.avatar,
+        item.avatarUrl,
+        item.senderAvatar,
+      );
       subLabel = `${item.senderName || "Người dùng"}: ${item.file.fileName}`;
       icon = <Ionicons name="document-outline" size={14} color="#6b7280" />;
     }
@@ -509,7 +535,12 @@ export default function SearchScreen() {
                 className={`mr-3 flex-row items-center px-2 py-1 rounded-full border ${selectedSenderId === member.userId ? "bg-blue-50 border-[#0091ff]" : "bg-gray-50 border-gray-200"}`}
               >
                 <GroupAvatar
-                  uri={member.avatarUrl}
+                  uri={
+                    member.avatarUrl ||
+                    member.profile?.avatarUrl ||
+                    member.user?.profile?.avatarUrl ||
+                    ""
+                  }
                   name={member.name}
                   size={20}
                 />

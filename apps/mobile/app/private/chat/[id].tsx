@@ -41,13 +41,18 @@ import FriendBanner from "@/components/chat/FriendBanner";
 export default function ChatWindow() {
   const conversationState = useAppSelector((state) => state.conversation);
   const conversations = conversationState.conversations;
-  const { id, messageId, otherUserId: paramOtherUserId } = useLocalSearchParams<{
+  const { id, messageId, otherUserId: paramOtherUserId, fromSearch } = useLocalSearchParams<{
     id: string;
     messageId?: string;
     otherUserId?: string;
+    fromSearch?: string;
   }>();
+  const fromSearchValue = Array.isArray(fromSearch) ? fromSearch[0] : fromSearch;
+  const openedFromSearch =
+    fromSearchValue === "1" || fromSearchValue === "true";
   const { socket } = useSocket();
   const user = useAppSelector((state) => state.auth.user);
+  const authUserId = user?.userId || (user as any)?._id || "";
   const router = useRouter();
   const dispatch = useAppDispatch();
 
@@ -802,7 +807,61 @@ export default function ChatWindow() {
           return prev.map((m) => {
             const newReadReceipts = updatedMap.get(m._id);
             if (!newReadReceipts) return m;
-            return { ...m, readReceipts: newReadReceipts };
+            const previousByUserId = new Map(
+              (m.readReceipts || []).map((receipt: any) => {
+                const rawUser = receipt?.userId;
+                const uid =
+                  typeof rawUser === "string" ? rawUser : rawUser?._id;
+                return [uid, receipt];
+              }),
+            );
+
+            const mergedReceipts = newReadReceipts.map((receipt: any) => {
+              const rawUser = receipt?.userId;
+              const uid =
+                typeof rawUser === "string" ? rawUser : rawUser?._id;
+              const prevReceipt = previousByUserId.get(uid);
+              const prevUser =
+                typeof prevReceipt?.userId === "string"
+                  ? null
+                  : prevReceipt?.userId;
+              const nextUser = typeof rawUser === "string" ? null : rawUser;
+
+              const mergedUser =
+                typeof rawUser === "string"
+                  ? prevUser
+                    ? {
+                        ...prevUser,
+                        _id: uid || prevUser?._id,
+                      }
+                    : {
+                        _id: uid,
+                        profile: { name: "", avatarUrl: "" },
+                      }
+                  : {
+                      ...rawUser,
+                      profile: {
+                        name:
+                          rawUser?.profile?.name ||
+                          prevUser?.profile?.name ||
+                          "",
+                        avatarUrl:
+                          rawUser?.profile?.avatarUrl ||
+                          prevUser?.profile?.avatarUrl ||
+                          (rawUser as any)?.avatarUrl ||
+                          (prevUser as any)?.avatarUrl ||
+                          "",
+                      },
+                    };
+
+              return {
+                ...prevReceipt,
+                ...receipt,
+                userId: mergedUser,
+              };
+            });
+
+            return { ...m, readReceipts: mergedReceipts };
           });
         });
       }
@@ -883,6 +942,15 @@ export default function ChatWindow() {
     };
   }, [socket, id, user?.userId]);
 
+  const latestSentMessageId = React.useMemo(() => {
+    const mine = messages.find((m) => {
+      const senderId =
+        typeof m.senderId === "string" ? m.senderId : m.senderId?._id;
+      return senderId === authUserId && m.type !== "SYSTEM";
+    });
+    return mine?._id || null;
+  }, [messages, authUserId]);
+
   // ================= RENDER =================
   const renderItem = React.useCallback(({ item, index }: any) => {
     // Cơ chế INVERTED: 
@@ -916,7 +984,8 @@ export default function ChatWindow() {
       new Date(item.createdAt).toDateString();
 
     const isSelected = selectedMessages.includes(item._id);
-    const isLastReadMessage = index === 0; // In inverted, index 0 is newest
+    const isLastReadMessage =
+      !!latestSentMessageId && item._id === latestSentMessageId;
     const addSpacing = isFirstInCluster && !showDivider && !isSystem;
 
     return (
@@ -956,7 +1025,7 @@ export default function ChatWindow() {
         )}
       </View>
     );
-  }, [messages, user?.userId, selectedMessages, isSelectMode, highlightedMessageId, isGroup]);
+  }, [messages, authUserId, selectedMessages, isSelectMode, highlightedMessageId, isGroup, latestSentMessageId]);
 
   return (
     <Container edges={["top", "left", "right", "bottom"]}>
@@ -1182,6 +1251,7 @@ export default function ChatWindow() {
         conversation={conversation}
         showInfoSheet={showInfoSheet}
         setShowInfoSheet={setShowInfoSheet}
+        openedFromSearch={openedFromSearch}
         contextMenuMsg={contextMenuMsg}
         setContextMenuMsg={setContextMenuMsg}
         isPinned={isPinned || false}

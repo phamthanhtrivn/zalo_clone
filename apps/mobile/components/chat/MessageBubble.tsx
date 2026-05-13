@@ -1019,13 +1019,31 @@ const MessageBubble = React.memo(
           {/* READ RECEIPTS */}
           {renderReadReceipts && message.readReceipts?.length > 0 && (
             <View style={{ flexDirection: "row", gap: -8, marginTop: 4 }}>
-              {message.readReceipts.slice(0, 3).map((rr, index) => (
-                <Image
-                  key={rr.userId?._id || index}
-                  source={{ uri: rr.userId?.profile?.avatarUrl || "" }}
-                  style={{ width: 14, height: 14, borderRadius: 7 }}
-                />
-              ))}
+              {message.readReceipts
+                .filter(
+                  (rr) =>
+                    !!(
+                      rr.userId?.profile?.avatarUrl ||
+                      (rr.userId as any)?.avatarUrl
+                    ),
+                )
+                .slice(0, 3)
+                .map((rr, index) => (
+                  <GroupAvatar
+                    key={rr.userId?._id || index}
+                    uri={
+                      rr.userId?.profile?.avatarUrl ||
+                      (rr.userId as any)?.avatarUrl ||
+                      ""
+                    }
+                    name={
+                      rr.userId?.profile?.name ||
+                      (rr.userId as any)?.name ||
+                      "U"
+                    }
+                    size={14}
+                  />
+                ))}
             </View>
           )}
         </View>

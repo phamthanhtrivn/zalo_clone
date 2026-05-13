@@ -58,7 +58,13 @@ export const SidebarSecondary = () => {
 
     const path = `/conversations/${conversationIdToNavigate}${messageId ? `?messageId=${messageId}` : ""}`;
     // Pass otherUserId and isNewContact via state to the chat component
-    navigate(path, { state: { otherUserId: finalOtherUserId, isNewContact: isNewContact } });
+    navigate(path, {
+      state: {
+        otherUserId: finalOtherUserId,
+        isNewContact: isNewContact,
+        fromSearch: true,
+      },
+    });
   };
 
   return (

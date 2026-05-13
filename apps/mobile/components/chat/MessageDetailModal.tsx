@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   FlatList,
 } from "react-native";
-import { Image } from "expo-image";
+import GroupAvatar from "../ui/GroupAvatar";
 import type { MessagesType } from "@/types/messages.type";
 
 interface Props {
@@ -66,7 +66,13 @@ const MessageDetailModal: React.FC<Props> = ({ visible, onClose, message }) => {
               </Text>
             ) : (
               <FlatList
-                data={message.readReceipts}
+                data={message.readReceipts?.filter(
+                  (item: any) =>
+                    !!(
+                      item?.userId?.profile?.avatarUrl ||
+                      item?.userId?.avatarUrl
+                    ),
+                )}
                 keyExtractor={(_, i) => i.toString()}
                 numColumns={4}
                 renderItem={({ item }) => (
@@ -77,26 +83,20 @@ const MessageDetailModal: React.FC<Props> = ({ visible, onClose, message }) => {
                       marginBottom: 12,
                     }}
                   >
-                    <View
-                      style={{
-                        width: 46,
-                        height: 46,
-                        borderRadius: 23,
-                        overflow: "hidden",
-                        backgroundColor: "#e5e7eb",
-                        marginBottom: 4,
-                      }}
-                    >
-                      <Image
-                        source={{ uri: item.userId.profile?.avatarUrl }}
-                        style={{ width: 46, height: 46 }}
-                      />
-                    </View>
+                    <GroupAvatar
+                      uri={
+                        item.userId?.profile?.avatarUrl ||
+                        item.userId?.avatarUrl ||
+                        ""
+                      }
+                      name={item.userId?.profile?.name || item.userId?.name || "U"}
+                      size={46}
+                    />
                     <Text
                       numberOfLines={1}
                       style={{ fontSize: 11, color: "#374151", textAlign: "center", width: 60 }}
                     >
-                      {item.userId.profile?.name}
+                      {item.userId?.profile?.name || item.userId?.name}
                     </Text>
                   </View>
                 )}

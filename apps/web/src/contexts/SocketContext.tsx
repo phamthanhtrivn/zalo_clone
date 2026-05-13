@@ -234,7 +234,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
           conversationId: data.conversationId,
           messageId: msg._id,
           userId: receipt.userId?._id || receipt.userId,
-          user: typeof receipt.userId === 'object' ? receipt.userId : undefined, // Truyền thêm object user nếu có
+          profile:
+            typeof receipt.userId === "object"
+              ? {
+                name: receipt.userId?.profile?.name,
+                avatarUrl: receipt.userId?.profile?.avatarUrl,
+              }
+              : undefined,
           type: "read"
         }));
       });

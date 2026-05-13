@@ -31,11 +31,14 @@ import { addMessage } from "@/store/slices/messageSlice"; // Added import for ad
 import ForwardModal from "@/components/layout/message/ForwardModal";
 import { conversationService } from "@/services/conversation.service";
 
+const EMPTY_MESSAGES: MessagesType[] = [];
+
 const ConversationPage = () => {
   const { id } = useParams();
   const location = useLocation();
   const { conversation: stateConversation, otherUserId: locationOtherUserId } =
     location.state || {};
+  const openedFromSearch = Boolean(location.state?.fromSearch);
   const dispatch = useAppDispatch();
 
   const currentUser = useAppSelector((state) => state.auth.user);
@@ -48,7 +51,7 @@ const ConversationPage = () => {
     (state) => state.conversation.replyingMessage,
   );
   const messages = useAppSelector(
-    (state) => state.message.messagesByConversation[id || ""] || [],
+    (state) => state.message.messagesByConversation[id || ""] ?? EMPTY_MESSAGES,
   );
 
   const conversation =
@@ -259,6 +262,13 @@ const ConversationPage = () => {
               conversationId: data.conversationId,
               messageId: msg._id,
               userId: receipt.userId?._id || receipt.userId,
+              profile:
+                typeof receipt.userId === "object"
+                  ? {
+                    name: receipt.userId?.profile?.name,
+                    avatarUrl: receipt.userId?.profile?.avatarUrl,
+                  }
+                  : undefined,
               type: "read",
             }),
           );
@@ -874,6 +884,7 @@ const ConversationPage = () => {
       <ConversationInfoPanel
         isOpen={isInfoOpen}
         conversation={conversation}
+        openedFromSearch={openedFromSearch}
         onClose={() => setIsInfoOpen(false)}
       />
       <MessageSearchPanel

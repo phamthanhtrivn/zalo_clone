@@ -28,6 +28,7 @@ import {
   updateConversationSetting,
 } from "@/store/slices/conversationSlice";
 import {
+  unhideConversation,
   muteConversation,
   pinConversation,
   unmuteConversation,
@@ -52,6 +53,7 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   conversation: ConversationItemType;
+  openedFromSearch?: boolean;
 }
 
 const SectionHeader = ({
@@ -87,6 +89,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
   visible,
   onClose,
   conversation,
+  openedFromSearch = false,
 }) => {
   const router = useRouter();
   const { socket } = useSocket();
@@ -102,7 +105,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
   const [expandedLink, setExpandedLink] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
-  const currentUserId = user?.userId;
+  const currentUserId = user?.userId || (user as any)?._id || "";
   const [members, setMembers] = useState<any[]>([]);
   const [expandedMembers, setExpandedMembers] = useState(true);
   const [isAddMemberVisible, setIsAddMemberVisible] = useState(false);
@@ -138,6 +141,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
       new Date(currentConversation.mutedUntil).getTime() > Date.now());
 
   const [isReady, setIsReady] = useState(false);
+  const [isUnhiding, setIsUnhiding] = useState(false);
 
   useEffect(() => {
     if (!visible) {
@@ -243,9 +247,9 @@ const ConversationInfoSheet: React.FC<Props> = ({
     (async () => {
       try {
         if (newPinned) {
-          await pinConversation(user?.userId, conversation.conversationId);
+          await pinConversation(currentUserId, conversation.conversationId);
         } else {
-          await unpinConversation(user?.userId, conversation.conversationId);
+          await unpinConversation(currentUserId, conversation.conversationId);
         }
       } catch (err) {
         dispatch(
@@ -289,10 +293,10 @@ const ConversationInfoSheet: React.FC<Props> = ({
     (async () => {
       try {
         if (duration === 0) {
-          await unmuteConversation(user?.userId, conversation.conversationId);
+          await unmuteConversation(currentUserId, conversation.conversationId);
         } else {
           await muteConversation(
-            user?.userId,
+            currentUserId,
             conversation.conversationId,
             duration,
           );
@@ -719,6 +723,64 @@ const ConversationInfoSheet: React.FC<Props> = ({
   };
 
   const canInvite = localSettings.allowMembersInvite || isOwner || isAdmin;
+  const shouldShowUnhideButton =
+    openedFromSearch && !isGroup && !!currentConversation?.hidden;
+
+  const handleUnhideConversation = async () => {
+    if (!currentConversation?.conversationId || !currentUserId || isUnhiding) return;
+
+    setIsUnhiding(true);
+    dispatch(
+      updateConversationSetting({
+        conversationId: currentConversation.conversationId,
+        hidden: false,
+      }),
+    );
+
+    try {
+      const res: any = await unhideConversation(
+        currentUserId,
+        currentConversation.conversationId,
+      );
+      if (!res?.success) {
+        throw new Error(res?.message || "Unhide failed");
+      }
+      Alert.alert("Thành công", "Đã gỡ ẩn cuộc trò chuyện");
+    } catch (err: any) {
+      const errorMessage = String(
+        err?.response?.data?.message || err?.message || "",
+      ).toLowerCase();
+      const alreadyUnhidden =
+        errorMessage.includes("not hidden") ||
+        errorMessage.includes("already unhidden") ||
+        errorMessage.includes("đã bỏ ẩn") ||
+        errorMessage.includes("không bị ẩn");
+
+      if (alreadyUnhidden) {
+        dispatch(
+          updateConversationSetting({
+            conversationId: currentConversation.conversationId,
+            hidden: false,
+          }),
+        );
+        Alert.alert("Thành công", "Đã gỡ ẩn cuộc trò chuyện");
+        return;
+      }
+
+      dispatch(
+        updateConversationSetting({
+          conversationId: currentConversation.conversationId,
+          hidden: true,
+        }),
+      );
+      Alert.alert(
+        "Lỗi",
+        err?.response?.data?.message || "Không thể gỡ ẩn cuộc trò chuyện",
+      );
+    } finally {
+      setIsUnhiding(false);
+    }
+  };
 
   return (
     <Modal
@@ -1255,6 +1317,25 @@ const ConversationInfoSheet: React.FC<Props> = ({
                     )}
                   </View>
                 )}
+              </View>
+            )}
+
+            {shouldShowUnhideButton && (
+              <View className="bg-white mb-2 py-2">
+                <TouchableOpacity
+                  className={`flex-row items-center px-4 py-3 ${isUnhiding ? "opacity-70" : ""}`}
+                  onPress={handleUnhideConversation}
+                  disabled={isUnhiding}
+                >
+                  {isUnhiding ? (
+                    <ActivityIndicator size="small" color="#0b63ce" />
+                  ) : (
+                    <Ionicons name="eye-outline" size={20} color="#0b63ce" />
+                  )}
+                  <Text className="ml-3 text-[15px] text-[#0b63ce] font-semibold">
+                    Gỡ ẩn trò chuyện
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
 

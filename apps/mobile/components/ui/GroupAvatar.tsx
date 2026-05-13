@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -15,12 +15,21 @@ interface GroupAvatarProps {
  */
 const GroupAvatar: React.FC<GroupAvatarProps> = ({ uri, name, size = 48 }) => {
   const [imageError, setImageError] = useState(false);
+  const [stableUri, setStableUri] = useState<string>("");
 
   // Unified business logic from utils
   const { initials, isGroupIcon } = useMemo(() => getAvatarData(name), [name]);
   const backgroundColor = useMemo(() => getColorByName(name), [name]);
 
-  const showFallback = !uri || imageError;
+  useEffect(() => {
+    if (uri && uri.trim().length > 0) {
+      setStableUri(uri);
+      setImageError(false);
+    }
+  }, [uri]);
+
+  const displayUri = uri && uri.trim().length > 0 ? uri : stableUri;
+  const showFallback = !displayUri || imageError;
 
   const containerStyle = useMemo(() => ({
     width: size,
@@ -39,7 +48,7 @@ const GroupAvatar: React.FC<GroupAvatarProps> = ({ uri, name, size = 48 }) => {
     <View style={[styles.baseContainer, containerStyle]}>
       {!showFallback ? (
         <Image
-          source={{ uri }}
+          source={{ uri: displayUri }}
           style={styles.image}
           contentFit="cover"
           transition={200}
