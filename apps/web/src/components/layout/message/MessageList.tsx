@@ -164,24 +164,26 @@ const MessageList = ({
                     const avatarUrl = receipt.userId?.profile?.avatarUrl;
                     const userName = receipt.userId?.profile?.name || 'User';
 
+                    if (avatarUrl && avatarUrl.trim() !== "") {
+                      return (
+                        <img
+                          key={idx}
+                          src={avatarUrl}
+                          className="w-4 h-4 rounded-full border border-white object-cover"
+                          alt={userName}
+                          title={userName}
+                        />
+                      );
+                    }
+
                     return (
-                      <img
-                        key={idx}
-                        src={avatarUrl}
-                        className="w-4 h-4 rounded-full border border-white"
-                        alt={userName}
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                          const parent = target.parentElement;
-                          if (parent) {
-                            const fallback = document.createElement('div');
-                            fallback.className = 'w-4 h-4 rounded-full bg-gray-400 border border-white flex items-center justify-center text-[8px] text-white';
-                            fallback.textContent = userName.charAt(0).toUpperCase();
-                            parent.insertBefore(fallback, target);
-                          }
-                        }}
-                      />
+                      <div 
+                        key={idx} 
+                        className="w-4 h-4 rounded-full bg-gray-400 border border-white flex items-center justify-center text-[8px] text-white"
+                        title={userName}
+                      >
+                        {userName.charAt(0).toUpperCase()}
+                      </div>
                     );
                   })}
                   {message.readReceipts.length > 3 && (

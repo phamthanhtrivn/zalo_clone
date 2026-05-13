@@ -4,9 +4,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useVideoCall } from "@/contexts/VideoCallContext";
 
 export default function OutgoingCallOverlay() {
-  const { videoCallData, leaveCall, sessionState } = useVideoCall();
+  const { videoCallData, leaveCall, sessionState, callMode } = useVideoCall();
 
-  const isOpen = sessionState === "CALLING";
+  const isOpen = callMode === 'DIRECT' && sessionState === "CALLING";
 
   if (!isOpen) return null;
 

@@ -5,10 +5,10 @@ import { useVideoCall } from "@/contexts/VideoCallContext";
 import { useAppSelector } from "@/store/store";
 
 export default function IncomingCallOverlay() {
-  const { videoCallData, leaveCall, answerCall, sessionState } = useVideoCall();
+  const { videoCallData, leaveCall, answerDirectCall, sessionState, callMode } = useVideoCall();
   const conversations = useAppSelector((state) => state.conversation.conversations);
 
-  const isOpen = sessionState === "RINGING";
+  const isOpen = callMode === 'DIRECT' && sessionState === "RINGING";
 
   const currentConversation = useMemo(() => {
     if (!videoCallData?.conversationId) return null;
@@ -74,7 +74,7 @@ export default function IncomingCallOverlay() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={answerCall}
+                onPress={answerDirectCall}
                 className="flex-1 h-16 bg-emerald-500 rounded-2xl items-center justify-center shadow-lg shadow-emerald-500/20"
               >
                 <View className="flex-row items-center gap-2">

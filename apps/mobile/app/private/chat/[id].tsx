@@ -53,7 +53,30 @@ export default function ChatWindow() {
 
   const conversation = conversations.find((c) => c.conversationId === id);
 
-  const isGroup = conversation?.type === "GROUP";
+  useEffect(() => {
+    const title = conversation?.name || "Chat";
+    if (title !== lastSetTitle.current) {
+      navigation.setOptions({
+        headerTitle: () => (
+          <View style={styles.headerContainer}>
+            <GroupAvatar
+              uri={conversation?.avatar}
+              name={conversation?.name || "Chat"}
+              size={36}
+            />
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {title}
+            </Text>
+          </View>
+        ),
+      });
+      lastSetTitle.current = title;
+    }
+  }, [conversation?.name, conversation?.avatar, navigation]);
+  // ✅ Use conversation.group as source of truth — conversation.type can be contaminated
+  // by the last message type (e.g. "GROUP_CALL") and cause false negatives
+  const isGroup = conversation?.type === "GROUP" || !!conversation?.group;
+
   const [contextMenuMsg, setContextMenuMsg] = useState<MessagesType | null>(
     null,
   );
@@ -61,7 +84,7 @@ export default function ChatWindow() {
   const [friendStatus, setFriendStatus] = useState<string | null>(null);
   const effectiveOtherMemberId = (conversation as any)?.otherMemberId || paramOtherUserId;
 
-  const { startCall } = useVideoCall();
+  const { startGroupCall, startDirectCall, joinGroupCall } = useVideoCall();
 
   // ===== STATE =====
   const [messages, setMessages] = useState<MessagesType[]>([]);
@@ -581,33 +604,37 @@ export default function ChatWindow() {
   };
 
   const handleVideoCall = () => {
+    console.log("🎥 [handleVideoCall] conversation:", conversation?.name, "type:", conversation?.type, "isGroup:", isGroup);
     // 1. Kiểm tra sự tồn tại của đối tượng conversation
     if (!conversation) {
       Alert.alert("Lỗi", "Không tìm thấy thông tin hội thoại.");
       return;
     }
 
-    // 2. Lấy partnerId trực tiếp từ trường otherMemberId (dựa trên log thực tế của bạn)
-    const partnerId = (conversation as any).otherMemberId;
-
-    console.log("DEBUG - Partner ID thực tế từ log:", partnerId);
-
-    // 3. Kiểm tra các điều kiện bắt buộc trước khi gọi
-    if (!id || !user?.userId || !partnerId) {
+    // 2. Kiểm tra các điều kiện bắt buộc trước khi gọi
+    if (!id || !user?.userId) {
       Alert.alert(
         "Lỗi",
-        "Không thể xác định người nhận hoặc thông tin người gọi.",
+        "Không thể xác định thông tin người gọi.",
       );
       return;
     }
 
-    // 4. Kích hoạt cuộc gọi
-    startCall(
-      partnerId,
-      id, // conversationId (Mã ID của phòng chat)
-      "VIDEO", // Loại cuộc gọi
-      conversation.name || "Người dùng", // Tên hiển thị đối phương
-    );
+    // 3. Kích hoạt cuộc gọi
+    if (isGroup) {
+      startGroupCall(
+        id, // conversationId
+        "VIDEO", // Loại cuộc gọi
+      );
+    } else {
+      startDirectCall(
+        effectiveOtherMemberId,
+        id,
+        "VIDEO",
+        conversation.name,
+        conversation.avatar
+      );
+    }
   };
 
   // ================= EFFECTS =================
@@ -825,12 +852,36 @@ export default function ChatWindow() {
       setMessages((prev) =>
         prev.map((m) =>
           m._id === data.messageId
-            ? { ...m, call: { ...m.call!, status: data.status, duration: data.duration ?? m.call?.duration ?? null } }
+            ? { 
+                ...m, 
+                call: { 
+                  type: m.call?.type ?? "VIDEO", 
+                  status: data.status, 
+                  duration: data.duration ?? m.call?.duration ?? null 
+                } 
+              }
             : m,
         ),
       );
     };
 
+    const handleGroupCallUpdated = (data: { messageId: string, status: string, conversationId: string }) => {
+      console.log("👥 [Mobile Socket] Group Call Updated:", data);
+      if (data.conversationId === id) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === data.messageId
+              ? { 
+                  ...m, 
+                  call: { 
+                    type: m.call?.type ?? "VIDEO", 
+                    status: data.status, 
+                    duration: data.duration ?? m.call?.duration ?? 0 
+                  } 
+                }
+              : m,
+          ),
+        );
     const handleAiStatus = (data: { targetId: string; status: "thinking" | "typing" | null }) => {
       if (data.targetId === id || data.targetId === user?.userId) {
         setAiStatus(data.status);
@@ -857,6 +908,7 @@ export default function ChatWindow() {
     };
 
     socket.on("call_updated", handleCallUpdated);
+    socket.on("group_call_updated", handleGroupCallUpdated);
     socket.on("read_receipt", handleReadReceipt);
     socket.on("messages_expired", handleMessagesExpired);
     socket.on("new_message", handleNewMessage);
@@ -876,6 +928,7 @@ export default function ChatWindow() {
       socket.off("messages_expired", handleMessagesExpired);
       socket.off("update_poll", handleUpdatePoll);
       socket.off("call_updated", handleCallUpdated);
+      socket.off("group_call_updated", handleGroupCallUpdated);
       socket.off("ai_status", handleAiStatus);
       socket.off("ai_typing_chunk", handleAiTypingChunk);
 
@@ -952,6 +1005,7 @@ export default function ChatWindow() {
             renderReadReceipts={isLastReadMessage}
             onReplyPress={handleJumpToMessage}
             isGroup={isGroup}
+            onJoinGroupCall={joinGroupCall}
           />
         )}
       </View>

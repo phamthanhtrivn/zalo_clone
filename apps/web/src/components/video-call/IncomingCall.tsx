@@ -10,7 +10,7 @@ function getInitial(nameOrId: string) {
 }
 
 export default function IncomingCall() {
-  const { videoCallData, answerCall, leaveCall, sessionState } = useCall();
+  const { videoCallData, answerDirectCall, leaveCall, sessionState } = useCall();
   const conversations = useAppSelector((state) => state.conversation.conversations);
 
   // Phase 4: Simplify visibility logic (PM note #3)
@@ -95,7 +95,7 @@ export default function IncomingCall() {
 
               <button
                 type="button"
-                onClick={answerCall}
+                onClick={answerDirectCall}
                 className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-3 shadow-lg shadow-emerald-600/25 transition relative overflow-hidden"
               >
                 <span className="absolute inset-0 opacity-20 animate-pulse bg-white/30" />

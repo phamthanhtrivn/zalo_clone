@@ -54,6 +54,7 @@ export interface MessagesType {
   type: string;
   pollId?: string | null;
   poll?: PollType | null;
+  callSessionId?: string | null;
 
   expired?: boolean;
   expiredAt: string | null;

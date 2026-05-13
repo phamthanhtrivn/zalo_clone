@@ -1,17 +1,33 @@
 import { Stack } from "expo-router";
 import { SocketProvider } from "@/contexts/SocketContext";
-import { VideoCallProvider } from "@/contexts/VideoCallContext";
+import { VideoCallProvider, useVideoCall } from "@/contexts/VideoCallContext";
 import IncomingCallOverlay from "@/components/video-call/IncomingCallOverlay";
 import OutgoingCallOverlay from "@/components/video-call/OutgoingCallOverlay";
 import ActiveCallOverlay from "@/components/video-call/ActiveCallOverlay";
+
+function CallOverlays() {
+  const { callMode } = useVideoCall();
+  
+  if (callMode === 'NONE') return null;
+
+  return (
+    <>
+      {callMode === 'DIRECT' && (
+        <>
+          <IncomingCallOverlay />
+          <OutgoingCallOverlay />
+        </>
+      )}
+      <ActiveCallOverlay />
+    </>
+  );
+}
 
 export default function PrivateLayout() {
   return (
     <SocketProvider>
       <VideoCallProvider>
-        <IncomingCallOverlay />
-        <OutgoingCallOverlay />
-        <ActiveCallOverlay />
+        <CallOverlays />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="chat" />

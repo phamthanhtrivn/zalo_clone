@@ -239,12 +239,24 @@ const messageSlice = createSlice({
             }>
         ) {
             const { conversationId, messageId, status, duration } = action.payload;
+            console.log(`[Redux] updateCallStatus: msg=${messageId}, status=${status}`);
             const messages = state.messagesByConversation[conversationId];
             if (!messages) return;
             const msg = messages.find((m) => m._id === messageId);
-            if (msg && msg.call) {
-                msg.call.status = status as any;
-                if (duration !== undefined) msg.call.duration = duration;
+            if (msg) {
+                console.log(`[Redux] Found message to update status: ${status}`);
+                if (!msg.call) {
+                    msg.call = {
+                        type: "VIDEO",
+                        status: status as any,
+                        duration: duration || 0
+                    };
+                } else {
+                    msg.call.status = status as any;
+                    if (duration !== undefined) msg.call.duration = duration;
+                }
+            } else {
+                console.warn(`[Redux] Message ${messageId} not found in conversation ${conversationId}`);
             }
         },
         // messageSlice.ts
