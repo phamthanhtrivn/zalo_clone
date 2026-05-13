@@ -252,6 +252,32 @@ export const MessageBubble = ({
               </div>
             )}
 
+            {content?.storyLink?.storyId && (
+              <div className="overflow-hidden rounded-xl border border-sky-200 bg-sky-50">
+                {content.storyLink.previewImage ? (
+                  <img
+                    src={content.storyLink.previewImage}
+                    className="h-40 w-full object-cover"
+                    alt="story preview"
+                  />
+                ) : (
+                  <div className="flex h-32 items-end bg-linear-to-br from-sky-500 to-blue-700 p-3">
+                    <p className="line-clamp-3 text-sm font-semibold text-white">
+                      {content.storyLink.previewText || "Story"}
+                    </p>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <span className="rounded-full bg-sky-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                    Trả lời story
+                  </span>
+                  <p className="line-clamp-1 text-xs text-slate-600">
+                    {content.storyLink.previewText || "Mở lại story đã trả lời"}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* PRIVATE / NINJA INDICATOR */}
             {(message.type === "PRIVATE" || message.type === "AI_SUMMARY") && (
               <div className="flex items-center gap-1 mt-1 text-[10px] text-gray-400 border-t border-gray-100 pt-1">

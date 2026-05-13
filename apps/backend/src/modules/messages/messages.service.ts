@@ -152,6 +152,13 @@ export class MessagesService {
     );
   }
 
+  async sendStandardMessage(
+    sendMessageDto: SendMessageDto,
+    files?: Express.Multer.File[],
+  ) {
+    return this.actionService.sendMessage(sendMessageDto, files);
+  }
+
   // --- Action Methods ---
   // async sendMessage(
   //   sendMessageDto: SendMessageDto,

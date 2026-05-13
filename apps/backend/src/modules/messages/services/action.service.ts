@@ -142,6 +142,7 @@ export class MessagesActionService {
         icon: content?.icon ?? null,
         files: [],
         voiceDuration: null,
+        storyLink: content?.storyLink ?? null,
       };
 
       if (files && files.length > 0) {

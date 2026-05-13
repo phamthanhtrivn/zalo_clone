@@ -10,4 +10,12 @@ export class ContentDto {
   @IsOptional()
   @IsNumber()
   voiceDuration?: number;
+
+  @IsOptional()
+  storyLink?: {
+    storyId?: string;
+    authorId?: string;
+    previewText?: string;
+    previewImage?: string;
+  } | null;
 }

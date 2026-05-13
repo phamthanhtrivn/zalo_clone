@@ -12,27 +12,29 @@ interface QuickActionsProps {
 export default function QuickActions({ onAlbum, onFriends, onMusic, onFont }: QuickActionsProps) {
     return (
         <>
-            {/* Aa button */}
             <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
                 <Pressable
                     onPress={onFont}
                     style={{
-                        width: 46, height: 46,
-                        borderRadius: 23,
-                        borderWidth: 2.5,
-                        borderColor: "#e0e0e0",
+                        width: 48, height: 48,
+                        borderRadius: 24,
+                        backgroundColor: "#fff",
+                        shadowColor: "#000",
+                        shadowOpacity: 0.08,
+                        shadowRadius: 8,
+                        shadowOffset: { width: 0, height: 2 },
+                        elevation: 2,
                         alignItems: "center",
                         justifyContent: "center",
                     }}>
-                    <Text style={{ fontWeight: "700", fontSize: 15, color: "#333" }}>Aa</Text>
+                    <Text style={{ fontWeight: "800", fontSize: 18, color: "#333" }}>Aa</Text>
                 </Pressable>
             </View>
 
-            {/* Chip row */}
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: 14, gap: 8, paddingBottom: 10 }}
+                contentContainerStyle={{ paddingHorizontal: 14, gap: 10, paddingBottom: 14 }}
             >
                 <Chip icon="musical-notes-outline" label="Nhạc" onPress={onMusic} />
                 <Chip icon="images-outline" label="Album" onPress={onAlbum} />
@@ -48,13 +50,13 @@ function Chip({ icon, label, onPress }: { icon: string; label: string; onPress: 
             onPress={onPress}
             style={{
                 flexDirection: "row", alignItems: "center", gap: 6,
-                borderWidth: 1, borderColor: "#e0e0e0",
-                borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8,
-                backgroundColor: "#fafafa",
+                borderWidth: 1, borderColor: "#e5e7eb",
+                borderRadius: 18, paddingHorizontal: 16, paddingVertical: 10,
+                backgroundColor: "#fff",
             }}
         >
             <Ionicons name={icon as any} size={17} color="#555" />
-            <Text style={{ fontSize: 13, color: "#333", fontWeight: "500" }}>{label}</Text>
+            <Text style={{ fontSize: 14, color: "#333", fontWeight: "500" }}>{label}</Text>
         </Pressable>
     );
 }

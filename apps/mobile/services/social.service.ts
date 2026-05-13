@@ -7,6 +7,21 @@ export const getFeed = async () => {
     return res;
 };
 
+export const getPostDetail = async (postId: string) => {
+    const res = await api.get(`/posts/detail/${postId}`);
+    return res;
+};
+
+export const getSocialNotifications = async () => {
+    const res = await api.get("/posts/notifications");
+    return res;
+};
+
+export const markSocialNotificationRead = async (notificationId: string) => {
+    const res = await api.post(`/posts/notifications/${notificationId}/read`);
+    return res;
+};
+
 export const reactPost = async (postId: string, type = "LIKE") => {
     const res = await api.post(`/posts/${postId}/react`, { type });
     return res;
@@ -47,6 +62,52 @@ export const createPost = async (formData: FormData) => {
         headers: {
             "Content-Type": "multipart/form-data",
         },
+    });
+    return res;
+};
+
+export const createStory = async (formData: FormData) => {
+    const res = await api.post("/posts/stories", formData, {
+        headers: {
+            "Content-Type": "multipart/form-data",
+        },
+    });
+    return res;
+};
+
+export const getStories = async () => {
+    const res = await api.get("/posts/stories");
+    return res;
+};
+
+export const deleteStory = async (storyId: string) => {
+    const res = await api.delete(`/posts/stories/${storyId}`);
+    return res;
+};
+
+export const markStoryViewed = async (storyId: string) => {
+    const res = await api.post(`/posts/stories/${storyId}/view`);
+    return res;
+};
+
+export const getStoryViewers = async (storyId: string) => {
+    const res = await api.get(`/posts/stories/${storyId}/viewers`);
+    return res;
+};
+
+export const reactStory = async (storyId: string, type: string) => {
+    const res = await api.post(`/posts/stories/${storyId}/react`, { type });
+    return res;
+};
+
+export const replyStory = async (storyId: string, content: string) => {
+    const res = await api.post(`/posts/stories/${storyId}/reply`, { content });
+    return res;
+};
+
+export const getStoryMusicSuggestions = async (q: string = "") => {
+    const res = await api.get("/posts/stories/music", {
+        params: q.trim() ? { q: q.trim() } : {},
     });
     return res;
 };

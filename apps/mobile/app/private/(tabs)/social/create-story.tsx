@@ -1,0 +1,487 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, Pressable, Alert, ScrollView, Modal, TextInput } from "react-native";
+import { useRouter } from "expo-router";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library";
+import Container from "@/components/common/Container";
+import { userService } from "@/services/user.service";
+import { createStory, musicService } from "@/services/social.service";
+
+type StoryMode = "text" | "image" | "video" | "loop";
+type PrivacyMode = "friends" | "include" | "exclude";
+type Friend = { id: string; name: string; avatar?: string };
+
+const SAMPLE_THUMBS = [
+  "https://images.unsplash.com/photo-1560343090-f0409e92791a",
+  "https://images.unsplash.com/photo-1519608487953-e999c86e7455",
+  "https://images.unsplash.com/photo-1517336714739-489689fd1ca8",
+  "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9",
+];
+
+export default function CreateStoryScreen() {
+  const router = useRouter();
+  const cameraRef = useRef<CameraView | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [facing, setFacing] = useState<"front" | "back">("back");
+  const [assetUri, setAssetUri] = useState<string>();
+  const [activeMode, setActiveMode] = useState<StoryMode>("image");
+  const [showTools, setShowTools] = useState(false);
+  const [showPrivacySheet, setShowPrivacySheet] = useState(false);
+  const [showFriendPicker, setShowFriendPicker] = useState(false);
+  const [privacyMode, setPrivacyMode] = useState<PrivacyMode>("friends");
+  const [friendPickerMode, setFriendPickerMode] = useState<"include" | "exclude">("include");
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friendQuery, setFriendQuery] = useState("");
+  const [includedFriendIds, setIncludedFriendIds] = useState<Set<string>>(new Set());
+  const [excludedFriendIds, setExcludedFriendIds] = useState<Set<string>>(new Set());
+  const [textStory, setTextStory] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [showMusicSheet, setShowMusicSheet] = useState(false);
+  const [musicKeyword, setMusicKeyword] = useState("");
+  const [musicList, setMusicList] = useState<any[]>([]);
+  const [selectedMusic, setSelectedMusic] = useState<any | null>(null);
+
+  const filteredFriends = useMemo(() => {
+    const q = friendQuery.trim().toLowerCase();
+    if (!q) return friends;
+    return friends.filter((f) => f.name.toLowerCase().includes(q));
+  }, [friends, friendQuery]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadFriends = async () => {
+      try {
+        const res: any = await userService.getListFriends();
+        const users = res?.users ?? res?.data?.users ?? [];
+        const mapped: Friend[] = users.flatMap((group: any) =>
+          (group.friends || []).map((f: any) => ({
+            id: f.friendId,
+            name: f.name || "Người dùng",
+            avatar: f.avatarUrl,
+          })),
+        );
+        if (mounted) setFriends(mapped);
+      } catch {
+        if (mounted) setFriends([]);
+      }
+    };
+    loadFriends();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const run = async () => {
+      try {
+        const res: any = await musicService.searchMusic(musicKeyword || "");
+        const tracks = res?.data || [];
+        const normalized = Array.isArray(tracks)
+          ? tracks.map((t: any) => ({
+              id: t.id,
+              title: t.title,
+              artist: t.artist,
+              thumbnail: t.thumbnail || t.image || "",
+              previewUrl: t.previewUrl || "",
+            }))
+          : [];
+        if (mounted) setMusicList(normalized);
+      } catch {
+        if (mounted) setMusicList([]);
+      }
+    };
+    if (showMusicSheet) run();
+    return () => {
+      mounted = false;
+    };
+  }, [musicKeyword, showMusicSheet]);
+
+  const toggleFriend = (id: string) => {
+    if (friendPickerMode === "include") {
+      setIncludedFriendIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      return;
+    }
+    setExcludedFriendIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const pickMedia = async (pickMode: "image" | "video") => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Thiếu quyền", "Vui lòng cấp quyền thư viện.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes:
+        pickMode === "video"
+          ? ImagePicker.MediaTypeOptions.Videos
+          : ImagePicker.MediaTypeOptions.Images,
+      quality: 1,
+      allowsEditing: false,
+    });
+    if (result.canceled || !result.assets?.length) return;
+    setAssetUri(result.assets[0].uri);
+    setActiveMode(pickMode);
+  };
+
+  const capturePhoto = async () => {
+    try {
+      if (!cameraRef.current) return;
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
+      if (photo?.uri) {
+        setAssetUri(photo.uri);
+        setActiveMode("image");
+      }
+    } catch {
+      Alert.alert("Lỗi", "Không thể chụp ảnh.");
+    }
+  };
+
+  const saveToDevice = async () => {
+    if (!assetUri) {
+      Alert.alert("Thông báo", "Chưa có ảnh/video để tải về.");
+      return;
+    }
+    const perm = await MediaLibrary.requestPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Thiếu quyền", "Vui lòng cấp quyền lưu ảnh vào thư viện.");
+      return;
+    }
+    try {
+      await MediaLibrary.saveToLibraryAsync(assetUri);
+      Alert.alert("Thành công", "Đã lưu vào thư viện.");
+    } catch {
+      Alert.alert("Lỗi", "Không thể lưu ảnh/video.");
+    }
+  };
+
+  const handlePost = async () => {
+    if (!assetUri && activeMode !== "text") {
+      Alert.alert("Thiếu nội dung", "Vui lòng chụp/chọn ảnh hoặc video trước khi đăng.");
+      return;
+    }
+    try {
+      setPosting(true);
+      const formData = new FormData();
+      formData.append("privacyMode", privacyMode);
+      formData.append("includeUserIds", JSON.stringify(Array.from(includedFriendIds)));
+      formData.append("excludeUserIds", JSON.stringify(Array.from(excludedFriendIds)));
+      if (selectedMusic) {
+        formData.append(
+          "music",
+          JSON.stringify({
+            title: selectedMusic.title,
+            artist: selectedMusic.artist,
+            previewUrl: selectedMusic.previewUrl,
+            thumbnail: selectedMusic.thumbnail,
+          }),
+        );
+      }
+      if (activeMode === "text") {
+        formData.append("text", textStory || "Khoảnh khắc mới");
+      }
+      if (assetUri) {
+        const name = assetUri.split("/").pop() || `story-${Date.now()}.jpg`;
+        const lower = name.toLowerCase();
+        const isVideo =
+          activeMode === "video" ||
+          lower.endsWith(".mp4") ||
+          lower.endsWith(".mov") ||
+          lower.endsWith(".mkv");
+        formData.append("files", {
+          uri: assetUri,
+          name,
+          type: isVideo ? "video/mp4" : "image/jpeg",
+        } as any);
+      }
+      await createStory(formData);
+      Alert.alert("Thành công", "Đăng story thành công.");
+      router.back();
+    } catch (error: any) {
+      Alert.alert("Lỗi", error?.response?.data?.message || "Không thể đăng story.");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  if (!permission) return <View style={{ flex: 1, backgroundColor: "black" }} />;
+  if (!permission.granted) {
+    return (
+      <Container className="bg-black">
+        <View className="flex-1 items-center justify-center px-6">
+          <Text className="text-white text-center text-[16px] mb-4">Cần quyền camera để tạo story</Text>
+          <Pressable onPress={requestPermission} className="bg-[#0ea5e9] px-5 py-3 rounded-full">
+            <Text className="text-white font-semibold">Cấp quyền Camera</Text>
+          </Pressable>
+        </View>
+      </Container>
+    );
+  }
+
+  return (
+    <Container className="bg-black">
+      <View className="flex-1 bg-black">
+        {activeMode === "text" ? (
+          <Image source={{ uri: "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8" }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+        ) : assetUri ? (
+          <Image source={{ uri: assetUri }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+        ) : (
+          <CameraView ref={cameraRef} facing={facing} style={{ width: "100%", height: "100%" }} />
+        )}
+
+        <View className="absolute inset-0 bg-black/10" />
+
+        <View className="absolute top-14 left-5 right-5 flex-row justify-between items-center">
+          <Pressable onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={36} color="white" />
+          </Pressable>
+          <View className="w-3 h-3 rounded-full bg-[#22c55e]" />
+        </View>
+
+        <Pressable
+          onPress={() => setShowMusicSheet(true)}
+          className="absolute top-24 self-center bg-black/60 rounded-full px-5 py-2.5 flex-row items-center"
+        >
+          <Ionicons name="musical-notes-outline" size={18} color="white" />
+          <Text className="text-white text-[16px] ml-2">
+            {selectedMusic?.title ? selectedMusic.title : "Thêm nhạc"}
+          </Text>
+        </Pressable>
+
+        <View className="absolute top-24 right-4">
+          <Pressable className="w-14 h-14 rounded-full bg-black/45 items-center justify-center mb-3" onPress={() => setShowTools((v) => !v)}>
+            <Text className="text-white text-[28px] font-bold">Aa</Text>
+          </Pressable>
+          {showTools && (
+            <>
+              {["Sticker", "Cắt ảnh", "Hiệu ứng", "Hình vẽ", "Vị trí"].map((label) => (
+                <View key={label} className="flex-row items-center justify-end mb-2">
+                  <Text className="text-white text-[20px] mr-3">{label}</Text>
+                  <View className="w-14 h-14 rounded-full bg-black/45 items-center justify-center">
+                    <Ionicons name="ellipse-outline" size={20} color="white" />
+                  </View>
+                </View>
+              ))}
+              <Pressable className="w-14 h-14 rounded-full bg-black/45 items-center justify-center self-end" onPress={() => setShowTools(false)}>
+                <Ionicons name="chevron-up" size={28} color="white" />
+              </Pressable>
+            </>
+          )}
+        </View>
+
+        {activeMode === "text" ? (
+          <View className="absolute inset-x-0 top-[300px] px-10 items-center">
+            <TextInput placeholder="Bạn đang nghĩ gì?" placeholderTextColor="#d4d4d4" value={textStory} onChangeText={setTextStory} className="text-[32px] text-white text-center w-full" />
+          </View>
+        ) : (
+          <View className="absolute bottom-44 left-0 right-0">
+            <View className="items-center mb-3">
+              <View className="w-14 h-14 rounded-full bg-black/55 items-center justify-center">
+                <Ionicons name="chevron-down" size={28} color="white" />
+              </View>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14 }}>
+              {SAMPLE_THUMBS.map((uri, idx) => (
+                <Pressable key={`${uri}-${idx}`} onPress={() => setAssetUri(uri)} className="mr-2">
+                  <Image source={{ uri }} style={{ width: 90, height: 90, borderRadius: 10, borderWidth: assetUri === uri ? 2 : 0, borderColor: "#fff" }} />
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        <View className="absolute bottom-20 left-0 right-0 px-8">
+          <View className="flex-row items-center justify-between">
+            <View className="items-center">
+              <Pressable onPress={() => setShowPrivacySheet(true)} className="w-14 h-14 rounded-xl bg-white/75 items-center justify-center">
+                <Ionicons name="people-outline" size={24} color="#1f2937" />
+              </Pressable>
+              <Text className="text-white text-[13px] mt-1">Quyền xem</Text>
+            </View>
+
+            <Pressable onPress={activeMode === "text" ? handlePost : capturePhoto} className={`w-28 h-28 rounded-full border-[6px] border-white/90 items-center justify-center ${activeMode === "loop" ? "bg-pink-500/80" : ""}`}>
+              <View className={`w-[84px] h-[84px] rounded-full items-center justify-center ${activeMode === "loop" ? "bg-pink-500" : "bg-white/95"}`}>
+                {activeMode === "loop" ? <Ionicons name="infinite" size={42} color="white" /> : null}
+              </View>
+            </Pressable>
+
+            <View className="items-center">
+              <Pressable onPress={() => setFacing((prev) => (prev === "back" ? "front" : "back"))} className="w-14 h-14 rounded-2xl bg-white/80 items-center justify-center">
+                <Ionicons name="camera-reverse-outline" size={28} color="#334155" />
+              </Pressable>
+              <Pressable disabled={posting} onPress={handlePost} className="mt-2 bg-[#0f82ff] px-5 py-2 rounded-full">
+                <Text className="text-white font-semibold text-[18px]">{posting ? "Đang đăng..." : "Đăng"}</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View className="flex-row mt-3 items-center">
+            <Pressable onPress={saveToDevice} className="mr-5 flex-row items-center">
+              <MaterialIcons name="download" size={20} color="white" />
+              <Text className="text-white ml-1">Tải về</Text>
+            </Pressable>
+            <Pressable onPress={() => pickMedia("image")} className="flex-row items-center">
+              <Ionicons name="images-outline" size={20} color="white" />
+              <Text className="text-white ml-1">Thư viện</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View className="absolute bottom-6 left-0 right-0 items-center">
+          <View className="flex-row items-center">
+            {[
+              { key: "text", label: "CHỮ" },
+              { key: "image", label: "ẢNH" },
+              { key: "video", label: "VIDEO" },
+              { key: "loop", label: "LOOP" },
+            ].map((m) => (
+              <Pressable
+                key={m.key}
+                onPress={() => {
+                  if (m.key === "video") {
+                    pickMedia("video");
+                    setActiveMode("video");
+                  } else {
+                    setActiveMode(m.key as StoryMode);
+                  }
+                }}
+                className="mx-5"
+              >
+                <Text className={`text-[16px] ${activeMode === m.key ? "text-white font-semibold" : "text-white/50"}`}>{m.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <Modal visible={showPrivacySheet} transparent animationType="slide">
+          <View className="flex-1 bg-black/40 justify-end">
+            <View className="bg-white rounded-t-3xl p-5">
+              <View className="w-14 h-1.5 bg-[#d1d5db] rounded-full self-center mb-4" />
+              <Text className="text-[24px] font-semibold mb-4">Ai được xem khoảnh khắc này?</Text>
+              <Pressable onPress={() => setPrivacyMode("friends")} className="py-4 border-b border-[#f3f4f6]">
+                <Text className="text-[20px]">Bạn bè Zalo</Text>
+                <Text className="text-[#6b7280] text-[16px]">Trừ bạn bè đã bị chặn xem</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setPrivacyMode("include");
+                  setFriendPickerMode("include");
+                  setShowFriendPicker(true);
+                }}
+                className="py-4 border-b border-[#f3f4f6] flex-row justify-between items-center"
+              >
+                <View>
+                  <Text className="text-[20px]">Một số bạn bè</Text>
+                  <Text className="text-[#6b7280] text-[16px]">{includedFriendIds.size > 0 ? `Đã chọn ${includedFriendIds.size} bạn` : "Chọn bạn bè được xem"}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#64748b" />
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setPrivacyMode("exclude");
+                  setFriendPickerMode("exclude");
+                  setShowFriendPicker(true);
+                }}
+                className="py-4 border-b border-[#f3f4f6] flex-row justify-between items-center"
+              >
+                <View>
+                  <Text className="text-[20px]">Bạn bè ngoại trừ...</Text>
+                  <Text className="text-[#6b7280] text-[16px]">{excludedFriendIds.size > 0 ? `Đã loại trừ ${excludedFriendIds.size} bạn` : "Chọn bạn bè không được xem"}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#64748b" />
+              </Pressable>
+              <Pressable onPress={() => setShowPrivacySheet(false)} className="mt-4 bg-[#0f82ff] py-3 rounded-full items-center">
+                <Text className="text-white text-[18px] font-semibold">Xong</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={showFriendPicker} transparent animationType="slide">
+          <View className="flex-1 bg-black/40 justify-end">
+            <View className="bg-white rounded-t-3xl p-4 h-[75%]">
+              <View className="flex-row justify-between items-center mb-3">
+                <Text className="text-[20px] font-semibold">{friendPickerMode === "include" ? "Chọn bạn bè được xem" : "Chọn bạn bè không được xem"}</Text>
+                <Pressable onPress={() => setShowFriendPicker(false)}>
+                  <Ionicons name="close" size={26} color="#111827" />
+                </Pressable>
+              </View>
+              <View className="bg-[#f3f4f6] rounded-full px-4 py-2 mb-3">
+                <TextInput placeholder="Tìm bạn bè..." value={friendQuery} onChangeText={setFriendQuery} />
+              </View>
+              <ScrollView>
+                {filteredFriends.map((f) => {
+                  const checked = friendPickerMode === "include" ? includedFriendIds.has(f.id) : excludedFriendIds.has(f.id);
+                  return (
+                    <Pressable key={f.id} onPress={() => toggleFriend(f.id)} className="flex-row items-center py-3 border-b border-[#f3f4f6]">
+                      <Image source={{ uri: f.avatar || "https://images.unsplash.com/photo-1544005313-94ddf0286df2" }} style={{ width: 38, height: 38, borderRadius: 19 }} />
+                      <Text className="ml-3 text-[17px] flex-1">{f.name}</Text>
+                      <View className={`w-6 h-6 rounded-full border ${checked ? "bg-[#0f82ff] border-[#0f82ff]" : "border-[#cbd5e1]"}`} />
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <Pressable onPress={() => setShowFriendPicker(false)} className="mt-3 bg-[#0f82ff] py-3 rounded-full items-center">
+                <Text className="text-white text-[18px] font-semibold">Lưu lựa chọn</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={showMusicSheet} transparent animationType="slide">
+          <View className="flex-1 bg-black/40 justify-end">
+            <View className="bg-white rounded-t-3xl p-4 h-[75%]">
+              <View className="w-14 h-1.5 bg-[#d1d5db] rounded-full self-center mb-3" />
+              <View className="bg-[#f3f4f6] rounded-full px-4 py-2 mb-3">
+                <TextInput
+                  placeholder="Tìm bài hát hoặc nghệ sĩ"
+                  value={musicKeyword}
+                  onChangeText={setMusicKeyword}
+                />
+              </View>
+              <ScrollView>
+                {musicList.map((m) => (
+                  <View key={m.id} className="flex-row items-center py-3 border-b border-[#f3f4f6]">
+                    <Image
+                      source={{ uri: m.thumbnail }}
+                      style={{ width: 48, height: 48, borderRadius: 10 }}
+                    />
+                    <View className="ml-3 flex-1">
+                      <Text className="text-[18px]" numberOfLines={1}>{m.title}</Text>
+                      <Text className="text-[#6b7280] text-[14px]" numberOfLines={1}>{m.artist}</Text>
+                    </View>
+                    <Pressable
+                      onPress={() => {
+                        setSelectedMusic(m);
+                        setShowMusicSheet(false);
+                      }}
+                      className="bg-[#e0f2fe] px-4 py-2 rounded-full"
+                    >
+                      <Text className="text-[#0ea5e9] font-semibold">CHỌN</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+              <Pressable onPress={() => setShowMusicSheet(false)} className="mt-3 bg-[#0f82ff] py-3 rounded-full items-center">
+                <Text className="text-white text-[18px] font-semibold">Đóng</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    </Container>
+  );
+}

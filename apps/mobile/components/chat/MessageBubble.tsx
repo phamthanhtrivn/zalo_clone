@@ -34,6 +34,8 @@ type Props = {
   isHighlighted?: boolean;
   onReplyPress?: (messageId: string) => void;
   isGroup: boolean;
+  onJoinGroupCall?: (sessionId: string) => void;
+  onOpenStoryLink?: (storyId: string) => void;
 };
 
 const TextWithLinks = ({ text }: { text: string }) => {
@@ -73,14 +75,14 @@ const MessageBubble = ({
   isHighlighted = false,
   onReplyPress,
   isGroup,
+  onOpenStoryLink,
 }: Props) => {
   const content = message.content;
-  const files = content?.files || [];
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   const mediaFiles = useMemo(
-    () => files.filter((f: any) => f.type === "IMAGE" || f.type === "VIDEO"),
-    [files],
+    () => (content?.files || []).filter((f: any) => f.type === "IMAGE" || f.type === "VIDEO"),
+    [content?.files],
   );
 
   const bubbleBg = isHighlighted
@@ -183,6 +185,128 @@ const MessageBubble = ({
           )}
 
           {renderText()}
+          {content?.storyLink?.storyId ? (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => onOpenStoryLink?.(content.storyLink?.storyId || "")}
+              style={{
+                marginTop: 8,
+                width: 180,
+                borderRadius: 16,
+                overflow: "hidden",
+                backgroundColor: "#0f172a",
+                borderWidth: 1,
+                borderColor: "#dbeafe",
+              }}
+            >
+              {content.storyLink.previewImage ? (
+                <View>
+                  <Image
+                    source={{ uri: content.storyLink.previewImage }}
+                    style={{ width: 180, height: 170 }}
+                    contentFit="cover"
+                  />
+                  <View
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      backgroundColor: "rgba(15,23,42,0.18)",
+                    }}
+                  />
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: 10,
+                      left: 10,
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 999,
+                      backgroundColor: "rgba(15,23,42,0.72)",
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, color: "white", fontWeight: "700" }}>
+                      Story
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <View
+                  style={{
+                    width: "100%",
+                    height: 170,
+                    padding: 14,
+                    justifyContent: "space-between",
+                    backgroundColor: "#2563eb",
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.82)", fontWeight: "700" }}>
+                    Story
+                  </Text>
+                  <Text numberOfLines={3} style={{ fontSize: 18, color: "white", fontWeight: "700" }}>
+                    {content.storyLink.previewText || "Xem lai story"}
+                  </Text>
+                </View>
+              )}
+              <View
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: content.storyLink.previewImage ? "rgba(15,23,42,0.92)" : "#0f172a",
+                }}
+              >
+                <View
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 15,
+                    backgroundColor: "rgba(255,255,255,0.92)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 10,
+                  }}
+                >
+                  <Ionicons name="play" size={15} color="#2563eb" />
+                </View>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: "#93c5fd",
+                      fontWeight: "700",
+                    }}
+                  >
+                    Tra loi story
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      fontSize: 12,
+                      color: "white",
+                      marginTop: 2,
+                      fontWeight: "500",
+                    }}
+                  >
+                    Xem story
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 999,
+                    backgroundColor: "#1d4ed8",
+                  }}
+                >
+                  <Text style={{ fontSize: 11, color: "white", fontWeight: "700" }}>
+                    Xem
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ) : null}
           {content?.icon ? <Text style={{ fontSize: 32 }}>{content.icon}</Text> : null}
 
           {mediaFiles.length > 0 && (

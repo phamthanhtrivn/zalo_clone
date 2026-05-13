@@ -312,6 +312,24 @@ const ConversationListItem = ({
     let icon: React.ReactNode = null;
     let text = "";
 
+    if (content.storyLink?.storyId) {
+      return {
+        showSender: true,
+        content: (
+          <span className="flex items-center gap-1 truncate">
+            <span className="rounded-full bg-sky-100 px-1.5 py-[1px] text-[10px] font-semibold text-sky-700">
+              Story
+            </span>
+            <span className="truncate">
+              {content.text
+                ? `Trả lời story: ${content.text}`
+                : `Trả lời story: ${content.storyLink.previewText || "Xem lại story"}`}
+            </span>
+          </span>
+        ),
+      };
+    }
+
     if (content.text && /https?:\/\//.test(content.text)) {
       icon = <HiMiniLink />;
       text = content.text;

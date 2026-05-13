@@ -36,6 +36,12 @@ export interface MessagesType {
     icon: string | null;
     files: File[];
     voiceDuration?: number | null;
+    storyLink?: {
+      storyId?: string;
+      authorId?: string;
+      previewText?: string;
+      previewImage?: string;
+    } | null;
   };
   pinned: boolean;
   recalled: boolean;
