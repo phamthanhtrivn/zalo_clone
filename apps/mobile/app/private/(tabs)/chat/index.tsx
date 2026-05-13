@@ -25,18 +25,6 @@ import QRIcon from "@/components/common/QRIcon";
 const selectVisibleConversations = createSelector(
   (state: RootState) => state.conversation.conversations,
   (conversations) => {
-    console.log(
-      "🔄 Selector running, conversations count:",
-      conversations.length,
-    );
-    console.log(
-      "📊 Unread counts:",
-      conversations.map((c) => ({
-        name: c.name,
-        unreadCount: c.unreadCount,
-      })),
-    );
-
     return [...conversations]
       .filter((c) => !c.hidden)
       .sort((a, b) => {

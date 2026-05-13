@@ -17,6 +17,7 @@ import { ConversationsService } from '../../conversations/conversations.service'
 import { RedisService } from 'src/common/redis/redis.service';
 import { REDIS_CHANNEL_SOCKET_EVENTS } from 'src/common/constants/redis.constant';
 import { SendMessageDto } from '../dto/send-message.dto';
+import { SendVoiceMessageDto } from '../dto/send-voice-message.dto';
 import { PinnedMessageDto } from '../dto/pinned-message.dto';
 import { RecalledMessageDto } from '../dto/recalled-message.dto';
 import { DeleteMessageForMeDto } from '../dto/delete-message-for-me.dto';
@@ -28,6 +29,12 @@ import { ConversationType } from 'src/common/types/enums/conversation-type';
 import { MemberRole } from 'src/common/types/enums/member-role';
 import { ConversationSetting } from 'src/modules/conversation-settings/schemas/conversation-setting.schema';
 
+import * as fs from 'fs';
+import * as path from 'path';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegPath from 'ffmpeg-static';
+
+ffmpeg.setFfmpegPath(ffmpegPath as string);
 
 @Injectable()
 export class MessagesActionService {
@@ -45,7 +52,20 @@ export class MessagesActionService {
     private readonly redisService: RedisService,
     @InjectModel(ConversationSetting.name)
     private readonly conversationSettingModel: Model<ConversationSetting>,
-  ) { }
+  ) {}
+
+  async convertToM4A(inputPath: string, outputPath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      ffmpeg(inputPath)
+        .audioCodec('aac')
+        .audioBitrate(128)
+        .audioChannels(1)
+        .format('ipod') // chuẩn m4a cho iOS
+        .on('end', () => resolve(outputPath))
+        .on('error', reject)
+        .save(outputPath);
+    });
+  }
 
   async sendMessage(
     sendMessageDto: SendMessageDto,
@@ -62,7 +82,8 @@ export class MessagesActionService {
         }
       }
 
-      const conversation = await this.conversationModel.findById(conversationId);
+      const conversation =
+        await this.conversationModel.findById(conversationId);
       if (!conversation) {
         throw new NotFoundException('Conversation not found');
       }
@@ -71,7 +92,10 @@ export class MessagesActionService {
         conversationId: new Types.ObjectId(conversationId),
       });
       let expiresAt: Date | undefined;
-      if (conversationSetting?.expireDuration && conversationSetting.expireDuration > 0) {
+      if (
+        conversationSetting?.expireDuration &&
+        conversationSetting.expireDuration > 0
+      ) {
         expiresAt = new Date(Date.now() + conversationSetting.expireDuration);
       }
 
@@ -101,14 +125,29 @@ export class MessagesActionService {
         );
       }
 
+      if ((content as any)?.voiceDuration != null) {
+        throw new BadRequestException(
+          'Voice message is not supported in this endpoint. Use POST /messages/voice',
+        );
+      }
+
+      if (files?.some((f) => f.mimetype?.startsWith('audio/'))) {
+        throw new BadRequestException(
+          'Voice message is not supported in this endpoint. Use POST /messages/voice',
+        );
+      }
+
       const formattedContent: any = {
         text: content?.text ?? null,
         icon: content?.icon ?? null,
         files: [],
+        voiceDuration: null,
       };
 
       if (files && files.length > 0) {
-        formattedContent.files = await Promise.all(files.map((file) => this.storageService.uploadFile(file)));
+        formattedContent.files = await Promise.all(
+          files.map((file) => this.storageService.uploadFile(file)),
+        );
       }
 
       if (
@@ -154,8 +193,8 @@ export class MessagesActionService {
 
       if (populatedMessage) {
         const conversationIdStr = conversationId.toString();
-        const transformedMessage = this.transformService.transformMessage(populatedMessage);
-
+        const transformedMessage =
+          this.transformService.transformMessage(populatedMessage);
 
         await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
           room: conversationIdStr,
@@ -201,6 +240,199 @@ export class MessagesActionService {
       return message;
     } catch (error) {
       console.log(error);
+    }
+  }
+
+  async sendVoiceMessage(
+    sendVoiceMessageDto: SendVoiceMessageDto,
+    files?: Express.Multer.File[],
+  ) {
+    try {
+      let { senderId, conversationId, content, repliedId } =
+        sendVoiceMessageDto;
+
+      // parse content
+      if (typeof content === 'string') {
+        try {
+          content = JSON.parse(content);
+        } catch (error) {
+          console.error('Failed to parse content JSON:', error);
+        }
+      }
+
+      // validate file
+      if (!files || files.length !== 1) {
+        throw new BadRequestException(
+          'Voice message must contain exactly one audio file',
+        );
+      }
+
+      const [audioFile] = files;
+
+      if (!audioFile?.mimetype?.startsWith('audio/')) {
+        throw new BadRequestException('Uploaded file must be an audio file');
+      }
+
+      // validate duration
+      const voiceDuration = Number((content as any)?.voiceDuration);
+      if (!Number.isFinite(voiceDuration) || voiceDuration <= 0) {
+        throw new BadRequestException(
+          'voiceDuration must be a positive number',
+        );
+      }
+
+      // check conversation
+      const conversation =
+        await this.conversationModel.findById(conversationId);
+      if (!conversation) {
+        throw new NotFoundException('Conversation not found');
+      }
+
+      // check member
+      const member = await this.memberModel.findOne({
+        userId: new Types.ObjectId(senderId),
+        conversationId: new Types.ObjectId(conversationId),
+        leftAt: null,
+      });
+
+      if (!member) {
+        throw new NotFoundException(
+          'User is not a participant in this conversation',
+        );
+      }
+
+      if (
+        conversation.type === ConversationType.GROUP &&
+        member.role === MemberRole.MEMBER &&
+        !conversation.group?.allowMembersSendMessages
+      ) {
+        throw new BadRequestException(
+          'Members are not allowed to send messages in this group',
+        );
+      }
+
+      let fileToUpload: Express.Multer.File = audioFile;
+
+      if (audioFile.mimetype === 'audio/webm') {
+        const tempInputPath = path.join(
+          process.cwd(),
+          'tmp',
+          `${Date.now()}.webm`,
+        );
+
+        const tempOutputPath = tempInputPath.replace('.webm', '.m4a');
+
+        // đảm bảo folder tmp tồn tại
+        if (!fs.existsSync(path.dirname(tempInputPath))) {
+          fs.mkdirSync(path.dirname(tempInputPath), { recursive: true });
+        }
+
+        // ghi buffer ra file
+        fs.writeFileSync(tempInputPath, audioFile.buffer);
+
+        // convert
+        await this.convertToM4A(tempInputPath, tempOutputPath);
+
+        // đọc lại file m4a
+        const m4aBuffer = fs.readFileSync(tempOutputPath);
+
+        fileToUpload = {
+          ...audioFile,
+          buffer: m4aBuffer,
+          originalname:
+            tempOutputPath.split('/').pop() || `voice-${Date.now()}.m4a`,
+          mimetype: 'audio/mp4',
+        };
+
+        // cleanup
+        fs.unlinkSync(tempInputPath);
+        fs.unlinkSync(tempOutputPath);
+      }
+      const uploaded = await this.storageService.uploadFile(fileToUpload);
+
+      const formattedContent: any = {
+        text: null,
+        icon: null,
+        files: [uploaded],
+        voiceDuration,
+      };
+
+      const message = await this.messageModel.create({
+        senderId: new Types.ObjectId(senderId),
+        conversationId: new Types.ObjectId(conversationId),
+        content: formattedContent,
+        pinned: false,
+        recalled: false,
+        reactions: [],
+        readReceipts: [{ userId: new Types.ObjectId(senderId) }],
+        repliedId: repliedId ? new Types.ObjectId(repliedId) : null,
+      });
+
+      await this.conversationModel.findByIdAndUpdate(conversationId, {
+        lastMessageId: new Types.ObjectId(message._id),
+        lastMessageAt: (message as any).createdAt,
+      });
+
+      // =========================
+      // SOCKET + REDIS
+      // =========================
+      const populatedMessage = await this.messageModel
+        .findById(message._id)
+        .populate('senderId', 'profile.name profile.avatarUrl')
+        .populate('readReceipts.userId', 'profile.name profile.avatarUrl')
+        .populate('reactions.userId', 'profile.name profile.avatarUrl')
+        .lean();
+
+      if (populatedMessage) {
+        const conversationIdStr = conversationId.toString();
+        const transformedMessage =
+          this.transformService.transformMessage(populatedMessage);
+
+        await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+          room: conversationIdStr,
+          event: 'new_message',
+          data: transformedMessage,
+        });
+
+        await this.transformService.emitMessageForMedias(
+          conversationIdStr,
+          transformedMessage,
+        );
+
+        // For multi-instance, we send an internal event to trigger read receipts on all instances
+        await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+          room: conversationIdStr,
+          event: 'internal_force_read_receipt',
+          data: { senderId, conversationId: conversationId.toString() },
+        });
+      }
+
+      const members = await this.memberModel.find({
+        conversationId: new Types.ObjectId(conversationId),
+        leftAt: null,
+      });
+
+      for (const m of members) {
+        const conversations =
+          await this.conversationService.getConversationsFromUser(
+            m.userId.toString(),
+          );
+        const conv = conversations.find(
+          (c) => c.conversationId.toString() === conversationId,
+        );
+        if (conv) {
+          await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
+            room: m.userId.toString(),
+            event: 'new_message_sidebar',
+            data: conv,
+          });
+        }
+      }
+
+      return message;
+    } catch (error) {
+      console.log(error);
+      throw error;
     }
   }
 
@@ -775,7 +1007,7 @@ export class MessagesActionService {
           })
           .session(session);
 
-        if (pinnedCount > 3) {
+        if (pinnedCount >= 3) {
           throw new BadRequestException('Maximum pinned messages reached');
         }
       }

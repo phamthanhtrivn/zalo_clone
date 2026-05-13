@@ -1,9 +1,10 @@
-import Tips from "@/components/auth/Tips";
+import AgreementCheckBox from "@/components/common/AgreementCheckBox";
 import Button from "@/components/common/Button";
 import Container from "@/components/common/Container";
 import Header from "@/components/common/Header";
 import Input from "@/components/common/TextInput";
-import { changePassword } from "@/store/auth/authThunk";
+import Tips from "@/components/auth/Tips";
+import { changePassword, logOutOther } from "@/store/auth/authThunk";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -13,13 +14,14 @@ import { showToast } from "@/utils/toast";
 export default function ChangePassword() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { loading, error } = useAppSelector((state) => state.auth);
+  const { loading } = useAppSelector((state) => state.auth);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [oldPassword, setOldPassword] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
+  const [logoutOther, setLogoutOther] = useState<boolean>(false);
 
   const [isHiddenPass, setHiddenPass] = useState<boolean>(true);
   const [isHiddenPass1, setHiddenPass1] = useState<boolean>(true);
@@ -27,6 +29,7 @@ export default function ChangePassword() {
 
   const handleOnUpdate = async () => {
     try {
+      setFieldErrors({});
       await dispatch(
         changePassword({
           newPassword: password,
@@ -34,18 +37,21 @@ export default function ChangePassword() {
           oldPassword: oldPassword,
         }),
       ).unwrap();
+
+      if (logoutOther) {
+        await dispatch(logOutOther()).unwrap();
+      }
+
       showToast("Đổi mật khẩu thành công");
       router.back();
     } catch (err: any) {
       if (err && err.errors && Array.isArray(err.errors)) {
         const errorsObj: Record<string, string> = {};
-
         err.errors.forEach((item: any) => {
           if (item.field) {
             errorsObj[item.field] = item.error;
           }
         });
-
         setFieldErrors(errorsObj);
       }
       showToast(err.message || "Đổi mật khẩu thất bại !");
@@ -102,14 +108,25 @@ export default function ChangePassword() {
             {fieldErrors.confirmPassword}
           </Text>
         )}
+
+        <View className="mt-2">
+          <AgreementCheckBox checked={logoutOther} onChange={setLogoutOther}>
+            <Text className="text-sm text-gray-700">
+              Đăng xuất khỏi các thiết bị khác
+            </Text>
+          </AgreementCheckBox>
+        </View>
+
         <Button
           onPress={handleOnUpdate}
-          className={`${loading ? "bg-secondary" : "bg-primary"} py-3 w-56`}
+          className={`${loading ? "bg-secondary" : "bg-primary"} py-3 mt-4 w-full rounded-xl`}
         >
           {loading ? (
             <ActivityIndicator color="black" />
           ) : (
-            <Text className={`text-white font-semibold text-sm`}>Cập nhật</Text>
+            <Text className={`text-white font-bold text-base`}>
+              Cập nhật mật khẩu
+            </Text>
           )}
         </Button>
       </View>

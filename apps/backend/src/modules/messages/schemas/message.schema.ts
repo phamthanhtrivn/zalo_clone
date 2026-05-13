@@ -31,6 +31,9 @@ export class Content {
 
   @Prop({ type: [File] })
   files?: File[];
+
+  @Prop({ type: Number, default: null })
+  voiceDuration?: number | null;
 }
 
 @Schema({ _id: false })
@@ -114,6 +117,7 @@ export class Message {
   callSessionId?: Types.ObjectId;
 
  @Prop({ type: Types.ObjectId, ref: 'Poll', required: false })
+
   pollId?: Types.ObjectId;
 
   // Tính năng tin nhắn tự hủy (từ PhamThanhTri)
@@ -123,9 +127,10 @@ export class Message {
   @Prop({ default: false })
   expired: boolean;
 
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  targetUserId?: Types.ObjectId;
 
-
-  // Khai báo để sửa lỗi TypeScript 
+  // Khai báo để sửa lỗi TypeScript
   createdAt: Date;
   updatedAt: Date;
 }

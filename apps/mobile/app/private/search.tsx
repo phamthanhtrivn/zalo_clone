@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Platform,
   ScrollView,
   Text,
@@ -13,9 +12,16 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Container from "@/components/common/Container";
+import Header from "@/components/common/Header";
 import { conversationService } from "@/services/conversation.service";
 import { messageService } from "@/services/message.service";
-import { useAppSelector } from "@/store/store";
+import { userService } from "@/services/user.service";
+import { fetchConversations } from "@/store/slices/conversationSlice";
+import { useAppDispatch, useAppSelector } from "@/store/store";
+import { showToast } from "@/utils/toast";
+
+import { useQuery } from "@tanstack/react-query";
+import GroupAvatar from "@/components/ui/GroupAvatar";
 
 const TABS = [
   { id: "all", label: "Tất cả" },
@@ -28,6 +34,7 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export default function SearchScreen() {
+  const dispatch = useAppDispatch();
   const router = useRouter();
   const { conversationId: targetConversationId } = useLocalSearchParams<{
     conversationId?: string;
@@ -35,97 +42,100 @@ export default function SearchScreen() {
   const isConversationSearch = !!targetConversationId;
 
   const [keyword, setKeyword] = useState("");
+  const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [scope, setScope] = useState<TabId>("all");
-  const [results, setResults] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [members, setMembers] = useState<any[]>([]);
   const [selectedSenderId, setSelectedSenderId] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(-1);
+  const [friendRequestingIds, setFriendRequestingIds] = useState<string[]>([]);
 
   const flatListRef = useRef<FlatList>(null);
 
   const user = useAppSelector((state) => state.auth.user);
   const userId = user?.userId || (user as any)?._id;
 
+  // Debounce logic for keyword
   useEffect(() => {
-    if (!isConversationSearch || !targetConversationId || !userId) {
-      setMembers([]);
-      return;
-    }
+    const timer = setTimeout(() => {
+      setDebouncedKeyword(keyword.trim());
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [keyword]);
 
-    const fetchMembers = async () => {
-      try {
-        const res = await conversationService.getListMembers(targetConversationId);
-        if (res?.success) {
-          setMembers(Array.isArray(res.data) ? res.data : []);
-        }
-      } catch (error) {
-        console.error("Fetch members error:", error);
+  // React Query for fetching members (only for conversation search)
+  const { data: memberData } = useQuery({
+    queryKey: ["members", targetConversationId],
+    queryFn: () => conversationService.getListMembers(targetConversationId!),
+    enabled: isConversationSearch && !!targetConversationId,
+  });
+
+  // Derived members from query data instead of manual state
+  const members = useMemo(() => {
+    if (memberData?.success && Array.isArray(memberData.data)) {
+      return memberData.data;
+    }
+    return [];
+  }, [memberData]);
+
+  // Main search query
+  const { data: searchData, isLoading: loading } = useQuery({
+    queryKey: ["search", userId, debouncedKeyword, isConversationSearch, targetConversationId, selectedSenderId],
+    queryFn: async () => {
+      if (!debouncedKeyword) return null;
+      if (isConversationSearch && targetConversationId) {
+        const res = await messageService.searchMessages(targetConversationId, {
+          userId,
+          keyword: debouncedKeyword,
+          senderId: selectedSenderId || undefined,
+          limit: 50,
+        });
+        return res?.success ? { messages: res.data?.messages || [] } : null;
+      } else {
+        const res = await conversationService.search({
+          userId,
+          keyword: debouncedKeyword,
+          scope: "all",
+        });
+        return res?.success ? res.data : null;
       }
-    };
+    },
+    enabled: !!userId && !!debouncedKeyword,
+  });
 
-    fetchMembers();
-  }, [isConversationSearch, targetConversationId, userId]);
+  const results = searchData;
 
-  useEffect(() => {
-    const trimmedKeyword = keyword.trim();
+  const displayData = useMemo(() => {
+    if (isConversationSearch) return results?.messages || [];
+    if (!results) return [];
 
-    if (!trimmedKeyword) {
-      setResults(null);
-      setCurrentIndex(-1);
-      return;
+    switch (scope) {
+      case "contacts":
+        return results.contacts || [];
+      case "groups":
+        return results.groups || [];
+      case "messages":
+        return results.messages || [];
+      case "files":
+        return results.files || [];
+      default:
+        // "all" tab
+        return [
+          ...(results.contacts || []),
+          ...(results.groups || []),
+          ...(results.messages || []),
+          ...(results.files || []),
+        ];
     }
-
-    if (!userId || !/^[0-9a-fA-F]{24}$/.test(userId)) {
-      console.error("Invalid or missing user ID, skipping search.");
-      return;
-    }
-
-    const timeoutId = setTimeout(async () => {
-      setLoading(true);
-      try {
-        if (isConversationSearch && targetConversationId) {
-          const res = await messageService.searchMessages(targetConversationId, {
-            userId,
-            keyword: trimmedKeyword,
-            senderId: selectedSenderId || undefined,
-            limit: 50,
-          });
-
-          if (res?.success) {
-            const messages = res.data?.messages || [];
-            setResults({ messages });
-            setCurrentIndex(messages.length > 0 ? 0 : -1);
-          }
-        } else {
-          const res = await conversationService.search({
-            userId,
-            keyword: trimmedKeyword,
-            scope,
-          });
-
-          if (res?.success) {
-            setResults(res.data);
-          }
-        }
-      } catch (error) {
-        console.error("Search error:", error);
-      } finally {
-        setLoading(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [
-    isConversationSearch,
-    keyword,
-    scope,
-    selectedSenderId,
-    targetConversationId,
-    userId,
-  ]);
+  }, [results, scope, isConversationSearch]);
 
   const filteredMessages = useMemo(() => results?.messages || [], [results]);
+
+  useEffect(() => {
+    if (isConversationSearch && filteredMessages.length > 0) {
+      setCurrentIndex(0);
+    } else {
+      setCurrentIndex(-1);
+    }
+  }, [filteredMessages, isConversationSearch]);
 
   useEffect(() => {
     if (filteredMessages.length === 0) {
@@ -146,6 +156,56 @@ export default function SearchScreen() {
       pathname: "/private/chat/[id]",
       params: { id: chatId, messageId },
     });
+  };
+
+  const openDirectConversation = async (targetUserId: string) => {
+    try {
+      const response: any = await conversationService.getOrCreateDirect(targetUserId);
+      const conversationId =
+        response?.data?._id ||
+        response?.data?.conversationId ||
+        response?._id ||
+        response?.conversationId;
+
+      if (!conversationId) {
+        throw new Error("Missing conversation id");
+      }
+
+      try {
+        await dispatch(fetchConversations()).unwrap();
+      } catch {
+        // The chat can still open using the returned conversation id.
+      }
+
+      router.push({
+        pathname: "/private/chat/[id]",
+        params: { id: conversationId, otherUserId: targetUserId },
+      });
+    } catch (error) {
+      showToast(
+        (error as any)?.response?.data?.message ||
+          "Không thể mở cuộc trò chuyện, vui lòng thử lại",
+      );
+    }
+  };
+
+  const handleAddFriendFromSearch = async (targetUserId: string) => {
+    if (!userId || !targetUserId || friendRequestingIds.includes(targetUserId)) {
+      return;
+    }
+
+    try {
+      setFriendRequestingIds((prev) => [...prev, targetUserId]);
+      const response = await userService.addFriend(targetUserId, userId);
+      showToast(response?.message || "Đã gửi lời mời kết bạn");
+    } catch (error) {
+      showToast(
+        (error as any)?.response?.data?.message ||
+          "Không thể gửi lời mời kết bạn",
+      );
+    } finally {
+      setFriendRequestingIds((prev) => prev.filter((id) => id !== targetUserId));
+    }
   };
 
   const navigateToResult = (direction: "up" | "down") => {
@@ -180,13 +240,10 @@ export default function SearchScreen() {
         if (item.conversationId) {
           router.push({
             pathname: "/private/chat/[id]",
-            params: { id: item.conversationId },
+            params: { id: item.conversationId, otherUserId: item.userId },
           });
         } else {
-          router.push({
-            pathname: "/private/chat/new",
-            params: { targetUserId: item.userId },
-          });
+          void openDirectConversation(item.userId);
         }
         return;
       }
@@ -234,18 +291,31 @@ export default function SearchScreen() {
       icon = <Ionicons name="document-outline" size={14} color="#6b7280" />;
     }
 
+    const isSendingFriendRequest = friendRequestingIds.includes(item.userId);
+    const canAddFriend =
+      isContact &&
+      !item.isFriend &&
+      !!item.userId &&
+      item.status !== "PENDING" &&
+      item.status !== "REQUESTED";
+
     return (
       <TouchableOpacity
         className="flex-row items-center px-4 py-3 bg-white border-b border-gray-100"
         onPress={handlePress}
       >
-        <Image
-          source={{ uri: avatarSource }}
-          className="w-12 h-12 rounded-full bg-gray-200"
+        <GroupAvatar
+          uri={avatarSource}
+          name={displayName}
+          size={48}
         />
         <View className="ml-3 flex-1">
           <View className="flex-row items-center justify-between">
-            <Text className="text-[16px] font-semibold text-black" numberOfLines={1}>
+            <Text
+              className="text-[16px] font-semibold text-black"
+              numberOfLines={1}
+              style={{ maxWidth: "75%" }}
+            >
               {displayName}
             </Text>
             {icon}
@@ -254,6 +324,23 @@ export default function SearchScreen() {
             {subLabel}
           </Text>
         </View>
+        {canAddFriend && (
+          <TouchableOpacity
+            disabled={isSendingFriendRequest}
+            onPress={() => handleAddFriendFromSearch(item.userId)}
+            className={`ml-3 px-3 py-2 rounded-full ${
+              isSendingFriendRequest ? "bg-[#dbeafe]" : "bg-[#0091ff]"
+            }`}
+          >
+            <Text
+              className={`text-[12px] font-semibold ${
+                isSendingFriendRequest ? "text-[#0a67d8]" : "text-white"
+              }`}
+            >
+              {isSendingFriendRequest ? "Đang gửi" : "Kết bạn"}
+            </Text>
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
     );
   };
@@ -349,70 +436,60 @@ export default function SearchScreen() {
   );
 
   return (
-    <Container className="flex-1 bg-[#F1F2F4]">
-      <View
-        className={`${isConversationSearch ? "bg-white" : "bg-[#0091ff]"} h-14 px-2 flex-row items-center shadow-sm`}
-      >
-        <TouchableOpacity onPress={() => router.back()} className="p-2">
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color={isConversationSearch ? "#6b7280" : "white"}
-          />
-        </TouchableOpacity>
-
-        <View
-          className={`flex-1 flex-row items-center rounded-md px-3 h-10 ${isConversationSearch ? "bg-[#f3f4f6]" : "bg-white/20"}`}
-        >
-          <Ionicons
-            name="search"
-            size={18}
-            color={isConversationSearch ? "#9ca3af" : "rgba(255,255,255,0.9)"}
-          />
-          <TextInput
-            autoFocus
-            placeholder={
-              isConversationSearch
-                ? "Tìm tin nhắn văn bản"
-                : "Tìm kiếm bạn bè, tin nhắn..."
-            }
-            placeholderTextColor={
-              isConversationSearch ? "#9ca3af" : "rgba(255,255,255,0.7)"
-            }
-            className={`flex-1 ml-2 text-[16px] ${isConversationSearch ? "text-black" : "text-white"}`}
-            style={{
-              paddingVertical: 0,
-              textAlignVertical: "center",
-              includeFontPadding: false,
-            }}
-            value={keyword}
-            onChangeText={setKeyword}
-            selectionColor={isConversationSearch ? "#0a84ff" : "white"}
-            returnKeyType="search"
-            onSubmitEditing={() => {
-              const currentMessage = filteredMessages[currentIndex];
-              if (currentMessage?._id) {
-                openMessageResult(currentMessage._id);
+    <Container edges={["left", "right", "bottom", "top"]} className="flex-1 bg-[#F1F2F4]">
+      <Header
+        back
+        gradient={!isConversationSearch}
+        centerChild={
+          <View
+            className={`flex-1 flex-row items-center rounded-md px-3 h-10 `}
+          >
+            <TextInput
+              autoFocus
+              placeholder={
+                isConversationSearch
+                  ? "Tìm tin nhắn văn bản"
+                  : "Tìm kiếm bạn bè, tin nhắn..."
               }
-            }}
-          />
-          {keyword.length > 0 && (
-            <TouchableOpacity onPress={() => setKeyword("")}>
-              <Ionicons
-                name="close-circle"
-                size={18}
-                color={isConversationSearch ? "#9ca3af" : "rgba(255,255,255,0.8)"}
-              />
+              placeholderTextColor={
+                isConversationSearch ? "#9ca3af" : "rgba(255,255,255,0.7)"
+              }
+              className={`flex-1 ml-2 text-[16px] ${isConversationSearch ? "text-black" : "text-white"}`}
+              style={{
+                paddingVertical: 0,
+                textAlignVertical: "center",
+                includeFontPadding: false,
+              }}
+              value={keyword}
+              onChangeText={setKeyword}
+              selectionColor={isConversationSearch ? "#0a84ff" : "white"}
+              returnKeyType="search"
+              onSubmitEditing={() => {
+                const currentMessage = filteredMessages[currentIndex];
+                if (currentMessage?._id) {
+                  openMessageResult(currentMessage._id);
+                }
+              }}
+            />
+            {keyword.length > 0 && (
+              <TouchableOpacity onPress={() => setKeyword("")}>
+                <Ionicons
+                  name="close-circle"
+                  size={18}
+                  color={isConversationSearch ? "#9ca3af" : "rgba(255,255,255,0.8)"}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+        }
+        rightChild={
+          !isConversationSearch && (
+            <TouchableOpacity className="p-2 ml-1" onPress={() => console.log("Scan QR")}>
+              <MaterialCommunityIcons name="qrcode-scan" size={22} color="white" />
             </TouchableOpacity>
-          )}
-        </View>
-
-        {!isConversationSearch && (
-          <TouchableOpacity className="p-2 ml-1" onPress={() => console.log("Scan QR")}>
-            <MaterialCommunityIcons name="qrcode-scan" size={22} color="white" />
-          </TouchableOpacity>
-        )}
-      </View>
+          )
+        }
+      />
 
       {isConversationSearch && members.length > 0 && (
         <View className="bg-white border-b border-gray-200 py-2">
@@ -431,11 +508,12 @@ export default function SearchScreen() {
                 onPress={() => setSelectedSenderId(member.userId)}
                 className={`mr-3 flex-row items-center px-2 py-1 rounded-full border ${selectedSenderId === member.userId ? "bg-blue-50 border-[#0091ff]" : "bg-gray-50 border-gray-200"}`}
               >
-                <Image
-                  source={{ uri: member.avatarUrl || "https://avatar.iran.liara.run/public/0" }}
-                  className="w-5 h-5 rounded-full mr-1.5"
+                <GroupAvatar
+                  uri={member.avatarUrl}
+                  name={member.name}
+                  size={20}
                 />
-                <Text className={`${selectedSenderId === member.userId ? "text-[#0091ff]" : "text-gray-600"} text-xs`}>
+                <Text className={`${selectedSenderId === member.userId ? "text-[#0091ff]" : "text-gray-600"} text-xs ml-1.5`}>
                   {member.name}
                 </Text>
               </TouchableOpacity>
@@ -482,16 +560,7 @@ export default function SearchScreen() {
         ) : (
           <FlatList
             ref={flatListRef}
-            data={
-              isConversationSearch
-                ? filteredMessages
-                : [
-                    ...(results?.contacts || []),
-                    ...(results?.groups || []),
-                    ...(results?.messages || []),
-                    ...(results?.files || []),
-                  ]
-            }
+            data={displayData}
             keyExtractor={(item, index) =>
               (item.messageId || item._id || item.userId || item.conversationId) + index
             }

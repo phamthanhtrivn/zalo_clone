@@ -1210,11 +1210,12 @@ export class ConversationsService {
   async getOrCreateDirectConversation(user1Id: string, user2Id: string) {
     if (user1Id === user2Id)
       throw new BadRequestException('Không thể tạo hội thoại với chính mình');
+    const BOT_ID = "69f438929cf8b39d88abd220";
     const u1 = new Types.ObjectId(user1Id);
     const u2 = new Types.ObjectId(user2Id);
 
     let conversation = await this.conversationModel.findOne({
-      type: ConversationType.DIRECT,
+      type: ConversationType.DIRECT || ConversationType.AI,
       participants: { $all: [u1, u2] },
     });
 
@@ -1223,8 +1224,9 @@ export class ConversationsService {
     const session = await this.connection.startSession();
     session.startTransaction();
     try {
+      const isAi = user1Id === BOT_ID || user2Id === BOT_ID;
       const savedConv = await new this.conversationModel({
-        type: ConversationType.DIRECT,
+        type: isAi ? ConversationType.AI : ConversationType.DIRECT,
         participants: [u1, u2],
         lastMessageAt: new Date(),
       }).save({ session });

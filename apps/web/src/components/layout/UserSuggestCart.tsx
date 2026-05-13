@@ -10,10 +10,10 @@ export default function UserSuggestCart({ item, handelAddFriend, handelSkip }: a
 
       <div className="w-full flex gap-5">
         <button onClick={() => handelSkip(item.friendId)} className="w-[50%] px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm">
-         Bỏ qua
+          Bỏ qua
         </button>
 
-        <button  onClick={() => handelAddFriend(item.friendId)} className="w-[50%] px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm">
+        <button onClick={() => handelAddFriend(item.friendId)} className="w-[50%] px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm">
           Kết bạn
         </button>
       </div>

@@ -1,4 +1,5 @@
 import { api } from "./api";
+import axios from "axios";
 
 export const userService = {
   getProfile: async (userId?: string) => {
@@ -19,37 +20,37 @@ export const userService = {
     return response.data;
   },
 
-   getListFriends: async () => {
+  getListFriends: async () => {
     const response = await api.get(`/users/list-friends`);
     return response.data;
   },
-  searchFriendByPhone : async (userId : string, phone : string) => {
-    const response = await api.post("/users/search-friend-phone", {userId, phone});
+  searchFriendByPhone: async (userId: string, phone: string) => {
+    const response = await api.post("/users/search-friend-phone", { userId, phone });
     return response.data;
   },
 
-  searchFriend: async (key: string, userId : string) => {
+  searchFriend: async (key: string, userId: string) => {
     const response = await api.post("/users/search-friend", {
       userId: userId,
       key,
     });
     return response.data;
   },
-  cancelFriend: async (friendId: string,  userId : string) => {
+  cancelFriend: async (friendId: string, userId: string) => {
     const response = await api.post("/users/cancel-friend", {
       userId: userId,
       friendId: friendId,
     });
     return response.data;
   },
-  blockFriend: async (friendId: string, userId : string) => {
+  blockFriend: async (friendId: string, userId: string) => {
     const response = await api.post("/users/block-friend", {
       userId: userId,
       friendId: friendId,
     });
     return response.data;
   },
-  
+
   receivedFriendRequests: async () => {
     const response = await api.get(
       `/users/received-friends-requests`,
@@ -69,7 +70,7 @@ export const userService = {
     return response.data;
   },
 
-  acceptFriend: async (friendId: string, userId : string) => {
+  acceptFriend: async (friendId: string, userId: string) => {
     const response = await api.post(`/users/accept-friend`, {
       userId: userId,
       friendId: friendId,
@@ -77,7 +78,7 @@ export const userService = {
     return response.data;
   },
 
-  rejectFriend: async (friendId: string, userId : string) => {
+  rejectFriend: async (friendId: string, userId: string) => {
     const response = await api.post(`/users/reject-friend`, {
       userId: userId,
       friendId: friendId,
@@ -85,7 +86,7 @@ export const userService = {
     return response.data;
   },
 
-  addFriend: async (friendId: string, userId : string) => {
+  addFriend: async (friendId: string, userId: string) => {
     const response = await api.post(`/users/add-friend`, {
       userId: userId,
       friendId: friendId,
@@ -105,9 +106,29 @@ export const userService = {
 
   getFriends: async () => {
     const res = await api.get("/users/list-friends");
-    return res;
+    return res.data;
   },
 
+
+
+  getMusicList: async (searchTerm: string = "vietnam") => {
+    try {
+      // Gọi trực tiếp iTunes API bằng axios (không dùng instance 'api' của hệ thống)
+      const response = await axios.get(
+        `https://itunes.apple.com/search?term=${searchTerm}&limit=20&media=music`
+      );
+      return response.data.results.map((item: any) => ({
+        id: item.trackId.toString(),
+        title: item.trackName,
+        artist: item.artistName,
+        thumbnail: item.artworkUrl100, // Ảnh bìa bài hát
+        previewUrl: item.previewUrl,   // Link nghe thử
+      }));
+    } catch (error) {
+      console.error("Lỗi khi fetch nhạc từ iTunes:", error);
+      throw error;
+    }
+  },
 
   checkFriendStatus: async (targetUserId: string) => {
     const response = await api.get(`/users/friend-status/${targetUserId}`);

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEnum } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class CreatePostDto {
     @IsOptional()
@@ -6,6 +6,23 @@ export class CreatePostDto {
     text?: string;
 
     @IsOptional()
-    @IsEnum(['PUBLIC', 'FRIENDS', 'PRIVATE'])
+    @IsString()
     visibility?: string;
+
+    @IsOptional()
+    location?: any;
+
+    @IsOptional()
+    music?: any;
+
+    @IsOptional()
+    taggedFriends?: any;
+
+    @IsOptional()
+    @IsString()
+    fontStyle?: string;
+
+    @IsOptional()
+    @IsString()
+    fontColor?: string;
 }

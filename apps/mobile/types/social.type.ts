@@ -14,3 +14,11 @@ export interface Location {
     address: string;
     distance: string;
 }
+export interface Music {
+    id: string;
+    title: string;
+    artist: string;
+    duration?: string;
+    thumbnail?: string;
+    previewUrl?: string;
+}

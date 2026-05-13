@@ -46,6 +46,20 @@ export class Post extends Document {
 
     @Prop({ default: 0 })
     commentCount: number;
+    @Prop({ type: Object })
+    location?: any;
+
+    @Prop({ type: Object })
+    music?: any;
+
+    @Prop({ type: [Types.ObjectId], ref: 'User', default: [] })
+    taggedFriends?: Types.ObjectId[];
+
+    @Prop()
+    fontStyle?: string;
+
+    @Prop()
+    fontColor?: string;
 }
 
 @Schema({ timestamps: true })

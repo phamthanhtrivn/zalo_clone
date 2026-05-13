@@ -1,5 +1,8 @@
 import Container from "@/components/common/Container";
+import { conversationService } from "@/services/conversation.service";
 import { userService } from "@/services/user.service";
+import { fetchConversations } from "@/store/slices/conversationSlice";
+import { useAppDispatch } from "@/store/store";
 import { showToast } from "@/utils/toast";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -41,6 +44,7 @@ function formatPhoneForDisplay(phone?: string): string {
 }
 
 export default function SearchProfileScreen() {
+  const dispatch = useAppDispatch();
   const userId = useSelector((state: any) => state.auth.user.userId);
   const router = useRouter();
   const { friendId, phone, status, name, avatarUrl } = useLocalSearchParams<{
@@ -54,6 +58,7 @@ export default function SearchProfileScreen() {
   const [relationshipStatus, setRelationshipStatus] =
     useState<RelationshipStatus>(parseRelationshipStatus(status));
   const [isActing, setIsActing] = useState(false);
+  const [isOpeningChat, setIsOpeningChat] = useState(false);
 
   const profileName = useMemo(() => {
     if (typeof name !== "string") return "Người dùng";
@@ -74,7 +79,6 @@ export default function SearchProfileScreen() {
   }, [profileAvatar]);
 
   const isFriend = relationshipStatus === "ACCEPTED";
-
   const phoneDisplay = useMemo(() => formatPhoneForDisplay(phone), [phone]);
 
   const description = isFriend
@@ -98,7 +102,53 @@ export default function SearchProfileScreen() {
       case "BLOCKED_BY_OTHER":
         return <Text className="text-[13px] font-semibold text-gray-500">BỊ CHẶN</Text>;
       default:
-        return <Ionicons name="person-add-outline" size={26} color="#111827" />;
+        return (
+          <>
+            <Ionicons name="person-add-outline" size={18} color="#0a67d8" />
+            <Text className="text-[15px] font-semibold text-[#0a67d8] ml-2">
+              Kết bạn
+            </Text>
+          </>
+        );
+    }
+  };
+
+  const handleOpenConversation = async () => {
+    if (!friendId) {
+      showToast("Không tìm thấy người dùng để nhắn tin");
+      return;
+    }
+
+    try {
+      setIsOpeningChat(true);
+      const response: any = await conversationService.getOrCreateDirect(friendId);
+      const conversationId =
+        response?.data?._id ||
+        response?.data?.conversationId ||
+        response?._id ||
+        response?.conversationId;
+
+      if (!conversationId) {
+        throw new Error("Không tạo được cuộc trò chuyện");
+      }
+
+      try {
+        await dispatch(fetchConversations()).unwrap();
+      } catch {
+        // Keep navigation working even if the refresh fails.
+      }
+
+      router.push({
+        pathname: "/private/chat/[id]",
+        params: { id: conversationId, otherUserId: friendId },
+      });
+    } catch (err) {
+      showToast(
+        (err as any)?.response?.data?.message ||
+          "Không thể mở cuộc trò chuyện, vui lòng thử lại",
+      );
+    } finally {
+      setIsOpeningChat(false);
     }
   };
 
@@ -108,6 +158,7 @@ export default function SearchProfileScreen() {
       showToast("Thiếu thông tin để thực hiện thao tác");
       return;
     }
+
     setIsActing(true);
 
     let data;
@@ -243,26 +294,33 @@ export default function SearchProfileScreen() {
 
           <View className="w-full mt-6 flex-row items-center">
             <TouchableOpacity
+              disabled={isOpeningChat}
               className={`h-14 rounded-full items-center justify-center flex-row ${
                 isFriend ? "w-full bg-[#dbeafe]" : "flex-1 bg-[#dbeafe]"
-              }`}
-              onPress={() => router.push("/private/chat")}
+              } ${isOpeningChat ? "opacity-80" : ""}`}
+              onPress={handleOpenConversation}
             >
-              <Ionicons
-                name="chatbubble-ellipses-outline"
-                size={24}
-                color="#0a67d8"
-              />
-              <Text className="text-[#0a67d8] text-[16px] font-semibold ml-3">
-                Nhắn tin
-              </Text>
+              {isOpeningChat ? (
+                <ActivityIndicator size="small" color="#0a67d8" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={24}
+                    color="#0a67d8"
+                  />
+                  <Text className="text-[#0a67d8] text-[16px] font-semibold ml-3">
+                    Nhắn tin
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
 
             {!isFriend && (
               <TouchableOpacity
                 disabled={isActing}
                 onPress={handlePrimaryAction}
-                className={`ml-3 h-14 min-w-[88px] px-4 rounded-full border items-center justify-center ${
+                className={`ml-3 h-14 min-w-[132px] px-5 rounded-full border items-center justify-center flex-row ${
                   relationshipStatus === "BLOCKED_BY_OTHER"
                     ? "bg-gray-50 border-gray-200"
                     : "bg-white border-gray-100"

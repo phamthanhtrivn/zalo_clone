@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class ContentDto {
   @IsOptional()
@@ -7,4 +7,7 @@ export class ContentDto {
   @IsOptional()
   @IsString()
   icon?: string;
+  @IsOptional()
+  @IsNumber()
+  voiceDuration?: number;
 }

@@ -1,4 +1,4 @@
-import { Avatar, AvatarImage, AvatarFallback } from "../../ui/avatar";
+import AppAvatar from "@/components/common/AppAvatar";
 import { Quote, MoreHorizontal } from "lucide-react";
 import { MessageBubble } from "./MessageBubble";
 import { ReactionPicker } from "./ReactionPicker";
@@ -13,7 +13,8 @@ import { RiUnpinLine } from "react-icons/ri";
 import { FaRegTrashAlt } from "react-icons/fa";
 import ViewDetailMessageModal from "./ViewDetailMessageModal";
 import { FaListCheck } from "react-icons/fa6";
-import { useAppSelector } from "@/store";
+import { useAppDispatch } from "@/store";
+import { setReplyingMessage } from "@/store/slices/conversationSlice";
 
 interface Props {
   message: MessagesType;
@@ -30,10 +31,7 @@ interface Props {
   setIsSelected: (isSelected: boolean) => void;
   selectedMessages: string[];
   toggleSelectMessage: (messageId: string) => void;
-  onForwardMessages: (
-    messageIds: string[],
-    targetConversationIds: string[],
-  ) => void;
+  onJumpToMessage?: (messageId: string) => void;
 
 }
 
@@ -52,18 +50,13 @@ export const MessageItem = ({
   setIsSelected,
   selectedMessages,
   toggleSelectMessage,
-  onForwardMessages,
+  onJumpToMessage,
 
 }: Props) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const dispatch = useAppDispatch();
 
-
-  // const liveMessage = useAppSelector((state) =>
-  //   state.message.messagesByConversation[message.conversationId]?.find(
-  //     (m) => m._id === message._id
-  //   )
-  // );
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
     window.addEventListener("click", handleClickOutside);
@@ -74,12 +67,12 @@ export const MessageItem = ({
     <div className={`flex items-end gap-2 ${isMe || message.expired ? "justify-end" : ""}`}>
       {!isMe &&
         (showAvatar ? (
-          <Avatar className="w-8 h-8">
-            <AvatarImage src={message.senderId.profile?.avatarUrl} />
-            <AvatarFallback>
-              {message.senderId.profile?.name?.charAt(0)}
-            </AvatarFallback>
-          </Avatar>
+          <AppAvatar
+            src={message.senderId?.profile?.avatarUrl}
+            name={message.senderId?.profile?.name || "User"}
+            className="h-8 w-8 text-[10px]"
+            isAI={message.type === "AI"}
+          />
         ) : (
           <div className="w-8" />
         ))}
@@ -97,6 +90,7 @@ export const MessageItem = ({
             isSelected={isSelected}
             selectedMessages={selectedMessages}
             toggleSelectMessage={toggleSelectMessage}
+            onJumpToMessage={onJumpToMessage}
           />
 
           {!message.recalled && (
@@ -128,6 +122,10 @@ export const MessageItem = ({
           >
             <button
               title="Trả lời"
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatch(setReplyingMessage(message));
+              }}
               className="cursor-pointer w-7 h-7 flex items-center justify-center rounded-full bg-white shadow-sm border border-gray-100 text-gray-600 hover:bg-gray-50 hover:text-blue-500"
             >
               <Quote size={10} className="fill-current" />
@@ -245,3 +243,4 @@ export const MessageItem = ({
     </div>
   );
 };
+

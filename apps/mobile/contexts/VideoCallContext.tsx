@@ -78,7 +78,6 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
     console.log("📱 [VideoCallContext] updateCallState:", newState);
     _setSessionState(newState);
     sessionStateRef.current = newState;
-    console.log(`[Mobile-CallState] Transition to: ${newState}`);
   }, []);
 
   const stopSound = async () => {
@@ -86,7 +85,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
       try {
         await soundRef.current.stopAsync();
         await soundRef.current.unloadAsync();
-      } catch (e) {}
+      } catch (e) { }
       soundRef.current = null;
     }
   };
@@ -102,7 +101,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
       soundRef.current = sound;
       await sound.setIsLoopingAsync(true);
       await sound.playAsync();
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const stopMediaStream = useCallback(() => {
@@ -145,6 +144,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
       }
     } else if (videoCallData.from || videoCallData.to) {
       const partnerId = videoCallData.isReceiving ? videoCallData.from : videoCallData.to;
+
       if (!isRemote) {
         const event = (finalStatus === "REJECTED") ? "call:reject" : "call:end";
         socket?.emit(event, {
@@ -422,6 +422,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
       socket?.emit("call:signal", { to: videoCallData.from, signal: pc.localDescription, conversationId: videoCallData.conversationId, messageId: videoCallData.messageId });
       if (videoCallData.messageId) {
         messageService.updateCallStatus({ messageId: videoCallData.messageId, status: "ACCEPTED", conversationId: videoCallData.conversationId }).catch(() => {});
+
       }
     } catch (error) {
       leaveCall();
@@ -446,6 +447,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
         staysActiveInBackground: true,
         playThroughEarpieceAndroid: false, 
       });
+
 
       const stream = await mediaDevices.getUserMedia({ audio: true, video: type === "VIDEO" ? { facingMode: "user" } : false });
       setLocalStream(stream);

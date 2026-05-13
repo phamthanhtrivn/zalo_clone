@@ -19,7 +19,7 @@ const GroupAvatar: React.FC<GroupAvatarProps> = ({ uri, name, size = 48 }) => {
   // Unified business logic from utils
   const { initials, isGroupIcon } = useMemo(() => getAvatarData(name), [name]);
   const backgroundColor = useMemo(() => getColorByName(name), [name]);
-  
+
   const showFallback = !uri || imageError;
 
   const containerStyle = useMemo(() => ({

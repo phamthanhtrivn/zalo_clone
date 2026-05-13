@@ -7,7 +7,7 @@ console.log(config.apiUrl);
 
 export const api = axios.create({
   baseURL: `${config.apiUrl}/api`,
-  timeout: 10000,
+  timeout: 20000,
 });
 
 // dùng instance riêng để refresh (tránh loop)
@@ -45,9 +45,14 @@ api.interceptors.response.use(
           refreshToken,
         });
 
-        const newAccessToken = res.data.accessToken;
+        const responseData = res.data;
+        const newAccessToken = responseData?.data?.accessToken;
 
-        await SecureStore.setItemAsync("access_token", newAccessToken);
+        if (!newAccessToken) {
+          throw new Error("Mã xác thực mới không hợp lệ");
+        }
+
+        await SecureStore.setItemAsync("access_token", String(newAccessToken));
 
         originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
 

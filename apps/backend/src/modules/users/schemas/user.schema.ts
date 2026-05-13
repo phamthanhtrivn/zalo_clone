@@ -56,6 +56,9 @@ export class User {
   @Prop({ type: Setting })
   settings?: Setting;
 
+  @Prop({ default: false })
+  isBot!: boolean;
+
   @Prop()
   lastSeenAt?: Date;
 

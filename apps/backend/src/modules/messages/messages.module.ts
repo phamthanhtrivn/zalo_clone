@@ -15,17 +15,18 @@ import { StorageModule } from 'src/common/storage/storage.module';
 import { ChatModule } from '../chat/chat.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { ConversationSettingSchema } from '../conversation-settings/schemas/conversation-setting.schema';
-import { ConversationSetting } from '../conversation-settings/schemas/conversation-setting.schema';
 
 import { Poll, PollSchema } from './schemas/poll.schema';
 import { PollVote, PollVoteSchema } from './schemas/poll-vote.schema';
 import { PollService } from './services/poll.service';
 import { CallSession, CallSessionSchema } from './schemas/call-session.schema';
 
+import { ConversationSetting } from '../conversation-settings/schemas/conversation-setting.schema';
 import { MessagesQueryService } from './services/query.service';
 import { MessagesActionService } from './services/action.service';
 import { MessagesCallService } from './services/call.service';
 import { MessagesTransformService } from './services/transform.service';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
   imports: [
@@ -34,15 +35,16 @@ import { MessagesTransformService } from './services/transform.service';
       { name: Member.name, schema: MemberSchema },
       { name: Conversation.name, schema: ConversationSchema },
       { name: ConversationSetting.name, schema: ConversationSettingSchema },
-      
+
       { name: Poll.name, schema: PollSchema },
       { name: PollVote.name, schema: PollVoteSchema },
       { name: CallSession.name, schema: CallSessionSchema },
     ]),
-    forwardRef(() => ChatModule), 
+    forwardRef(() => ChatModule),
     forwardRef(() => ConversationsModule),
     MembersModule,
     StorageModule,
+    forwardRef(() => AiModule),
   ],
   providers: [
     MessagesService,
@@ -50,11 +52,11 @@ import { MessagesTransformService } from './services/transform.service';
     MessagesActionService,
     MessagesCallService,
     MessagesTransformService,
-    
+
     PollService,
   ],
   controllers: [MessagesController],
-  
+
   exports: [MessagesService, PollService, MessagesCallService],
 })
 export class MessagesModule {}

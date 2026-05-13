@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { SendMessageDto } from './dto/send-message.dto';
+import { SendVoiceMessageDto } from './dto/send-voice-message.dto';
 import { PinnedMessageDto } from './dto/pinned-message.dto';
 import { RecalledMessageDto } from './dto/recalled-message.dto';
 import { ReactionDto } from './dto/reaction.dto';
@@ -35,6 +36,7 @@ import { VotePollDto } from './dto/vote-poll.dto';
 import { InitiateGroupCallDto } from './dto/initiate-group-call.dto';
 import { MessagesCallService } from './services/call.service';
 import { Req } from '@nestjs/common'; 
+
 import { JwtAuthGuard } from '../auth/passport/jwt-auth.guard';
 
 @Controller('messages')
@@ -137,7 +139,16 @@ export class MessagesController {
     @Body() sendMessageDto: SendMessageDto,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    return this.messagesService.sendMessage(sendMessageDto, files);
+    return this.messagesService.handleIncomingMessage(sendMessageDto, files);
+  }
+
+  @Post('voice')
+  @UseInterceptors(FilesInterceptor('files', 1))
+  async sendVoiceMessage(
+    @Body() sendVoiceMessageDto: SendVoiceMessageDto,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    return this.messagesService.sendVoiceMessage(sendVoiceMessageDto, files);
   }
 
   @Post('call')
