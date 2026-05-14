@@ -59,6 +59,10 @@ export class MessagesTransformService {
           senderId: this.signUser(message.repliedId.senderId),
         }
         : null,
+      callSessionId:
+        message.callSessionId?._id?.toString() ||
+        message.callSessionId?.toString() ||
+        null,
       pollId: message.pollId?._id?.toString() || message.pollId?.toString(),
       poll: this.transformPoll(message.pollId),
     };

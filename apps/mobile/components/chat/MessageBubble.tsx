@@ -37,7 +37,11 @@ type Props = {
   isHighlighted?: boolean;
   onReplyPress?: (messageId: string) => void;
   isGroup: boolean;
-  onJoinGroupCall?: (sessionId: string) => void;
+  onJoinGroupCall?: (
+    sessionId: string,
+    conversationId: string,
+    type: "VIDEO" | "VOICE",
+  ) => void;
   onOpenStoryLink?: (storyId: string) => void;
 };
 
@@ -166,6 +170,91 @@ const MessageBubble = ({
             borderColor: "#e5e7eb",
           }}
         >
+          {message.call || message.type === "GROUP_CALL" || message.callSessionId ? (
+            <View style={{ minWidth: 180 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: "rgba(0,104,255,0.12)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons
+                    name={
+                      isGroup
+                        ? "people"
+                        : (message.call?.type || "VIDEO") === "VIDEO"
+                          ? "videocam"
+                          : "call"
+                    }
+                    size={18}
+                    color="#0068ff"
+                  />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#111827" }}>
+                    Cuộc gọi {isGroup ? "nhóm " : ""}
+                    {(message.call?.type || "VIDEO") === "VIDEO" ? "video" : "thoại"}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+                    {message.type === "GROUP_CALL" || message.callSessionId
+                      ? message.call?.status === "ENDED"
+                        ? `Cuộc gọi đã kết thúc${message.call?.duration ? ` • ${message.call.duration}s` : ""}`
+                        : "Đang diễn ra..."
+                      : message.call?.status === "MISSED"
+                        ? "Cuộc gọi nhỡ"
+                        : message.call?.status === "REJECTED"
+                          ? "Cuộc gọi bị từ chối"
+                          : message.call?.status === "BUSY"
+                            ? "Máy bận"
+                            : message.call?.status === "ENDED"
+                              ? `Cuộc gọi đã kết thúc${message.call?.duration ? ` • ${message.call.duration}s` : ""}`
+                              : "Đang thiết lập..."}
+                  </Text>
+                </View>
+              </View>
+
+              {(message.type === "GROUP_CALL" || message.callSessionId) &&
+                message.call?.status !== "ENDED" &&
+                message.callSessionId &&
+                onJoinGroupCall && (
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() =>
+                      onJoinGroupCall(
+                        message.callSessionId as string,
+                        message.conversationId,
+                        message.call?.type || "VIDEO",
+                      )
+                    }
+                    style={{
+                      marginTop: 10,
+                      alignSelf: "stretch",
+                      backgroundColor: "#0068ff",
+                      paddingVertical: 9,
+                      borderRadius: 10,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>
+                      Tham gia
+                    </Text>
+                  </TouchableOpacity>
+                )}
+            </View>
+          ) : (
+            <>
           {message.repliedId && (
             <TouchableOpacity
               activeOpacity={0.7}
@@ -428,6 +517,8 @@ const MessageBubble = ({
                 );
               })}
             </View>
+          )}
+            </>
           )}
 
           {showTime && (
