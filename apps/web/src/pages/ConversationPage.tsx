@@ -104,6 +104,12 @@ const ConversationPage = () => {
     });
   }, []);
 
+  const handleConversationCleared = useCallback(() => {
+    if (!id) return;
+    dispatch(setMessages({ conversationId: id, messages: [] }));
+    setPinnedMessages([]);
+  }, [dispatch, id]);
+
   useEffect(() => {
     setActiveConversationId(id || null);
     return () => setActiveConversationId(null);
@@ -900,6 +906,7 @@ const ConversationPage = () => {
         conversation={conversation}
         openedFromSearch={openedFromSearch}
         onClose={() => setIsInfoOpen(false)}
+        onConversationCleared={handleConversationCleared}
       />
       <MessageSearchPanel
         isOpen={isSearchOpen}

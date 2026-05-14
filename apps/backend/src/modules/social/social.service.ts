@@ -16,12 +16,14 @@ import { RedisService } from 'src/common/redis/redis.service';
 import { REDIS_CHANNEL_SOCKET_EVENTS } from 'src/common/constants/redis.constant';
 import { ConversationsService } from '../conversations/conversations.service';
 import { MessagesService } from '../messages/messages.service';
+import { User } from '../users/schemas/user.schema';
 
 @Injectable()
 export class SocialService {
     constructor(
         @InjectModel(Post.name) private postModel: Model<Post>,
         @InjectModel(Comment.name) private commentModel: Model<Comment>,
+        @InjectModel(User.name) private userModel: Model<User>,
         @InjectModel(SocialNotification.name)
         private socialNotificationModel: Model<SocialNotification>,
         private readonly storageService: StorageService,
@@ -30,6 +32,10 @@ export class SocialService {
         private readonly conversationsService: ConversationsService,
         private readonly messagesService: MessagesService,
     ) { }
+
+    private toObjectId(value: string) {
+        return new Types.ObjectId(value);
+    }
 
     private async getUserProfileBasic(userId: string) {
         const user = await this.postModel.db.collection('users').findOne(
@@ -129,14 +135,18 @@ export class SocialService {
     }
 
     async getPostDetail(postId: string, viewerId: string) {
-        const viewer = await this.postModel.db
-            .collection('users')
-            .findOne({ _id: new Types.ObjectId(viewerId) });
+        const viewer = await this.userModel
+            .findById(viewerId)
+            .select('friends hiddenSocialAuthorIds')
+            .lean();
 
         const friendIds =
             viewer?.friends
                 ?.filter((f: any) => f.status === 'ACCEPTED')
                 ?.map((f: any) => new Types.ObjectId(f.friendId)) || [];
+        const hiddenAuthorIds = new Set(
+            (viewer?.hiddenSocialAuthorIds || []).map((id: any) => String(id)),
+        );
 
         const post = await this.postModel.aggregate([
             {
@@ -163,6 +173,17 @@ export class SocialService {
         const found = post[0];
         if (!found) {
             throw new NotFoundException('Post not found');
+        }
+
+        if (hiddenAuthorIds.has(String(found.authorId))) {
+            throw new NotFoundException('Post not found');
+        }
+
+        const blockedViewers = new Set(
+            (found.author?.blockedDiaryViewerIds || []).map((id: any) => String(id)),
+        );
+        if (blockedViewers.has(String(viewerId))) {
+            throw new ForbiddenException('No permission');
         }
 
         const isMine = String(found.authorId) === String(viewerId);
@@ -200,6 +221,7 @@ export class SocialService {
             images: (found.content?.media || []).map((media: any) =>
                 this.storageService.signFileUrl(media.url),
             ),
+            visibility: found.visibility || 'PUBLIC',
             likes: (found.reactions || []).length,
             reactionCounts,
             myReaction,
@@ -256,15 +278,19 @@ export class SocialService {
 
     // ================= FEED =================
     async getFeed(userId: string) {
-        const user = await this.postModel.db
-            .collection('users')
-            .findOne({ _id: new Types.ObjectId(userId) });
+        const user = await this.userModel
+            .findById(userId)
+            .select('friends hiddenSocialAuthorIds')
+            .lean();
 
         const friendIds =
             user?.friends
                 ?.filter((f) => f.status === 'ACCEPTED')
                 ?.map((f) => f.friendId) || [];
         const friendObjectIds = friendIds.map((id) => new Types.ObjectId(id));
+        const hiddenAuthorObjectIds = (user?.hiddenSocialAuthorIds || []).map(
+            (id: any) => new Types.ObjectId(id),
+        );
 
         const posts = await this.postModel.aggregate([
             {
@@ -290,6 +316,9 @@ export class SocialService {
                                 },
                             ],
                         },
+                        {
+                            authorId: { $nin: hiddenAuthorObjectIds },
+                        },
                     ],
                 }
             },
@@ -303,16 +332,27 @@ export class SocialService {
             },
             { $unwind: { path: '$author', preserveNullAndEmptyArrays: true } },
             {
+                $match: {
+                    $or: [
+                        { 'author.blockedDiaryViewerIds': { $exists: false } },
+                        { 'author.blockedDiaryViewerIds': { $nin: [new Types.ObjectId(userId)] } },
+                    ],
+                },
+            },
+            {
                 $project: {
                     id: '$_id',
                     authorId: '$authorId',
                     text: '$content.text',
                     media: '$content.media',
+                    visibility: '$visibility',
+                    music: '$music',
+                    location: '$location',
                     reactions: '$reactions',
                     comments: '$commentCount',
                     createdAt: 1,
                     name: '$author.profile.name',
-                    avatar: '$author.profile.avatarUrl'
+                    avatar: '$author.profile.avatarUrl',
                 }
             },
             { $sort: { createdAt: -1 } }
@@ -340,6 +380,7 @@ export class SocialService {
                 images: (post.media || []).map(m =>
                     this.storageService.signFileUrl(m.url)
                 ),
+                visibility: post.visibility || 'PUBLIC',
                 likes: (post.reactions || []).length,
                 reactionCounts,
                 myReaction,
@@ -445,15 +486,19 @@ export class SocialService {
     }
 
     async getStories(viewerId: string) {
-        const viewer = await this.postModel.db
-            .collection('users')
-            .findOne({ _id: new Types.ObjectId(viewerId) });
+        const viewer = await this.userModel
+            .findById(viewerId)
+            .select('friends hiddenSocialAuthorIds')
+            .lean();
 
         const friendIds: string[] =
             viewer?.friends
                 ?.filter((f: any) => f.status === 'ACCEPTED')
                 ?.map((f: any) => String(f.friendId)) || [];
         const friendSet = new Set(friendIds);
+        const hiddenAuthorSet = new Set(
+            (viewer?.hiddenSocialAuthorIds || []).map((id: any) => String(id)),
+        );
 
         const stories = await this.postModel.aggregate([
             {
@@ -477,6 +522,12 @@ export class SocialService {
         const canView = (story: any) => {
             const authorId = story.authorId?.toString?.() || String(story.authorId);
             if (authorId === viewerId) return true;
+            if (hiddenAuthorSet.has(authorId)) return false;
+
+            const blockedViewers = new Set(
+                (story.author?.blockedDiaryViewerIds || []).map((id: any) => String(id)),
+            );
+            if (blockedViewers.has(String(viewerId))) return false;
 
             const mode = story.storyPrivacy?.mode || 'friends';
             const include = (story.storyPrivacy?.includeUserIds || []).map((id: any) =>
@@ -581,6 +632,129 @@ export class SocialService {
         );
 
         return { success: true };
+    }
+
+    async deletePost(postId: string, userId: string) {
+        const post = await this.postModel.findOne({
+            _id: this.toObjectId(postId),
+            postType: 'POST',
+        });
+
+        if (!post) {
+            throw new NotFoundException('Post not found');
+        }
+
+        if (String(post.authorId) !== String(userId)) {
+            throw new ForbiddenException('No permission');
+        }
+
+        await Promise.all([
+            this.commentModel.deleteMany({ postId: post._id }),
+            this.postModel.deleteOne({ _id: post._id }),
+        ]);
+
+        return { success: true, postId };
+    }
+
+    async updatePostVisibility(postId: string, userId: string, visibility: string) {
+        const allowed = ['PUBLIC', 'FRIENDS', 'PRIVATE'];
+        if (!allowed.includes(visibility)) {
+            throw new BadRequestException('Invalid visibility');
+        }
+
+        const post = await this.postModel.findOne({
+            _id: this.toObjectId(postId),
+            postType: 'POST',
+        });
+
+        if (!post) {
+            throw new NotFoundException('Post not found');
+        }
+
+        if (String(post.authorId) !== String(userId)) {
+            throw new ForbiddenException('No permission');
+        }
+
+        post.visibility = visibility;
+        await post.save();
+
+        return {
+            success: true,
+            postId,
+            visibility: post.visibility,
+        };
+    }
+
+    async hideAuthorFromFeed(postId: string, userId: string) {
+        const post = await this.postModel.findById(postId).select('authorId postType').lean();
+        if (!post || post.postType === 'STORY') {
+            throw new NotFoundException('Post not found');
+        }
+
+        await this.userModel.updateOne(
+            { _id: this.toObjectId(userId) },
+            { $addToSet: { hiddenSocialAuthorIds: post.authorId } },
+        );
+
+        return {
+            success: true,
+            hiddenAuthorId: String(post.authorId),
+            postId,
+        };
+    }
+
+    async blockDiaryViewer(postId: string, userId: string) {
+        const post = await this.postModel.findById(postId).select('authorId postType').lean();
+        if (!post || post.postType === 'STORY') {
+            throw new NotFoundException('Post not found');
+        }
+
+        if (String(post.authorId) === String(userId)) {
+            throw new BadRequestException('Cannot block yourself');
+        }
+
+        await this.userModel.updateOne(
+            { _id: this.toObjectId(userId) },
+            { $addToSet: { blockedDiaryViewerIds: post.authorId } },
+        );
+
+        return {
+            success: true,
+            blockedUserId: String(post.authorId),
+            postId,
+        };
+    }
+
+    async reportPost(postId: string, userId: string, reason?: string) {
+        const post = await this.postModel.findOne({
+            _id: this.toObjectId(postId),
+            postType: 'POST',
+        });
+        if (!post) {
+            throw new NotFoundException('Post not found');
+        }
+
+        const existing = (post.reports || []).some(
+            (report: any) => String(report.userId) === String(userId),
+        );
+
+        if (!existing) {
+            post.reports = [
+                ...(post.reports || []),
+                {
+                    userId: this.toObjectId(userId),
+                    reason: (reason || '').trim(),
+                    createdAt: new Date(),
+                } as any,
+            ];
+            await post.save();
+        }
+
+        return {
+            success: true,
+            postId,
+            alreadyReported: existing,
+        };
     }
 
     async markStoryViewed(storyId: string, userId: string) {

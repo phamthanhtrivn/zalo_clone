@@ -33,6 +33,7 @@ import {
   pinConversation,
   unmuteConversation,
   unpinConversation,
+  clearConversation,
 } from "@/services/conversation-settings.service";
 import { useSocket } from "@/contexts/SocketContext";
 import * as FileSystem from "expo-file-system/legacy";
@@ -46,6 +47,7 @@ import MemberActionSheet from "../ui/MemberActionSheet";
 import GroupAvatar from "../ui/GroupAvatar";
 import ShareGroupQRModal from "./ShareGroupQRModal";
 import { pollService } from "@/services/poll.service";
+import ConversationPinModal from "./ConversationPinModal";
 
 const { width } = Dimensions.get("window");
 
@@ -54,6 +56,7 @@ interface Props {
   onClose: () => void;
   conversation: ConversationItemType;
   openedFromSearch?: boolean;
+  onConversationCleared?: () => void;
 }
 
 const SectionHeader = ({
@@ -90,6 +93,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
   onClose,
   conversation,
   openedFromSearch = false,
+  onConversationCleared,
 }) => {
   const router = useRouter();
   const { socket } = useSocket();
@@ -104,6 +108,12 @@ const ConversationInfoSheet: React.FC<Props> = ({
   const [expandedFile, setExpandedFile] = useState(false);
   const [expandedLink, setExpandedLink] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [showAllMedia, setShowAllMedia] = useState(false);
+  const [showAllFiles, setShowAllFiles] = useState(false);
+  const [showAllLinks, setShowAllLinks] = useState(false);
+  const [showAllMembers, setShowAllMembers] = useState(false);
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [pinLoading, setPinLoading] = useState(false);
 
   const currentUserId = user?.userId || (user as any)?._id || "";
   const [members, setMembers] = useState<any[]>([]);
@@ -726,10 +736,16 @@ const ConversationInfoSheet: React.FC<Props> = ({
   const shouldShowUnhideButton =
     openedFromSearch && !isGroup && !!currentConversation?.hidden;
 
-  const handleUnhideConversation = async () => {
+  const visibleMedias = showAllMedia ? medias : medias.slice(0, 6);
+  const visibleFiles = showAllFiles ? files : files.slice(0, 6);
+  const visibleLinks = showAllLinks ? links : links.slice(0, 6);
+  const visibleMembers = showAllMembers ? members : members.slice(0, 15);
+
+  const handleUnhideConversation = async (pin: string) => {
     if (!currentConversation?.conversationId || !currentUserId || isUnhiding) return;
 
     setIsUnhiding(true);
+    setPinLoading(true);
     dispatch(
       updateConversationSetting({
         conversationId: currentConversation.conversationId,
@@ -741,10 +757,12 @@ const ConversationInfoSheet: React.FC<Props> = ({
       const res: any = await unhideConversation(
         currentUserId,
         currentConversation.conversationId,
+        pin,
       );
       if (!res?.success) {
         throw new Error(res?.message || "Unhide failed");
       }
+      setPinModalVisible(false);
       Alert.alert("Thành công", "Đã gỡ ẩn cuộc trò chuyện");
     } catch (err: any) {
       const errorMessage = String(
@@ -779,7 +797,41 @@ const ConversationInfoSheet: React.FC<Props> = ({
       );
     } finally {
       setIsUnhiding(false);
+      setPinLoading(false);
     }
+  };
+
+  const handleClearHistory = () => {
+    Alert.alert(
+      "Xác nhận",
+      "Toàn bộ lịch sử trò chuyện trong hội thoại này sẽ bị xóa khỏi thiết bị của bạn. Bạn có chắc chắn muốn tiếp tục?",
+      [
+        { text: "Không", style: "cancel" },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res: any = await clearConversation(
+                currentUserId,
+                conversation.conversationId,
+              );
+              if (!res?.success) {
+                throw new Error(res?.message || "Clear failed");
+              }
+              onConversationCleared?.();
+              onClose();
+              Alert.alert("Thành công", "Đã xóa lịch sử trò chuyện");
+            } catch (err: any) {
+              Alert.alert(
+                "Lỗi",
+                err?.response?.data?.message || "Không thể xóa lịch sử trò chuyện",
+              );
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -797,6 +849,18 @@ const ConversationInfoSheet: React.FC<Props> = ({
           onPress={(e) => e.stopPropagation()}
           className="flex-1 bg-[#f7f8fa] mt-[60px] rounded-t-[20px] overflow-hidden"
         >
+          <ConversationPinModal
+            visible={pinModalVisible}
+            title="Nhập mã PIN để gỡ ẩn trò chuyện"
+            description="Nhập đúng mã PIN 4 số để xác nhận gỡ ẩn cuộc trò chuyện."
+            confirmLabel="Gỡ ẩn"
+            loading={pinLoading}
+            onClose={() => {
+              if (pinLoading) return;
+              setPinModalVisible(false);
+            }}
+            onSubmit={handleUnhideConversation}
+          />
           <View
             className="flex-row items-center justify-between px-4 py-3.5 bg-white border-b border-[#f3f4f6]"
           >
@@ -1057,8 +1121,9 @@ const ConversationInfoSheet: React.FC<Props> = ({
                         Chưa có ảnh/video trong cuộc trò chuyện
                       </Text>
                     ) : (
-                      <View className="flex-row flex-wrap gap-0.5">
-                        {medias.slice(0, 6).map((media, idx) => {
+                      <>
+                        <View className="flex-row flex-wrap gap-0.5">
+                        {visibleMedias.map((media, idx) => {
                           const file = media?.content?.file;
                           const isVideo = file?.type === "VIDEO";
                           return (
@@ -1086,7 +1151,18 @@ const ConversationInfoSheet: React.FC<Props> = ({
                             </TouchableOpacity>
                           );
                         })}
-                      </View>
+                        </View>
+                        {medias.length > 6 && (
+                        <TouchableOpacity
+                          className="mt-3 rounded-xl bg-[#f3f4f6] py-3 items-center"
+                          onPress={() => setShowAllMedia((prev) => !prev)}
+                        >
+                          <Text className="text-[14px] font-medium text-[#374151]">
+                            {showAllMedia ? "Thu gọn" : `Xem tất cả (${medias.length})`}
+                          </Text>
+                        </TouchableOpacity>
+                        )}
+                      </>
                     )}
                   </View>
                 )}
@@ -1114,7 +1190,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
                         Chưa có file trong cuộc trò chuyện
                       </Text>
                     ) : (
-                      files.slice(0, 6).map((item, idx) => {
+                      visibleFiles.map((item, idx) => {
                         const file = item.content?.file;
                         return (
                           <TouchableOpacity
@@ -1153,6 +1229,16 @@ const ConversationInfoSheet: React.FC<Props> = ({
                         );
                       })
                     )}
+                    {files.length > 6 && (
+                      <TouchableOpacity
+                        className="mt-2 rounded-xl bg-[#f3f4f6] py-3 items-center"
+                        onPress={() => setShowAllFiles((prev) => !prev)}
+                      >
+                        <Text className="text-[14px] font-medium text-[#374151]">
+                          {showAllFiles ? "Thu gọn" : `Xem tất cả (${files.length})`}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 )}
               </View>
@@ -1173,7 +1259,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
                         Chưa có link trong cuộc trò chuyện
                       </Text>
                     ) : (
-                      links.slice(0, 6).map((item, idx) => {
+                      visibleLinks.map((item, idx) => {
                         const url = item.content?.text;
                         let domain = url;
                         try {
@@ -1206,6 +1292,16 @@ const ConversationInfoSheet: React.FC<Props> = ({
                           </TouchableOpacity>
                         );
                       })
+                    )}
+                    {links.length > 6 && (
+                      <TouchableOpacity
+                        className="mt-2 rounded-xl bg-[#f3f4f6] py-3 items-center"
+                        onPress={() => setShowAllLinks((prev) => !prev)}
+                      >
+                        <Text className="text-[14px] font-medium text-[#374151]">
+                          {showAllLinks ? "Thu gọn" : `Xem tất cả (${links.length})`}
+                        </Text>
+                      </TouchableOpacity>
                     )}
                   </View>
                 )}
@@ -1277,7 +1373,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
                 {expandedMembers && (
                   <View className="px-4 pb-2.5">
                     {/* Chỉ render tối đa 15 người ở màn hình preview để đảm bảo độ mượt */}
-                    {members.slice(0, 15).map((m) => (
+                      {visibleMembers.map((m) => (
                       <TouchableOpacity
                         key={m.userId}
                         className="flex-row items-center py-3 border-b border-[#f3f4f6]"
@@ -1310,9 +1406,11 @@ const ConversationInfoSheet: React.FC<Props> = ({
                     {members.length > 15 && (
                       <TouchableOpacity
                         className="py-3 items-center"
-                        onPress={() => {/* Logic mở full danh sách thành viên */ }}
+                        onPress={() => setShowAllMembers((prev) => !prev)}
                       >
-                        <Text className="text-[#0068ff] text-sm">Xem tất cả ({members.length})</Text>
+                        <Text className="text-[#0068ff] text-sm">
+                          {showAllMembers ? "Thu gọn" : `Xem tất cả (${members.length})`}
+                        </Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1324,7 +1422,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
               <View className="bg-white mb-2 py-2">
                 <TouchableOpacity
                   className={`flex-row items-center px-4 py-3 ${isUnhiding ? "opacity-70" : ""}`}
-                  onPress={handleUnhideConversation}
+                  onPress={() => setPinModalVisible(true)}
                   disabled={isUnhiding}
                 >
                   {isUnhiding ? (
@@ -1351,7 +1449,7 @@ const ConversationInfoSheet: React.FC<Props> = ({
               )}
               <TouchableOpacity
                 className="flex-row items-center px-4 py-4"
-                onPress={handleLeaveGroup}
+                onPress={isGroup ? handleLeaveGroup : handleClearHistory}
               >
                 <Ionicons name="log-out-outline" size={20} color="#ef4444" />
                 <Text className="ml-3 text-[15px] text-[#ef4444] font-semibold">

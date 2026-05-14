@@ -14,9 +14,10 @@ export class ConversationSettingsController {
     hideConversation(
         @Body('userId') userId: string,
         @Body('conversationId') conversationId: string,
+        @Body('pin') pin?: string,
     ) {
         return this.conversationSettingsService.hideConversation(new Types.ObjectId(userId),
-            new Types.ObjectId(conversationId));
+            new Types.ObjectId(conversationId), pin);
 
     }
     // Bỏ ẩn
@@ -24,10 +25,12 @@ export class ConversationSettingsController {
     unhideConversation(
         @Body('userId') userId: string,
         @Body('conversationId') conversationId: string,
+        @Body('pin') pin?: string,
     ) {
         return this.conversationSettingsService.unhideConversation(
             new Types.ObjectId(userId),
-            new Types.ObjectId(conversationId));
+            new Types.ObjectId(conversationId),
+            pin);
 
     }
     // Gim
@@ -94,6 +97,16 @@ export class ConversationSettingsController {
         @Body('conversationId') conversationId: string,
     ) {
         return this.conversationSettingsService.deleteConversation(
+            new Types.ObjectId(userId),
+            new Types.ObjectId(conversationId),
+        );
+    }
+    @Patch('clear')
+    clearConversation(
+        @Body('userId') userId: string,
+        @Body('conversationId') conversationId: string,
+    ) {
+        return this.conversationSettingsService.clearConversation(
             new Types.ObjectId(userId),
             new Types.ObjectId(conversationId),
         );

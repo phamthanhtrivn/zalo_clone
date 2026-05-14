@@ -42,10 +42,8 @@ export default function SocialScreen() {
   const posts = useAppSelector((state: any) => state.diary?.posts ?? []);
   const loading = useAppSelector((state: any) => state.diary?.loading ?? false);
 
-  // Kiểm tra avatarUrl ở cả root (từ Auth) và profile (từ User model)
   const avatar = user?.avatarUrl || user?.profile?.avatarUrl || null;
 
-  // Logic "Lấy tin": Fetch dữ liệu nhật ký từ server
   const loadContent = useCallback(async () => {
     if (activeTab === "diary") {
       await dispatch(fetchDiaryPosts());
@@ -64,6 +62,7 @@ export default function SocialScreen() {
 
   useEffect(() => {
     if (!socket) return;
+
     const handleStoryNew = (payload: any) => {
       setStories((prev) => {
         const exp = payload?.story?.expiresAt
@@ -83,6 +82,7 @@ export default function SocialScreen() {
             ...prev,
           ]);
         }
+
         const next = [...prev];
         next[idx] = {
           ...next[idx],
@@ -90,13 +90,15 @@ export default function SocialScreen() {
           userAvatar: payload.userAvatar || next[idx].userAvatar,
           stories: [payload.story, ...(next[idx].stories || [])],
         };
-        // move updated author to top
         const updated = next.splice(idx, 1)[0];
         return pruneExpiredStories([updated, ...next]);
       });
     };
 
-    const handleStoryDeleted = (payload: { storyId: string; authorId: string }) => {
+    const handleStoryDeleted = (payload: {
+      storyId: string;
+      authorId: string;
+    }) => {
       setStories((prev) => {
         const next = prev
           .map((g: any) =>
@@ -113,6 +115,7 @@ export default function SocialScreen() {
         return pruneExpiredStories(next);
       });
     };
+
     socket.on("story:new", handleStoryNew);
     socket.on("story:deleted", handleStoryDeleted);
     return () => {
@@ -128,14 +131,12 @@ export default function SocialScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  // Xử lý sự kiện làm mới tin (Pull-to-refresh)
   const onRefresh = async () => {
     setRefreshing(true);
     await loadContent();
     setRefreshing(false);
   };
 
-  // Sự kiện "Tạo tin": Điều hướng sang màn hình đăng bài mới
   const handleCreatePost = () => {
     router.push("/private/social/create-post");
   };

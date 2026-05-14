@@ -27,6 +27,33 @@ export const reactPost = async (postId: string, type = "LIKE") => {
     return res;
 };
 
+export const deletePost = async (postId: string) => {
+    const res = await api.delete(`/posts/${postId}`);
+    return res;
+};
+
+export const updatePostVisibility = async (postId: string, visibility: string) => {
+    const res = await api.post(`/posts/${postId}/visibility`, { visibility });
+    return res;
+};
+
+export const hideAuthorPosts = async (postId: string) => {
+    const res = await api.post(`/posts/${postId}/hide-author`);
+    return res;
+};
+
+export const blockDiaryViewer = async (postId: string) => {
+    const res = await api.post(`/posts/${postId}/block-viewer`);
+    return res;
+};
+
+export const reportPost = async (postId: string, reason?: string) => {
+    const res = await api.post(`/posts/${postId}/report`, {
+        reason: reason || "",
+    });
+    return res;
+};
+
 export const commentPost = async (
     postId: string,
     content: string,

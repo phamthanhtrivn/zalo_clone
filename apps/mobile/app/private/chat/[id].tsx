@@ -519,6 +519,14 @@ export default function ChatWindow() {
     }
   };
 
+  const handleConversationCleared = () => {
+    setMessages([]);
+    setPinnedMessages([]);
+    if (id) {
+      dispatch(setCachedMessages({ conversationId: id, messages: [] }));
+    }
+  };
+
   const handleDeleteForMe = async (messageId: string) => {
     if (!id || !user?.userId) return;
     try {
@@ -1356,6 +1364,7 @@ export default function ChatWindow() {
         showInfoSheet={showInfoSheet}
         setShowInfoSheet={setShowInfoSheet}
         openedFromSearch={openedFromSearch}
+        onConversationCleared={handleConversationCleared}
         contextMenuMsg={contextMenuMsg}
         setContextMenuMsg={setContextMenuMsg}
         isPinned={isPinned || false}

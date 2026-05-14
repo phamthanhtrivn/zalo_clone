@@ -70,6 +70,7 @@ import {
   muteConversation,
   unmuteConversation,
   unhideConversation,
+  clearConversation,
 } from "@/services/conversation-settings.service";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { useSocket } from "@/contexts/SocketContext";
@@ -85,6 +86,7 @@ import type { ConversationItemType } from "@/types/conversation-item.type";
 import { getFileIcon } from "@/utils/file-icon.util";
 import { getDateLabel } from "@/utils/format-message-time..util";
 import { Users as UsersIcon } from "lucide-react";
+import ConversationPinDialog from "@/components/layout/ConversationPinDialog";
 
 type ConversationMemberRow = {
   userId: string;
@@ -105,6 +107,7 @@ interface ConversationInfoPanelProps {
   conversation: ConversationItemType | null;
   openedFromSearch?: boolean;
   onClose?: () => void;
+  onConversationCleared?: () => void;
 }
 
 const ConversationInfoPanel = ({
@@ -112,6 +115,7 @@ const ConversationInfoPanel = ({
   conversation,
   openedFromSearch = false,
   onClose,
+  onConversationCleared,
 }: ConversationInfoPanelProps) => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -173,6 +177,13 @@ const ConversationInfoPanel = ({
   const [deleteGroupDialogOpen, setDeleteGroupDialogOpen] = useState(false);
   const [isDeletingGroup, setIsDeletingGroup] = useState(false);
   const [isUnhiding, setIsUnhiding] = useState(false);
+  const [unhidePinOpen, setUnhidePinOpen] = useState(false);
+  const [unhidePinLoading, setUnhidePinLoading] = useState(false);
+  const [clearHistoryDialogOpen, setClearHistoryDialogOpen] = useState(false);
+  const [showAllMedia, setShowAllMedia] = useState(false);
+  const [showAllFiles, setShowAllFiles] = useState(false);
+  const [showAllLinks, setShowAllLinks] = useState(false);
+  const [showAllMembers, setShowAllMembers] = useState(false);
 
   const [preview, setPreview] = useState<{ isOpen: boolean; index: number }>({
     isOpen: false,
@@ -204,6 +215,10 @@ const ConversationInfoPanel = ({
     currentConversation?.group?.allowMembersInvite || canManageMembers;
   const shouldShowUnhideButton =
     openedFromSearch && !isGroup && !!currentConversation?.hidden;
+  const visibleMedias = showAllMedia ? medias : medias.slice(0, 6);
+  const visibleFiles = showAllFiles ? files : files.slice(0, 6);
+  const visibleLinks = showAllLinks ? links : links.slice(0, 6);
+  const visibleMembers = showAllMembers ? members : members.slice(0, 15);
 
   // --- FETCH DATA ---
 
@@ -616,12 +631,13 @@ const ConversationInfoPanel = ({
     }
   };
 
-  const handleUnhideConversation = async () => {
+  const handleUnhideConversation = async (pin: string) => {
     if (!currentConversation?.conversationId || !currentUserId || isUnhiding) {
       return;
     }
 
     setIsUnhiding(true);
+    setUnhidePinLoading(true);
     dispatch(
       updateConversationSetting({
         conversationId: currentConversation.conversationId,
@@ -633,10 +649,12 @@ const ConversationInfoPanel = ({
       const res = await unhideConversation(
         currentUserId,
         currentConversation.conversationId,
+        pin,
       );
       if (!res?.success) {
         throw new Error(res?.message || "Unhide failed");
       }
+      setUnhidePinOpen(false);
       toast.success("Đã gỡ ẩn cuộc trò chuyện");
     } catch (error: any) {
       dispatch(
@@ -650,6 +668,27 @@ const ConversationInfoPanel = ({
       );
     } finally {
       setIsUnhiding(false);
+      setUnhidePinLoading(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (!currentConversation?.conversationId) return;
+    try {
+      const res = await clearConversation(
+        currentUserId,
+        currentConversation.conversationId,
+      );
+      if (!res?.success) {
+        throw new Error(res?.message || "Clear failed");
+      }
+      onConversationCleared?.();
+      setClearHistoryDialogOpen(false);
+      toast.success("Đã xóa lịch sử trò chuyện");
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message || "Không thể xóa lịch sử trò chuyện",
+      );
     }
   };
 
@@ -1082,7 +1121,7 @@ const ConversationInfoPanel = ({
             <div className="px-4 pb-4">
               {medias.length > 0 ? (
                 <div className="grid grid-cols-3 gap-1">
-                  {medias.slice(0, 6).map((media, idx) => {
+                  {visibleMedias.map((media, idx) => {
                     const file = media?.content?.file;
                     const isVideo = file?.type === "VIDEO";
                     return (
@@ -1121,7 +1160,7 @@ const ConversationInfoPanel = ({
                 </p>
               )}
               {medias.length > 0 && (
-                <Button className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 mt-3 h-8 text-xs cursor-pointer">
+                <Button className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 mt-3 h-8 text-xs cursor-pointer" onClick={() => setShowAllMedia((prev) => !prev)}>
                   Xem tất cả
                 </Button>
               )}
@@ -1149,7 +1188,7 @@ const ConversationInfoPanel = ({
             <div className="px-4 pb-4">
               {files.length > 0 ? (
                 <div className="space-y-2">
-                  {files.slice(0, 6).map((item, idx) => {
+                  {visibleFiles.map((item, idx) => {
                     const file = item.content?.file;
                     return (
                       <div
@@ -1184,7 +1223,7 @@ const ConversationInfoPanel = ({
                 </p>
               )}
               {files.length > 0 && (
-                <Button className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 mt-3 h-8 text-xs cursor-pointer">
+                <Button className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 mt-3 h-8 text-xs cursor-pointer" onClick={() => setShowAllFiles((prev) => !prev)}>
                   Xem tất cả
                 </Button>
               )}
@@ -1211,7 +1250,7 @@ const ConversationInfoPanel = ({
           {expandedSections.link && (
             <div className="px-4 pb-4 space-y-2">
               {links.length > 0 ? (
-                links.slice(0, 6).map((item, idx) => {
+                visibleLinks.map((item, idx) => {
                   const url = item.content?.text;
                   const getDomain = (url: string) => {
                     try {
@@ -1251,7 +1290,7 @@ const ConversationInfoPanel = ({
                 </p>
               )}
               {links.length > 0 && (
-                <Button className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 mt-3 h-8 text-xs cursor-pointer">
+                <Button className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 mt-3 h-8 text-xs cursor-pointer" onClick={() => setShowAllLinks((prev) => !prev)}>
                   Xem tất cả
                 </Button>
               )}
@@ -1334,7 +1373,7 @@ const ConversationInfoPanel = ({
             {/* NỘI DUNG DANH SÁCH */}
             {expandedSections.members && (
               <div className="px-2 pb-3 animate-in fade-in duration-200">
-                {members.map((m) => (
+                {visibleMembers.map((m) => (
                   <div
                     key={m.userId}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 group"
@@ -1413,6 +1452,14 @@ const ConversationInfoPanel = ({
                   </div>
                 ))}
                 {/* Nút Thêm Thành Viên */}
+                {members.length > 15 && (
+                  <button
+                    onClick={() => setShowAllMembers((prev) => !prev)}
+                    className="mb-1 w-full rounded-lg bg-gray-100 px-3 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-200 cursor-pointer"
+                  >
+                    {showAllMembers ? "Thu gọn" : `Xem tất cả (${members.length})`}
+                  </button>
+                )}
                 {isGroup && canInvite && (
                   <button
                     onClick={() => setAddMemberModalOpen(true)}
@@ -1434,7 +1481,7 @@ const ConversationInfoPanel = ({
         {shouldShowUnhideButton && (
           <div className="bg-white mt-2 border-y">
             <button
-              onClick={handleUnhideConversation}
+              onClick={() => setUnhidePinOpen(true)}
               disabled={isUnhiding}
               className="h-12 w-full flex items-center px-4 gap-3 text-[#0b63ce] hover:bg-blue-50 transition-colors cursor-pointer disabled:opacity-70"
             >
@@ -1460,7 +1507,9 @@ const ConversationInfoPanel = ({
             </button>
           )}
           <button
-            onClick={() => (isGroup ? setLeaveGroupDialogOpen(true) : null)}
+            onClick={() =>
+              isGroup ? setLeaveGroupDialogOpen(true) : setClearHistoryDialogOpen(true)
+            }
             className="h-12 w-full flex items-center px-4 gap-3 text-red-500 hover:bg-red-50 transition-colors border-t border-gray-50 cursor-pointer"
           >
             {isGroup ? <LogOut size={18} /> : <Trash2 size={18} />}
@@ -1472,6 +1521,39 @@ const ConversationInfoPanel = ({
       </div>
 
       {/* DIALOGS & MODALS */}
+      <ConversationPinDialog
+        open={unhidePinOpen}
+        title="Nhập mã PIN để gỡ ẩn trò chuyện"
+        description="Nhập đúng mã PIN 4 số để xác nhận gỡ ẩn cuộc trò chuyện."
+        confirmLabel="Gỡ ẩn"
+        loading={unhidePinLoading}
+        onClose={() => {
+          if (unhidePinLoading) return;
+          setUnhidePinOpen(false);
+        }}
+        onSubmit={handleUnhideConversation}
+      />
+
+      <AlertDialog
+        open={clearHistoryDialogOpen}
+        onOpenChange={setClearHistoryDialogOpen}
+      >
+        <AlertDialogContent className="max-w-[520px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận</AlertDialogTitle>
+            <AlertDialogDescription className="text-[16px] leading-7 text-[#374151]">
+              Toàn bộ lịch sử trò chuyện trong hội thoại này sẽ bị xóa khỏi tài khoản của bạn. Bạn có chắc chắn muốn tiếp tục?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Không</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearHistory}>
+              Xóa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <CreateGroupModal
         open={addMemberModalOpen}
         onOpenChange={setAddMemberModalOpen}

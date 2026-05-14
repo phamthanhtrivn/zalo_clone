@@ -1,6 +1,6 @@
 import { ScrollView, View, Text, Pressable } from "react-native";
 import { Image } from "expo-image";
-import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
 type Story = {
   id: string;
@@ -21,10 +21,12 @@ export default function StoriesStrip({
   onCreateStory,
   onOpenStory,
   stories,
+  currentUserAvatar,
 }: {
   onCreateStory?: () => void;
   onOpenStory?: (story: Story) => void;
   stories?: any[];
+  currentUserAvatar?: string | null;
 }) {
   const groupsJson = JSON.stringify(stories || []);
 
@@ -51,7 +53,7 @@ export default function StoriesStrip({
         mediaUri: first.mediaUri || "",
         text: first.text || "",
         mediaType: first.mediaType || (first.mediaUri ? "IMAGE" : "TEXT"),
-        hoursAgo: `${diffHours} gio`,
+        hoursAgo: `${diffHours} giờ`,
         storiesJson: JSON.stringify(g.stories || []),
         startIndex: 0,
         groupsJson,
@@ -72,18 +74,44 @@ export default function StoriesStrip({
       >
         <Image
           source={{
-            uri: "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9",
+            uri:
+              currentUserAvatar ||
+              "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9",
           }}
           style={{ width: "100%", height: "100%" }}
         />
         <View className="absolute inset-0 bg-black/35" />
         <View className="absolute left-0 right-0 top-[48px] items-center">
-          <View className="w-11 h-11 rounded-full bg-[#3b82f6] border-2 border-white items-center justify-center">
-            <Ionicons name="videocam-outline" size={22} color="white" />
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              borderWidth: 2,
+              borderColor: "#fff",
+              overflow: "hidden",
+            }}
+          >
+            {currentUserAvatar ? (
+              <Image
+                source={{ uri: currentUserAvatar }}
+                style={{ width: "100%", height: "100%" }}
+              />
+            ) : (
+              <LinearGradient
+                colors={["#4f8cff", "#a855f7"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                }}
+              />
+            )}
           </View>
         </View>
         <View className="absolute bottom-2 left-0 right-0 items-center">
-          <Text className="text-white font-semibold text-[18px]">Tao moi</Text>
+          <Text className="text-white font-semibold text-[18px]">Tạo mới</Text>
         </View>
       </Pressable>
 
@@ -101,7 +129,7 @@ export default function StoriesStrip({
           ) : (
             <View className="w-full h-full bg-[#1f2937] items-center justify-center px-2">
               <Text numberOfLines={5} className="text-white text-[13px] text-center">
-                {story.text || "Story chu"}
+                {story.text || "Story chữ"}
               </Text>
             </View>
           )}

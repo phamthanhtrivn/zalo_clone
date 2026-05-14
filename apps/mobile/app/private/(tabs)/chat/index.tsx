@@ -142,40 +142,7 @@ export default function Home() {
       />
       <View className="flex-1 bg-white">
         {/* Tabs */}
-        <View className="flex-row items-center justify-between px-4 py-2 border-b border-gray-100">
-          <View className="flex-row gap-6">
-            <Pressable
-              onPress={() => setActiveTab("PRIORITY")}
-              className={`pb-1 ${activeTab === "PRIORITY" ? "border-b-2 border-blue-500" : ""}`}
-            >
-              <Text
-                className={`text-[13px] ${activeTab === "PRIORITY" ? "font-bold text-blue-500" : "font-medium text-gray-500"}`}
-              >
-                Ưu tiên
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setActiveTab("OTHER")}
-              className={`pb-1 ${activeTab === "OTHER" ? "border-b-2 border-blue-500" : ""}`}
-            >
-              <Text
-                className={`text-[13px] ${activeTab === "OTHER" ? "font-bold text-blue-500" : "font-medium text-gray-500"}`}
-              >
-                Khác
-              </Text>
-            </Pressable>
-          </View>
 
-          <View className="flex-row items-center gap-3">
-            <Pressable className="flex-row items-center bg-gray-50 px-2 py-1 rounded">
-              <Text className="text-[12px] text-gray-500 mr-1">Phân loại</Text>
-              <Ionicons name="chevron-down" size={12} color="#6b7280" />
-            </Pressable>
-            <Pressable>
-              <Ionicons name="ellipsis-horizontal" size={18} color="#6b7280" />
-            </Pressable>
-          </View>
-        </View>
 
         {conversations.length === 0 ? (
           <View className="flex-1 items-center justify-center px-10">
