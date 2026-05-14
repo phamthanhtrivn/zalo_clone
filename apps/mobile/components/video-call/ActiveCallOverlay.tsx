@@ -42,6 +42,7 @@ const ParticipantView = memo(({ stream, name, isLocal, camOn = true, micOn = tru
     <View style={[styles.participantContainer, style]}>
       {stream && camOn ? (
         <RTCView
+          key={stream?.id || 'no-stream'}
           streamURL={stream.toURL()}
           style={StyleSheet.absoluteFillObject}
           objectFit="cover"
@@ -137,7 +138,8 @@ export default function ActiveCallOverlay() {
     localStream, 
     remoteStream,
     remoteStreams, 
-    leaveCall 
+    leaveCall,
+    participantNamesRef
   } = useVideoCall();
 
   const isOpen = sessionState === "CONNECTED" || sessionState === "IN_GROUP_CALL" || (callMode === 'GROUP' && sessionState === 'CALLING');
@@ -157,8 +159,29 @@ export default function ActiveCallOverlay() {
   }, [isOpen, videoCallData?.conversationId]);
 
   const getName = (id: string) => {
-    const member = members.find(m => m.userId === id);
-    return member?.name || videoCallData?.fromName || `User_${id.substring(id.length - 4)}`;
+    if (!id) return "Người dùng";
+    const mid = String(id);
+    
+    // 1. Ưu tiên lấy từ bản đồ tên trong Context (đã lưu lúc nhận tín hiệu)
+    if (participantNamesRef?.current?.has(mid)) {
+      return participantNamesRef.current.get(mid);
+    }
+
+    // 2. Tìm trong mảng members từ Redux/useEffect
+    const member = members.find((m: any) => 
+      String(m.userId) === mid || 
+      String(m._id) === mid || 
+      String(m.user?._id) === mid
+    );
+    if (member) {
+      return member.profile?.name || member.name || member.user?.profile?.name || "Thành viên";
+    }
+
+    // 3. Fallback: Socket data
+    if (mid === videoCallData?.from) return videoCallData?.fromName || "Người gọi";
+    if (mid === videoCallData?.to) return videoCallData?.toName || "Người nhận";
+
+    return `User_${mid.substring(mid.length - 4)}`;
   };
 
   useEffect(() => {
