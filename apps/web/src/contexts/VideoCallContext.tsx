@@ -190,7 +190,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const peer = new Peer({
       initiator,
-      trickle: false,
+      trickle: true,
       stream: streamRef.current,
       config: ICE_SERVERS,
     });
@@ -369,7 +369,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
       streamRef.current = currentStream;
       if (myVideoRef.current) myVideoRef.current.srcObject = currentStream;
 
-      const p = new Peer({ initiator: true, trickle: false, stream: currentStream, config: ICE_SERVERS });
+      const p = new Peer({ initiator: true, trickle: true, stream: currentStream, config: ICE_SERVERS });
       p.on("signal", (sig: any) => {
         socket?.emit("call:signal", {
           to: targetId,
@@ -412,7 +412,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
       streamRef.current = currentStream;
       if (myVideoRef.current) myVideoRef.current.srcObject = currentStream;
 
-      const p = new Peer({ initiator: false, trickle: false, stream: currentStream, config: ICE_SERVERS });
+      const p = new Peer({ initiator: false, trickle: true, stream: currentStream, config: ICE_SERVERS });
       p.on("signal", (sig: any) => {
         socket?.emit("call:signal", { to: videoCallData.from, signal: sig, conversationId: videoCallData.conversationId, callType: videoCallData.callType });
       });

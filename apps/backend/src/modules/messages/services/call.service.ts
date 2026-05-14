@@ -390,6 +390,13 @@ export class MessagesCallService {
         senderId: new Types.ObjectId(senderId),
         conversationId: new Types.ObjectId(conversationId),
         type: MessageType.GROUP_CALL,
+        content: {
+          text: null,
+          icon: null,
+          files: [],
+          voiceDuration: null,
+          storyLink: null,
+        },
         callSessionId: sessionDoc._id,
         pinned: false,
         recalled: false,
@@ -406,24 +413,21 @@ export class MessagesCallService {
       });
 
       // Simple population
-      const populatedMsg = await this.messageModel.findById(messageDoc._id).populate({
-        path: 'senderId',
-        select: 'profile.name profile.avatarUrl',
-      });
+      const populatedMsg = await this.messageModel.findById(messageDoc._id)
+        .populate({
+          path: 'senderId',
+          select: 'profile.name profile.avatarUrl',
+        })
+        .populate('readReceipts.userId', 'profile.name profile.avatarUrl');
 
       if (populatedMsg) {
         console.log(`[initiateGroupCall] Message populated`);
         const rawMessage = (populatedMsg as any).toObject();
-        const signedMessage = {
+        const signedMessage = this.transformService.transformMessage({
           ...rawMessage,
           _id: rawMessage._id.toString(),
           conversationId: conversationIdStr,
-          senderId: this.transformService.signUser(rawMessage.senderId),
-        };
-
-        if (signedMessage.senderId && signedMessage.senderId._id) {
-          signedMessage.senderId._id = signedMessage.senderId._id.toString();
-        }
+        });
 
         await this.redisService.publish(REDIS_CHANNEL_SOCKET_EVENTS, {
           room: conversationIdStr,

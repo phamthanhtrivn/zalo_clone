@@ -29,7 +29,34 @@ function CallTimer({ isOpen }: { isOpen: boolean }) {
 const VideoRenderer = ({ stream, isLocal }: { stream: MediaStream | undefined, isLocal?: boolean }) => {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
-    if (ref.current && stream) ref.current.srcObject = stream;
+    const video = ref.current;
+    if (!video) return;
+
+    if (!stream) {
+      video.srcObject = null;
+      return;
+    }
+
+    video.srcObject = stream;
+    const ensurePlayback = async () => {
+      try {
+        await video.play();
+      } catch (error) {
+        console.warn("[VideoRenderer] Unable to autoplay stream:", error);
+      }
+    };
+
+    if (video.readyState >= 1) {
+      void ensurePlayback();
+    } else {
+      video.onloadedmetadata = () => {
+        void ensurePlayback();
+      };
+    }
+
+    return () => {
+      video.onloadedmetadata = null;
+    };
   }, [stream]);
   if (!stream) return <div className="bg-slate-800 w-full h-full flex items-center justify-center"><VideoOff size={48} className="text-white/20" /></div>;
   return <video ref={ref} autoPlay playsInline muted={isLocal} className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''}`} />;
