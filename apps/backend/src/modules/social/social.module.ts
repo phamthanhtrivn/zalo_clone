@@ -7,6 +7,7 @@ import {
     SocialNotification,
     SocialNotificationSchema,
 } from './schemas/social-notification.schema';
+import { User, UserSchema } from '../users/schemas/user.schema';
 import { StorageModule } from 'src/common/storage/storage.module';
 import { SpotifyService } from './spotify.service';
 import { RedisModule } from 'src/common/redis/redis.module';
@@ -19,6 +20,7 @@ import { MessagesModule } from '../messages/messages.module';
             { name: Post.name, schema: PostSchema },
             { name: Comment.name, schema: CommentSchema },
             { name: SocialNotification.name, schema: SocialNotificationSchema },
+            { name: User.name, schema: UserSchema },
         ]),
         StorageModule,
         RedisModule,

@@ -106,7 +106,7 @@ export default function PostHeader({
                     fontWeight: "700",
                     color: canPost && !posting ? "#0068FF" : "#c7c9d1",
                 }}>
-                    {posting ? "Dang..." : "Dang"}
+                    {posting ? "Đăng..." : "Đăng"}
                 </Text>
             </Pressable>
         </View>

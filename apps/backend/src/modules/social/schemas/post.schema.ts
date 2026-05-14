@@ -10,6 +10,18 @@ class MediaItem {
     type: string;
 }
 
+@Schema({ _id: false })
+class PostReportItem {
+    @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+    userId: Types.ObjectId;
+
+    @Prop({ default: '' })
+    reason?: string;
+
+    @Prop({ type: Date, default: Date.now })
+    createdAt?: Date;
+}
+
 @Schema({ timestamps: true })
 export class Post extends Document {
     @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
@@ -43,6 +55,9 @@ export class Post extends Document {
         default: [],
     })
     reactions: any[];
+
+    @Prop({ type: [SchemaFactory.createForClass(PostReportItem)], default: [] })
+    reports?: PostReportItem[];
 
     @Prop({ default: 0 })
     commentCount: number;

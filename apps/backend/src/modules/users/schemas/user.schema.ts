@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Types } from 'mongoose';
+import { Document, Types } from 'mongoose';
 import { FriendStatus } from 'src/common/types/enums/friend-status';
 import { Gender } from 'src/common/types/enums/gender';
 
@@ -64,7 +64,17 @@ export class User {
 
   @Prop({ type: [Friend], default: [] })
   friends?: Friend[];
+
+  @Prop({ type: [Types.ObjectId], ref: 'User', default: [] })
+  hiddenSocialAuthorIds?: Types.ObjectId[];
+
+  @Prop({ type: [Types.ObjectId], ref: 'User', default: [] })
+  blockedDiaryViewerIds?: Types.ObjectId[];
+
+  @Prop()
+  conversationPinHash?: string;
 }
+export type UserDocument = User & Document;
 export const UserSchema = SchemaFactory.createForClass(User);
 UserSchema.index({ phone: 1 });
 UserSchema.index({ 'profile.name': 1 });

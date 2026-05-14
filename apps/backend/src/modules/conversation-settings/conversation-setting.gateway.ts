@@ -35,4 +35,11 @@ export class ConversationSettingGateway {
         console.log("EMIT DELETE:", userId, payload);
         this.server.to(userId).emit("conversation_setting:delete", payload);
     }
+
+    emitConversationCleared(
+        userId: string,
+        payload: { conversationId: string; clearAt: Date | null },
+    ) {
+        this.server.to(userId).emit("conversation_setting:clear", payload);
+    }
 }

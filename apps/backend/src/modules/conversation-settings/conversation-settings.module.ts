@@ -7,11 +7,13 @@ import {
   ConversationSettingSchema,
 } from './schemas/conversation-setting.schema';
 import { ConversationSettingGateway } from './conversation-setting.gateway';
+import { User, UserSchema } from '../users/schemas/user.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: ConversationSetting.name, schema: ConversationSettingSchema },
+      { name: User.name, schema: UserSchema },
     ]),
   ],
   providers: [ConversationSettingsService, ConversationSettingGateway],

@@ -52,7 +52,7 @@ export default function PostBody({
             <TextInput
                 value={text}
                 onChangeText={onChangeText}
-                placeholder="Ban dang nghi gi?"
+                placeholder="Bạn dang nghĩ gì?"
                 placeholderTextColor={fontColor ? `${fontColor}99` : "#9ca3af"}
                 multiline
                 style={{

@@ -95,6 +95,31 @@ export class SocialController {
         return this.socialService.getPostDetail(id, req.user.userId);
     }
 
+    @Delete('/:id')
+    deletePost(@Param('id') id: string, @Req() req) {
+        return this.socialService.deletePost(id, req.user.userId);
+    }
+
+    @Post('/:id/visibility')
+    updatePostVisibility(@Param('id') id: string, @Req() req, @Body('visibility') visibility: string) {
+        return this.socialService.updatePostVisibility(id, req.user.userId, visibility);
+    }
+
+    @Post('/:id/hide-author')
+    hideAuthor(@Param('id') id: string, @Req() req) {
+        return this.socialService.hideAuthorFromFeed(id, req.user.userId);
+    }
+
+    @Post('/:id/block-viewer')
+    blockViewer(@Param('id') id: string, @Req() req) {
+        return this.socialService.blockDiaryViewer(id, req.user.userId);
+    }
+
+    @Post('/:id/report')
+    reportPost(@Param('id') id: string, @Req() req, @Body('reason') reason?: string) {
+        return this.socialService.reportPost(id, req.user.userId, reason);
+    }
+
     @Post('/:id/react')
     react(@Param('id') id: string, @Req() req, @Body('type') type: string) {
         return this.socialService.toggleReaction(id, req.user.userId, type);

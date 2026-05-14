@@ -25,6 +25,7 @@ interface Post {
     id: string;
     _id?: string;
     userId: string;
+    visibility?: string;
     name: string;
     avatar: string;
     text: string;
@@ -34,6 +35,7 @@ interface Post {
     myReaction: string | null;
     comments: number;
     createdAt: string;
+    authorId?: string;
 }
 
 interface DiaryState {
@@ -56,7 +58,40 @@ const initialState: DiaryState = {
 const diarySlice = createSlice({
     name: "diary",
     initialState,
-    reducers: {},
+    reducers: {
+        removePostFromFeed: (state, action) => {
+            const postId = String(action.payload);
+            state.posts = state.posts.filter(
+                (post) => String(post.id || post._id) !== postId
+            );
+            delete state.commentsByPost[postId];
+            delete state.commentLoading[postId];
+        },
+        removeAuthorPostsFromFeed: (state, action) => {
+            const authorId = String(action.payload);
+            const removedIds = state.posts
+                .filter((post) => String(post.authorId || post.userId) === authorId)
+                .map((post) => String(post.id || post._id));
+
+            state.posts = state.posts.filter(
+                (post) => String(post.authorId || post.userId) !== authorId
+            );
+
+            for (const postId of removedIds) {
+                delete state.commentsByPost[postId];
+                delete state.commentLoading[postId];
+            }
+        },
+        updatePostVisibilityInFeed: (state, action) => {
+            const { postId, visibility } = action.payload;
+            const post = state.posts.find(
+                (item) => String(item.id || item._id) === String(postId)
+            );
+            if (post) {
+                post.visibility = visibility;
+            }
+        },
+    },
     extraReducers: (builder) => {
         builder
             // FETCH POSTS
@@ -125,4 +160,9 @@ const diarySlice = createSlice({
     },
 });
 
+export const {
+    removePostFromFeed,
+    removeAuthorPostsFromFeed,
+    updatePostVisibilityInFeed,
+} = diarySlice.actions;
 export default diarySlice.reducer;
