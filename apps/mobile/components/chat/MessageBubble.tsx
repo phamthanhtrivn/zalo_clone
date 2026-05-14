@@ -6,6 +6,7 @@ import {
   Linking,
   Dimensions,
   Modal,
+  StyleSheet,
 } from "react-native";
 import Markdown from "react-native-markdown-display";
 import { Image } from "expo-image";
@@ -16,6 +17,8 @@ import PollMessage from "./PollMessage";
 import { formatTime } from "@/utils/format-message-time.util";
 import type { MessagesType, ReactionType } from "@/types/messages.type";
 import ReactionSummary from "./ReactionSummary";
+import CallContent from "./CallContent";
+import { formatFileSize } from "@/utils/format-file.util";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -75,6 +78,7 @@ const MessageBubble = ({
   isHighlighted = false,
   onReplyPress,
   isGroup,
+  onJoinGroupCall,
   onOpenStoryLink,
 }: Props) => {
   const content = message.content;
@@ -82,6 +86,14 @@ const MessageBubble = ({
 
   const mediaFiles = useMemo(
     () => (content?.files || []).filter((f: any) => f.type === "IMAGE" || f.type === "VIDEO"),
+    [content?.files],
+  );
+
+  const documentFiles = useMemo(
+    () =>
+      (content?.files || []).filter(
+        (f: any) => f.type === "FILE" || (!["IMAGE", "VIDEO", "VOICE"].includes(f.type)),
+      ),
     [content?.files],
   );
 
@@ -181,6 +193,19 @@ const MessageBubble = ({
               pollId={(message.pollId as any) || ""}
               conversationId={message.conversationId}
               initialPoll={message.poll}
+            />
+          )}
+
+          {(message.call || message.type === "GROUP_CALL") && (
+            <CallContent
+              type={message.call?.type || "VIDEO"}
+              status={message.call?.status || "ACTIVE"}
+              duration={message.call?.duration || null}
+              isMe={isMe}
+              isGroupCall={message.type === "GROUP_CALL"}
+              isGroupChat={isGroup}
+              sessionId={(message as any).callSessionId}
+              onJoin={onJoinGroupCall}
             />
           )}
 
@@ -308,6 +333,50 @@ const MessageBubble = ({
             </TouchableOpacity>
           ) : null}
           {content?.icon ? <Text style={{ fontSize: 32 }}>{content.icon}</Text> : null}
+
+          {documentFiles.length > 0 && (
+            <View style={{ marginTop: 6, gap: 4 }}>
+              {documentFiles.map((file: any, index: number) => (
+                <TouchableOpacity
+                  key={`doc-${index}`}
+                  activeOpacity={0.7}
+                  onPress={() => Linking.openURL(file.fileKey)}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: isMe ? "rgba(255,255,255,0.5)" : "#f3f4f6",
+                    padding: 8,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: "rgba(0,0,0,0.05)",
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 8,
+                      backgroundColor: "#fff",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      marginRight: 10,
+                    }}
+                  >
+                    <Ionicons name="document-text" size={24} color="#0068ff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "500", color: "#111" }}>
+                      {file.fileName}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                      {formatFileSize(file.fileSize)}
+                    </Text>
+                  </View>
+                  <Ionicons name="download-outline" size={20} color="#6b7280" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           {mediaFiles.length > 0 && (
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 6 }}>

@@ -70,6 +70,9 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
   // --- Group State ---
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
   const peersRef = useRef(new Map<string, any>());
+  
+  // 📝 Persistent Name Resolver (Map) to prevent "User_ID" bug
+  const participantNamesRef = useRef(new Map<string, string>());
 
   // --- Audio ---
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -106,23 +109,39 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
 
   const stopMediaStream = useCallback(() => {
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track: any) => track.stop());
+      console.log("📱 [VideoCallContext] Stopping all local tracks...");
+      localStreamRef.current.getTracks().forEach((track: any) => {
+        track.enabled = false;
+        track.stop();
+      });
       localStreamRef.current = null;
-      setLocalStream(null);
     }
+    setLocalStream(null);
     setRemoteStream(null);
     setRemoteStreams({});
   }, []);
 
   const cleanupCall = useCallback(() => {
+    console.log("📱 [VideoCallContext] Full Cleanup Initiated");
     stopMediaStream();
     stopSound();
+    
     if (peerRef.current) {
+      peerRef.current.ontrack = null;
+      peerRef.current.onicecandidate = null;
       peerRef.current.close();
       peerRef.current = null;
     }
-    peersRef.current.forEach(pc => pc.close());
+
+    peersRef.current.forEach((pc, uid) => {
+      pc.ontrack = null;
+      pc.onicecandidate = null;
+      pc.close();
+      console.log(`📱 [VideoCallContext] Purged peer: ${uid}`);
+    });
     peersRef.current.clear();
+    participantNamesRef.current.clear();
+    
     setVideoCallData({ isReceiving: false, from: "" });
   }, [stopMediaStream]);
 
@@ -156,6 +175,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
       }
     }
 
+    setRemoteStreams({}); 
     cleanupCall();
     updateCallState('ENDED');
     setTimeout(() => {
@@ -205,6 +225,17 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
   // --- Group Mesh Helper ---
   const createGroupPeer = useCallback(async (targetUserId: string, initiator: boolean, sessionId: string) => {
     if (!localStreamRef.current) return null;
+
+    // ♻️ [WebRTC] Peer Deduplication
+    if (peersRef.current.has(targetUserId)) {
+      console.log(`♻️ [WebRTC] Cleaning up stale peer for ${targetUserId} before re-creating`);
+      const oldPc = peersRef.current.get(targetUserId);
+      oldPc.ontrack = null;
+      oldPc.onicecandidate = null;
+      oldPc.close();
+      peersRef.current.delete(targetUserId);
+    }
+
     const pc = new RTCPeerConnection(ICE_SERVERS);
     localStreamRef.current.getTracks().forEach((track: any) => pc.addTrack(track, localStreamRef.current));
 
@@ -246,6 +277,10 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
         socket.emit("call:respond_status", { to: data.from, status: "BUSY", conversationId: data.conversationId });
         return;
       }
+      // 📝 Capture name from signal if available
+      if (data.from && data.fromName) {
+        participantNamesRef.current.set(String(data.from), data.fromName);
+      }
 
       if (data.signal?.type === "offer") {
         setCallMode('DIRECT');
@@ -282,6 +317,11 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
       if (pc && pc.signalingState === 'closed') {
         peersRef.current.delete(data.fromUserId);
         pc = null;
+      }
+
+      // 📝 Capture name from group signal if available
+      if (data.fromUserId && data.fromName) {
+        participantNamesRef.current.set(String(data.fromUserId), data.fromName);
       }
 
       if (data.signalData.type === 'offer') {
@@ -431,6 +471,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
 
   const startGroupCall = async (conversationId: string, type: "VIDEO" | "VOICE") => {
     console.log("📱 [VideoCallContext] startGroupCall:", conversationId, type);
+    setRemoteStreams({}); 
     if (!isWebRTCSupported) return;
     const cameraStatus = await Camera.requestCameraPermissionsAsync();
     const audioStatus = await Audio.requestPermissionsAsync();
@@ -464,6 +505,10 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
   };
 
   const joinGroupCall = async (sessionId: string, conversationId: string, type: "VIDEO" | "VOICE") => {
+    console.log("♻️ [WebRTC] Starting fresh session, previous peers cleared");
+    cleanupCall();
+    setRemoteStreams({}); 
+
     if (!isWebRTCSupported) return;
     const cameraStatus = await Camera.requestCameraPermissionsAsync();
     const audioStatus = await Audio.requestPermissionsAsync();
@@ -509,6 +554,7 @@ export const VideoCallProvider = ({ children }: { children: React.ReactNode }) =
         startGroupCall,
         joinGroupCall,
         leaveCall,
+        participantNamesRef,
       }}
     >
       {children}
