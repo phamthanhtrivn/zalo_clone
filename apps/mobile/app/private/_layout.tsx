@@ -50,6 +50,7 @@ export default function PrivateLayout() {
           <Stack.Screen name="qr-scanner" />
           <Stack.Screen name="confirm-qr-login" />
         </Stack>
+        
       </VideoCallProvider>
     </SocketProvider>
   );

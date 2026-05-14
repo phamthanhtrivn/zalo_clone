@@ -110,3 +110,10 @@ export const isSameHourAndMinute = (a: string, b: string) => {
 
   return d1.getHours() === d2.getHours() && d1.getMinutes() === d2.getMinutes();
 };
+
+export const formatDuration = (seconds: number | null) => {
+  if (seconds === null || seconds === undefined) return "00:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+};

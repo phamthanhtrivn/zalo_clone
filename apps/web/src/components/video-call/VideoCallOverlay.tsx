@@ -159,8 +159,14 @@ export default function VideoCallOverlay() {
   };
 
   const getName = (id: string) => {
-    const member = members.find((m: any) => m.userId === id);
-    return member?.name || `User_${id.substring(id.length - 4)}`;
+    if (!id) return "Người dùng";
+    const mid = String(id);
+    const member = members.find((m: any) => 
+      String(m.userId) === mid || 
+      String(m._id) === mid || 
+      String(m.user?._id) === mid
+    );
+    return member?.profile?.name || member?.name || member?.user?.profile?.name || `User_${mid.substring(mid.length - 4)}`;
   };
 
   if (!isOpen || callMode === 'NONE') return null;

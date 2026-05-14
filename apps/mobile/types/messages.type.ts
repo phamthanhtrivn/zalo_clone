@@ -11,7 +11,8 @@ export interface MessagesType {
     };
   };
   conversationId: string;
-  type: "USER_MESSAGE" | "SYSTEM" | "POLL" | "GROUP_CALL" | "PRIVATE" | "AI_SUMMARY";
+  type: "USER_MESSAGE" | "SYSTEM" | "POLL" | "GROUP_CALL" | "AI_SUMMARY";
+  callSessionId?: string | null;
   content: {
     text: string | null;
     icon: string | null;
@@ -36,7 +37,6 @@ export interface MessagesType {
     status: string;
     duration: number | null;
   } | null;
-  callSessionId?: string | null;
   expiresAt: string | null;
   expired?: boolean;
   createdAt: string;
