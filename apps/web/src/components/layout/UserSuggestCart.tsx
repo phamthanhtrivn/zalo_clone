@@ -5,6 +5,7 @@ export default function UserSuggestCart({ item, handelAddFriend, handelSkip }: a
       <UserInfoItem
         name={item?.name}
         avartaUrl={item?.avatarUrl}
+        id={item?.friendId}
         desc={"Bạn có thể biết"}
       />
 

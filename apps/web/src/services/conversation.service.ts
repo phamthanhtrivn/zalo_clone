@@ -179,4 +179,10 @@ export const conversationService = {
     const response = await apiClient.patch(`/api/conversations/${id}/qr-token`);
     return response.data;
   },
+  getCommonGroupsCount: async (targetUserId: string) => {
+    const response = await apiClient.get(
+      `/api/conversations/common-groups/${targetUserId}`,
+    );
+    return response.data;
+  },
 };
