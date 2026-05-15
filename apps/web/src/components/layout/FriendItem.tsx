@@ -1,4 +1,5 @@
 import { MoreHorizontal } from "lucide-react";
+import CategoryFilterButton from "./CategoryFilterButton";
 import AppAvatar from "../common/AppAvatar";
 import { useState } from "react";
 import { userService } from "@/services/user.service";
@@ -6,9 +7,12 @@ import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { conversationService } from "@/services/conversation.service";
 import { toast } from "react-toastify";
+import FriendProfileModal from "./FriendProfileModal";
 
 export const FriendItem = ({ item, setFriends }: any) => {
   const [openId, setOpenId] = useState<string>("");
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [selectedFriendId, setSelectedFriendId] = useState<string>("");
   const navigate = useNavigate();
   const userId = useSelector((item: any) => item.auth.user.userId);
 
@@ -76,6 +80,18 @@ export const FriendItem = ({ item, setFriends }: any) => {
     deleteFriend();
   };
 
+  const handleOpenProfile = (friendId: string) => {
+    setSelectedFriendId(friendId);
+    setIsProfileOpen(true);
+    setOpenId("");
+  };
+
+  const handleMessageFromProfile = async () => {
+    if (!selectedFriendId) return;
+    await handleStartConversation(selectedFriendId);
+    setIsProfileOpen(false);
+  };
+
   return (
     <div key={item.key}>
       <div>
@@ -86,9 +102,12 @@ export const FriendItem = ({ item, setFriends }: any) => {
       {item.friends.map((f: any) => (
         <div
           key={f.friendId}
-          className="flex items-center justify-between px-2 py-3 hover:bg-gray-50 rounded-lg mb-2"
+          className="mb-2 flex items-center justify-between rounded-lg px-2 py-3 hover:bg-gray-50"
         >
-          <div className="flex items-center gap-3">
+          <div
+            className="flex items-center gap-3"
+            onClick={() => handleStartConversation(f.friendId)}
+          >
             <AppAvatar
               src={f?.avatarUrl}
               name={f?.name || "User"}
@@ -104,27 +123,28 @@ export const FriendItem = ({ item, setFriends }: any) => {
               <MoreHorizontal className="text-gray-500" />
             </button>
             {openId === f.friendId && (
-              <div className="absolute right-0 -mt-0.5 w-48 bg-white border rounded-xl shadow-lg">
-                <div className="p-3 hover:bg-gray-50 cursor-pointer">
-                  <button>Xem thông tin</button>
+              <div className="absolute right-0 -mt-0.5 w-48 rounded-xl border bg-white shadow-lg">
+                <div className="cursor-pointer p-3 hover:bg-gray-50">
+                  <button onClick={() => handleOpenProfile(f.friendId)}>
+                    Xem thông tin
+                  </button>
                 </div>
-                <div className="p-3 hover:bg-gray-50 cursor-pointer">
+                <div className="cursor-pointer p-3 hover:bg-gray-50">
                   <button onClick={() => handleStartConversation(f.friendId)}>
                     Nhắn tin
                   </button>
                 </div>
-                <div className="p-3 hover:bg-gray-50 cursor-pointer">
-                  <button>Phân loại</button>
-                </div>
-                <div className="p-3 hover:bg-gray-50 cursor-pointer">
-                  <button> Đặt tên gợi nhớ</button>
-                </div>
-                <div className="p-3 hover:bg-gray-50 cursor-pointer">
+                {/* <div className="cursor-pointer p-0">
+                  <CategoryFilterButton
+                    variant="inline"
+                  />
+                </div> */}
+                <div className="cursor-pointer p-3 hover:bg-gray-50">
                   <button onClick={() => handelBock(f.friendId)}>
                     Chặn người này
                   </button>
                 </div>
-                <div className="p-3 text-red-500 hover:bg-gray-50 cursor-pointer">
+                <div className="cursor-pointer p-3 text-red-500 hover:bg-gray-50">
                   <button onClick={() => handelDeleteFriend(f.friendId)}>
                     Xóa bạn
                   </button>
@@ -134,6 +154,13 @@ export const FriendItem = ({ item, setFriends }: any) => {
           </div>
         </div>
       ))}
+
+      <FriendProfileModal
+        open={isProfileOpen}
+        profileId={selectedFriendId}
+        onClose={() => setIsProfileOpen(false)}
+        onMessage={handleMessageFromProfile}
+      />
     </div>
   );
 };
