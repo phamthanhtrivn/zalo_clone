@@ -1,0 +1,44 @@
+name: Deploy Zola Backend
+
+on:
+  push:
+    branches: [ "main" ] # Tự động chạy khi push code vào nhánh main
+    paths:
+      - 'apps/backend/**' # Chỉ chạy khi sửa code ở folder backend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker Image
+        run: |
+          # Build image từ folder backend và đẩy lên Docker Hub
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/zola-backend:latest ./apps/backend
+          docker push ${{ secrets.DOCKER_USERNAME }}/zola-backend:latest
+
+  deploy:
+    needs: build-and-push # Đợi build xong mới deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH to EC2 and Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/zola-backend
+            # Tạo file docker-compose.yml nếu chưa có (lần đầu chạy)
+            # Kéo bản image mới nhất từ Docker Hub về
+            sudo docker-compose pull
+            # Khởi động lại container với bản mới
+            sudo docker-compose up -d
