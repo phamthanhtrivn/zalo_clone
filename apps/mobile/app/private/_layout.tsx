@@ -31,6 +31,17 @@ export default function PrivateLayout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="chat" />
+          <Stack.Screen
+            name="story-create"
+            options={{
+              headerShown: false,
+              presentation: "fullScreenModal",
+              animation: "slide_from_bottom",
+            }}
+          />
+          <Stack.Screen name="story-viewer" />
+          <Stack.Screen name="post-viewer" />
+          <Stack.Screen name="social-notifications" />
           <Stack.Screen name="profile" />
           <Stack.Screen name="setting" />
           <Stack.Screen name="search" />
@@ -39,6 +50,7 @@ export default function PrivateLayout() {
           <Stack.Screen name="qr-scanner" />
           <Stack.Screen name="confirm-qr-login" />
         </Stack>
+        
       </VideoCallProvider>
     </SocketProvider>
   );

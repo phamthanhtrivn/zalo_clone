@@ -14,8 +14,14 @@ import { ICE_SERVERS } from "@/constants/webrtc";
 import { CallStatus, CallType } from "@/constants/types";
 import { messageService } from "@/services/message.service";
 
-export type CallMode = 'NONE' | 'DIRECT' | 'GROUP';
-export type CallSessionState = 'IDLE' | 'CALLING' | 'RINGING' | 'CONNECTED' | 'ENDED' | 'IN_GROUP_CALL';
+export type CallMode = "NONE" | "DIRECT" | "GROUP";
+export type CallSessionState =
+  | "IDLE"
+  | "CALLING"
+  | "RINGING"
+  | "CONNECTED"
+  | "ENDED"
+  | "IN_GROUP_CALL";
 
 interface VideoCallData {
   isReceiving: boolean;
@@ -26,7 +32,7 @@ interface VideoCallData {
   conversationId?: string;
   callType?: CallType;
   messageId?: string;
-  sessionId?: string; // For Group Call
+  sessionId?: string;
 }
 
 interface VideoCallContextType {
@@ -36,10 +42,16 @@ interface VideoCallContextType {
   myVideoRef: React.RefObject<HTMLVideoElement | null>;
   userVideoRef: React.RefObject<HTMLVideoElement | null>;
   stream: MediaStream | undefined;
-  remoteStream: MediaStream | undefined; // For 1-1
-  remoteStreams: Record<string, MediaStream>; // For Group
+  remoteStream: MediaStream | undefined;
+  remoteStreams: Record<string, MediaStream>;
   peersConnecting: Set<string>;
-  startDirectCall: (targetId: string, convId: string, type: CallType, targetName?: string, targetAvatar?: string) => void;
+  startDirectCall: (
+    targetId: string,
+    convId: string,
+    type: CallType,
+    targetName?: string,
+    targetAvatar?: string,
+  ) => void;
   answerDirectCall: () => void;
   startGroupCall: (convId: string, type: CallType) => void;
   joinGroupCall: (sessionId: string, convId: string, type: CallType) => void;
@@ -60,10 +72,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
   const { socket } = useSocket();
   const currentUser = useAppSelector((state) => state.auth.user);
 
-  // --- Common State ---
-  const [callMode, setCallMode] = useState<CallMode>('NONE');
-  const [sessionState, setSessionState] = useState<CallSessionState>('IDLE');
-  const sessionStateRef = useRef<CallSessionState>('IDLE');
+  const [callMode, setCallMode] = useState<CallMode>("NONE");
+  const [sessionState, setSessionState] = useState<CallSessionState>("IDLE");
+  const sessionStateRef = useRef<CallSessionState>("IDLE");
   const [videoCallData, setVideoCallData] = useState<VideoCallData>({
     isReceiving: false,
     from: "",
@@ -73,19 +84,28 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
   const streamRef = useRef<MediaStream | undefined>(undefined);
   const myVideoRef = useRef<HTMLVideoElement>(null);
 
-  // --- Direct (1-1) State ---
-  const [remoteStream, setRemoteStream] = useState<MediaStream | undefined>(undefined);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | undefined>(
+    undefined,
+  );
   const [pendingSignals, setPendingSignals] = useState<any[]>([]);
   const userVideoRef = useRef<HTMLVideoElement>(null);
   const peerRef = useRef<any>(null);
 
-  // --- Group State ---
-  const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
-  const [peersConnecting, setPeersConnecting] = useState<Set<string>>(new Set());
-  const peersRef = useRef(new Map<string, any>());
+  const [remoteStreams, setRemoteStreams] = useState<
+    Record<string, MediaStream>
+  >({});
+  const [peersConnecting, setPeersConnecting] = useState<Set<string>>(
+    new Set(),
+  );
+  const peersRef = useRef(new Map<string, RTCPeerConnection>());
+  const processingGroupOffersRef = useRef(new Set<string>());
+  const pendingGroupCandidatesRef = useRef(
+    new Map<string, RTCIceCandidateInit[]>(),
+  );
 
-  // --- Audio ---
-  const ringtoneRef = useRef<HTMLAudioElement>(new Audio("/sounds/incoming.mp3"));
+  const ringtoneRef = useRef<HTMLAudioElement>(
+    new Audio("/sounds/incoming.mp3"),
+  );
   const dialingRef = useRef<HTMLAudioElement>(new Audio("/sounds/dialing.mp3"));
 
   useEffect(() => {
@@ -118,22 +138,71 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   }, []);
 
+  const removeConnectingPeer = useCallback((userId: string) => {
+    setPeersConnecting((prev) => {
+      const next = new Set(prev);
+      next.delete(userId);
+      return next;
+    });
+  }, []);
+
+  const removeGroupPeer = useCallback(
+    (userId: string) => {
+      const peer = peersRef.current.get(userId);
+      if (peer) {
+        try {
+          peer.ontrack = null;
+          peer.onicecandidate = null;
+          peer.onconnectionstatechange = null;
+          peer.close();
+        } catch {}
+        peersRef.current.delete(userId);
+      }
+
+      pendingGroupCandidatesRef.current.delete(userId);
+      removeConnectingPeer(userId);
+      setRemoteStreams((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    },
+    [removeConnectingPeer],
+  );
+
+  const resetGroupPeers = useCallback(() => {
+    peersRef.current.forEach((peer, userId) => {
+      try {
+        peer.ontrack = null;
+        peer.onicecandidate = null;
+        peer.onconnectionstatechange = null;
+        peer.close();
+      } catch {}
+      pendingGroupCandidatesRef.current.delete(userId);
+    });
+    peersRef.current.clear();
+    processingGroupOffersRef.current.clear();
+    pendingGroupCandidatesRef.current.clear();
+    setRemoteStreams({});
+    setPeersConnecting(new Set());
+  }, []);
+
   const leaveCall = useCallback(
     (reason: CallStatus = CallStatus.ENDED, isRemote: boolean = false) => {
       let finalStatus = reason;
       const currentState = sessionStateRef.current;
 
-      if (currentState !== 'CONNECTED' && currentState !== 'IN_GROUP_CALL') {
-        if (currentState === 'CALLING') finalStatus = CallStatus.MISSED;
-        else if (currentState === 'RINGING') finalStatus = CallStatus.REJECTED;
+      if (currentState !== "CONNECTED" && currentState !== "IN_GROUP_CALL") {
+        if (currentState === "CALLING") finalStatus = CallStatus.MISSED;
+        else if (currentState === "RINGING")
+          finalStatus = CallStatus.REJECTED;
       }
 
-      // Cleanup Socket
       if (videoCallData.sessionId) {
         if (!isRemote) {
           socket?.emit("call:group:leave", {
             sessionId: videoCallData.sessionId,
-            conversationId: videoCallData.conversationId
+            conversationId: videoCallData.conversationId,
           });
         }
       } else if (videoCallData.from) {
@@ -142,7 +211,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
             socket?.emit("call:reject", {
               to: videoCallData.from,
               conversationId: videoCallData.conversationId,
-              reason: "Người nghe từ chối cuộc gọi",
+              reason: "NgÆ°á»i nghe tá»« chá»‘i cuá»™c gá»i",
               messageId: videoCallData.messageId,
             });
           } else {
@@ -157,90 +226,96 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       stopMediaStream();
-      
-      // Cleanup Peers
+
       if (peerRef.current) {
         peerRef.current.destroy();
         peerRef.current = null;
       }
-      peersRef.current.forEach((p) => p.destroy());
-      peersRef.current.clear();
-      
-      setRemoteStreams({});
-      setPeersConnecting(new Set());
+
+      resetGroupPeers();
       setPendingSignals([]);
-      updateCallState('ENDED');
-      
+      updateCallState("ENDED");
+
       setTimeout(() => {
-        if (sessionStateRef.current === 'ENDED') {
-          updateCallState('IDLE');
-          setCallMode('NONE');
+        if (sessionStateRef.current === "ENDED") {
+          updateCallState("IDLE");
+          setCallMode("NONE");
           setVideoCallData({ isReceiving: false, from: "" });
         }
       }, 2000);
     },
-    [socket, videoCallData, stopMediaStream, updateCallState],
+    [socket, videoCallData, stopMediaStream, updateCallState, resetGroupPeers],
   );
 
-  // --- Group Mesh Logic ---
-  const createPeer = useCallback((targetUserId: string, initiator: boolean, sessionId: string) => {
-    if (!streamRef.current) return null;
+  const createGroupPeer = useCallback(
+    async (targetUserId: string, initiator: boolean, sessionId: string) => {
+      if (!streamRef.current) return null;
 
-    setPeersConnecting(prev => new Set(prev).add(targetUserId));
+      removeGroupPeer(targetUserId);
+      setPeersConnecting((prev) => new Set(prev).add(targetUserId));
 
-    const peer = new Peer({
-      initiator,
-      trickle: false,
-      stream: streamRef.current,
-      config: ICE_SERVERS,
-    });
-
-    peer.on("signal", (signal: any) => {
-      socket?.emit("call:group:signal", {
-        toUserId: targetUserId,
-        signalData: signal,
-        sessionId
+      const peer = new RTCPeerConnection(ICE_SERVERS);
+      streamRef.current.getTracks().forEach((track) => {
+        peer.addTrack(track, streamRef.current as MediaStream);
       });
-    });
 
-    peer.on("stream", (remStream: any) => {
-      // ✅ Guard: don't re-enter IN_GROUP_CALL if we've already ended
-      const state = sessionStateRef.current;
-      if (state === 'IDLE' || state === 'ENDED') return;
-      setRemoteStreams(prev => ({ ...prev, [targetUserId]: remStream }));
-      setPeersConnecting(prev => {
-        const next = new Set(prev);
-        next.delete(targetUserId);
-        return next;
-      });
-      if (state !== 'IN_GROUP_CALL') {
-        updateCallState('IN_GROUP_CALL');
+      peer.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket?.emit("call:group:signal", {
+            toUserId: targetUserId,
+            signalData: { type: "candidate", candidate: event.candidate },
+            sessionId,
+          });
+        }
+      };
+
+      peer.ontrack = (event) => {
+        const state = sessionStateRef.current;
+        if (state === "IDLE" || state === "ENDED") return;
+        if (event.streams && event.streams[0]) {
+          setRemoteStreams((prev) => ({
+            ...prev,
+            [targetUserId]: event.streams[0],
+          }));
+        }
+        removeConnectingPeer(targetUserId);
+        if (state !== "IN_GROUP_CALL") {
+          updateCallState("IN_GROUP_CALL");
+        }
+      };
+
+      peer.onconnectionstatechange = () => {
+        if (["failed", "disconnected", "closed"].includes(peer.connectionState)) {
+          removeGroupPeer(targetUserId);
+        }
+      };
+
+      peersRef.current.set(targetUserId, peer);
+
+      if (initiator) {
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        socket?.emit("call:group:signal", {
+          toUserId: targetUserId,
+          signalData: peer.localDescription,
+          sessionId,
+        });
       }
-    });
 
-    peer.on("close", () => {
-      setRemoteStreams(prev => {
-        const next = { ...prev };
-        delete next[targetUserId];
-        return next;
-      });
-      peersRef.current.delete(targetUserId);
-    });
+      return peer;
+    },
+    [socket, updateCallState, removeGroupPeer, removeConnectingPeer],
+  );
 
-    peersRef.current.set(targetUserId, peer);
-    return peer;
-  }, [socket, updateCallState]);
-
-  // --- Socket Integration ---
   useEffect(() => {
     if (!socket) return;
 
-    // 1-1 Signaling
     const handleIncomingSignal = (data: any) => {
-      const currentState = sessionStateRef.current;
-
-      // MUTUAL EXCLUSION (Busy logic)
-      if (sessionStateRef.current !== 'IDLE' && sessionStateRef.current !== 'ENDED' && data.signal?.type === 'offer') {
+      if (
+        sessionStateRef.current !== "IDLE" &&
+        sessionStateRef.current !== "ENDED" &&
+        data.signal?.type === "offer"
+      ) {
         socket.emit("call:respond_status", {
           to: data.from,
           status: CallStatus.BUSY,
@@ -250,11 +325,11 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (data.signal?.type === "offer") {
-        setCallMode('DIRECT');
+        setCallMode("DIRECT");
         setVideoCallData({ ...data, isReceiving: true });
-        updateCallState('RINGING');
+        updateCallState("RINGING");
         ringtoneRef.current?.play().catch(() => {});
-        
+
         if (data.messageId) {
           messageService.updateCallStatus({
             messageId: data.messageId,
@@ -265,7 +340,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (data.signal?.type === "answer") {
-        updateCallState('CONNECTED');
+        updateCallState("CONNECTED");
         dialingRef.current?.pause();
       }
 
@@ -282,37 +357,114 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     };
 
-    // Group Signaling
-    const handleGroupSignal = (data: { fromUserId: string, signalData: any, sessionId: string }) => {
-      // ✅ Strict guard: ignore stale signals after call ends
+    const handleGroupSignal = async (data: {
+      fromUserId: string;
+      signalData: any;
+      sessionId: string;
+    }) => {
       const currentState = sessionStateRef.current;
-      if (currentState === 'IDLE' || currentState === 'ENDED') return;
-      if (currentState !== 'IN_GROUP_CALL' && currentState !== 'CALLING') return;
+      if (currentState === "IDLE" || currentState === "ENDED") return;
+      if (currentState !== "IN_GROUP_CALL" && currentState !== "CALLING") return;
 
-      let peer = peersRef.current.get(data.fromUserId);
-      if (data.signalData.type === 'offer' && !peer) {
-        peer = createPeer(data.fromUserId, false, data.sessionId);
+      let peer = peersRef.current.get(data.fromUserId) || null;
+      if (peer && peer.signalingState === "closed") {
+        peersRef.current.delete(data.fromUserId);
+        peer = null;
       }
-      if (peer && !peer.destroyed) {
+
+      if (data.signalData?.type === "candidate") {
+        if (!peer || !peer.remoteDescription) {
+          const queued =
+            pendingGroupCandidatesRef.current.get(data.fromUserId) || [];
+          queued.push(data.signalData.candidate);
+          pendingGroupCandidatesRef.current.set(data.fromUserId, queued);
+          return;
+        }
+
         try {
-          peer.signal(data.signalData);
+          await peer.addIceCandidate(
+            new RTCIceCandidate(data.signalData.candidate),
+          );
         } catch (e) {
-          console.warn("Signal error:", e);
+          console.warn("Group candidate error:", e);
+        }
+        return;
+      }
+
+      if (data.signalData?.type === "offer") {
+        if (processingGroupOffersRef.current.has(data.fromUserId)) return;
+        processingGroupOffersRef.current.add(data.fromUserId);
+
+        try {
+          if (!peer) {
+            peer = await createGroupPeer(data.fromUserId, false, data.sessionId);
+          }
+          if (!peer || peer.signalingState === "closed") return;
+
+          if (peer.remoteDescription) return;
+
+          if (
+            peer.signalingState !== "stable" &&
+            peer.signalingState !== "have-remote-offer"
+          ) {
+            removeGroupPeer(data.fromUserId);
+            peer = await createGroupPeer(data.fromUserId, false, data.sessionId);
+          }
+
+          if (!peer || peer.signalingState === "closed") return;
+
+          await peer.setRemoteDescription(
+            new RTCSessionDescription(data.signalData),
+          );
+          if (peer.signalingState !== "have-remote-offer") return;
+
+          const pendingCandidates =
+            pendingGroupCandidatesRef.current.get(data.fromUserId) || [];
+          for (const candidate of pendingCandidates) {
+            try {
+              await peer.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch {}
+          }
+          pendingGroupCandidatesRef.current.delete(data.fromUserId);
+
+          const answer = await peer.createAnswer();
+          await peer.setLocalDescription(answer);
+          socket?.emit("call:group:signal", {
+            toUserId: data.fromUserId,
+            signalData: peer.localDescription,
+            sessionId: data.sessionId,
+          });
+        } catch (e) {
+          console.warn("Group offer handling error:", e);
+        } finally {
+          processingGroupOffersRef.current.delete(data.fromUserId);
+        }
+        return;
+      }
+
+      if (data.signalData?.type === "answer") {
+        if (!peer) return;
+        try {
+          await peer.setRemoteDescription(
+            new RTCSessionDescription(data.signalData),
+          );
+
+          const pendingCandidates =
+            pendingGroupCandidatesRef.current.get(data.fromUserId) || [];
+          for (const candidate of pendingCandidates) {
+            try {
+              await peer.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch {}
+          }
+          pendingGroupCandidatesRef.current.delete(data.fromUserId);
+        } catch (e) {
+          console.warn("Group answer handling error:", e);
         }
       }
     };
 
     const handleGroupLeave = (data: { userId: string }) => {
-      const peer = peersRef.current.get(data.userId);
-      if (peer) {
-        if (!peer.destroyed) peer.destroy();
-        peersRef.current.delete(data.userId);
-      }
-      setRemoteStreams(prev => {
-        const next = { ...prev };
-        delete next[data.userId];
-        return next;
-      });
+      removeGroupPeer(data.userId);
     };
 
     socket.on("call:signal", handleIncomingSignal);
@@ -328,9 +480,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
       socket.off("call:group:signal");
       socket.off("call:group:leave");
     };
-  }, [socket, createPeer, leaveCall, updateCallState]);
-
-  // --- API Triggers ---
+  }, [socket, createGroupPeer, leaveCall, updateCallState, removeGroupPeer]);
 
   const startDirectCall = async (
     targetId: string,
@@ -339,8 +489,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
     targetName?: string,
     targetAvatar?: string,
   ) => {
-    setCallMode('DIRECT');
-    updateCallState('CALLING');
+    setCallMode("DIRECT");
+    updateCallState("CALLING");
     dialingRef.current?.play().catch(() => {});
 
     try {
@@ -369,7 +519,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
       streamRef.current = currentStream;
       if (myVideoRef.current) myVideoRef.current.srcObject = currentStream;
 
-      const p = new Peer({ initiator: true, trickle: false, stream: currentStream, config: ICE_SERVERS });
+      const p = new Peer({
+        initiator: true,
+        trickle: true,
+        stream: currentStream,
+        config: ICE_SERVERS,
+      });
       p.on("signal", (sig: any) => {
         socket?.emit("call:signal", {
           to: targetId,
@@ -377,13 +532,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
           conversationId: convId,
           callType: type,
           fromName: currentUser?.profile?.name || currentUser?.name,
-          fromAvatar: currentUser?.profile?.avatarUrl || currentUser?.avatarUrl,
+          fromAvatar:
+            currentUser?.profile?.avatarUrl || currentUser?.avatarUrl,
           messageId: msgId,
         });
       });
       p.on("stream", (remStream: any) => {
         setRemoteStream(remStream);
-        updateCallState('CONNECTED');
+        updateCallState("CONNECTED");
         dialingRef.current?.pause();
       });
       peerRef.current = p;
@@ -393,14 +549,16 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const answerDirectCall = async () => {
-    updateCallState('CONNECTED');
+    updateCallState("CONNECTED");
     ringtoneRef.current?.pause();
     if (videoCallData.messageId) {
-      messageService.updateCallStatus({
-        messageId: videoCallData.messageId,
-        conversationId: videoCallData.conversationId!,
-        status: CallStatus.ACCEPTED,
-      }).catch(() => {});
+      messageService
+        .updateCallStatus({
+          messageId: videoCallData.messageId,
+          conversationId: videoCallData.conversationId!,
+          status: CallStatus.ACCEPTED,
+        })
+        .catch(() => {});
     }
 
     try {
@@ -412,12 +570,22 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
       streamRef.current = currentStream;
       if (myVideoRef.current) myVideoRef.current.srcObject = currentStream;
 
-      const p = new Peer({ initiator: false, trickle: false, stream: currentStream, config: ICE_SERVERS });
+      const p = new Peer({
+        initiator: false,
+        trickle: true,
+        stream: currentStream,
+        config: ICE_SERVERS,
+      });
       p.on("signal", (sig: any) => {
-        socket?.emit("call:signal", { to: videoCallData.from, signal: sig, conversationId: videoCallData.conversationId, callType: videoCallData.callType });
+        socket?.emit("call:signal", {
+          to: videoCallData.from,
+          signal: sig,
+          conversationId: videoCallData.conversationId,
+          callType: videoCallData.callType,
+        });
       });
       p.on("stream", (remStream: any) => setRemoteStream(remStream));
-      pendingSignals.forEach(sig => p.signal(sig));
+      pendingSignals.forEach((sig) => p.signal(sig));
       setPendingSignals([]);
       peerRef.current = p;
     } catch (err) {
@@ -426,38 +594,69 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const startGroupCall = async (conversationId: string, type: CallType) => {
-    setCallMode('GROUP');
+    setCallMode("GROUP");
     try {
-      const currentStream = await navigator.mediaDevices.getUserMedia({ video: type === CallType.VIDEO, audio: true });
+      resetGroupPeers();
+
+      const currentStream = await navigator.mediaDevices.getUserMedia({
+        video: type === CallType.VIDEO,
+        audio: true,
+      });
       setStream(currentStream);
       streamRef.current = currentStream;
       if (myVideoRef.current) myVideoRef.current.srcObject = currentStream;
 
-      const res = await messageService.initiateGroupCall({ conversationId, senderId: currentUser?.userId || (currentUser as any)?._id, type });
+      const res = await messageService.initiateGroupCall({
+        conversationId,
+        senderId: currentUser?.userId || (currentUser as any)?._id,
+        type,
+      });
       const sessionId = res.data?.session?._id || res.session?._id;
-      setVideoCallData({ sessionId, conversationId, callType: type, isReceiving: false, from: "" });
-      updateCallState('IN_GROUP_CALL');
-      // ✅ Don't emit call:group:join here — initiator is already added in initiateGroupCall
-      // Just notify others that we are in the call room
+      setVideoCallData({
+        sessionId,
+        conversationId,
+        callType: type,
+        isReceiving: false,
+        from: "",
+      });
+      updateCallState("IN_GROUP_CALL");
       socket?.emit("call:group:join", { sessionId, conversationId });
     } catch (err) {
       leaveCall();
     }
   };
 
-  const joinGroupCall = async (sessionId: string, conversationId: string, type: CallType) => {
-    setCallMode('GROUP');
-    updateCallState('IN_GROUP_CALL');
+  const joinGroupCall = async (
+    sessionId: string,
+    conversationId: string,
+    type: CallType,
+  ) => {
+    setCallMode("GROUP");
+    updateCallState("IN_GROUP_CALL");
     try {
-      const currentStream = await navigator.mediaDevices.getUserMedia({ video: type === CallType.VIDEO, audio: true });
+      resetGroupPeers();
+
+      const currentStream = await navigator.mediaDevices.getUserMedia({
+        video: type === CallType.VIDEO,
+        audio: true,
+      });
       setStream(currentStream);
       streamRef.current = currentStream;
       if (myVideoRef.current) myVideoRef.current.srcObject = currentStream;
 
-      setVideoCallData({ sessionId, conversationId, callType: type, isReceiving: false, from: "" });
+      setVideoCallData({
+        sessionId,
+        conversationId,
+        callType: type,
+        isReceiving: false,
+        from: "",
+      });
+
       const response = await messageService.joinGroupCall(sessionId);
       const existingParticipants = response.data || response;
-      existingParticipants.forEach((pId: string) => createPeer(pId, true, sessionId));
+      for (const pId of existingParticipants) {
+        await createGroupPeer(pId, true, sessionId);
+      }
       socket?.emit("call:group:join", { sessionId, conversationId });
     } catch (err) {
       leaveCall();

@@ -44,6 +44,17 @@ import type {
   ConversationCategory,
   ConversationItemType,
 } from "@/types/conversation-item.type";
+import ConversationPinDialog from "./ConversationPinDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Props = {
   conversation: ConversationItemType;
@@ -116,6 +127,9 @@ const ConversationListItem = ({
   const user = useAppSelector((state) => state.auth.user);
   const { socket, markAsRead, markAsUnread } = useSocket();
   const [hoverMenu, setHoverMenu] = useState<string | null>(null);
+  const [hidePinOpen, setHidePinOpen] = useState(false);
+  const [hidePinLoading, setHidePinLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isLastMessageExpired, setIsLastMessageExpired] = useState(() =>
     getIsExpired(
       conversation.lastMessage?.expired,
@@ -312,6 +326,24 @@ const ConversationListItem = ({
     let icon: React.ReactNode = null;
     let text = "";
 
+    if (content.storyLink?.storyId) {
+      return {
+        showSender: true,
+        content: (
+          <span className="flex items-center gap-1 truncate">
+            <span className="rounded-full bg-sky-100 px-1.5 py-[1px] text-[10px] font-semibold text-sky-700">
+              Story
+            </span>
+            <span className="truncate">
+              {content.text
+                ? `Trả lời story: ${content.text}`
+                : `Trả lời story: ${content.storyLink.previewText || "Xem lại story"}`}
+            </span>
+          </span>
+        ),
+      };
+    }
+
     if (content.text && /https?:\/\//.test(content.text)) {
       icon = <HiMiniLink />;
       text = content.text;
@@ -390,7 +422,12 @@ const ConversationListItem = ({
     e.preventDefault();
     e.stopPropagation();
     setOpenMenu(null);
+    setHidePinOpen(true);
+  };
+
+  const submitHideConversationPin = async (pin: string) => {
     const newHidden = !conversation.hidden;
+    setHidePinLoading(true);
 
     dispatch(
       updateConversationSetting({
@@ -401,8 +438,9 @@ const ConversationListItem = ({
 
     try {
       newHidden
-        ? await hideConversation(user?.userId, conversation.conversationId)
-        : await unhideConversation(user?.userId, conversation.conversationId);
+        ? await hideConversation(user?.userId, conversation.conversationId, pin)
+        : await unhideConversation(user?.userId, conversation.conversationId, pin);
+      setHidePinOpen(false);
     } catch (error) {
       dispatch(
         updateConversationSetting({
@@ -411,6 +449,8 @@ const ConversationListItem = ({
         }),
       );
       console.error("Hide failed:", error);
+    } finally {
+      setHidePinLoading(false);
     }
   };
 
@@ -484,13 +524,7 @@ const ConversationListItem = ({
     e.preventDefault();
     e.stopPropagation();
     setOpenMenu(null);
-
-    try {
-      await deleteConversation(user?.userId, conversation.conversationId);
-      dispatch(removeConversation(conversation.conversationId));
-    } catch (error) {
-      console.error("Delete failed:", error);
-    }
+    setDeleteDialogOpen(true);
   };
 
   const handleExpire = async (days: number, e?: React.MouseEvent) => {
@@ -525,13 +559,61 @@ const ConversationListItem = ({
     : 0;
 
   return (
-    <div
+    <>
+      <ConversationPinDialog
+        open={hidePinOpen}
+        title={
+          conversation.hidden
+            ? "Nhập mã PIN để gỡ ẩn trò chuyện"
+            : "Nhập mã PIN để ẩn trò chuyện"
+        }
+        description={
+          conversation.hidden
+            ? "Nhập đúng mã PIN 4 số để xác nhận gỡ ẩn cuộc trò chuyện."
+            : "Nếu đây là lần đầu, mã PIN 4 số này sẽ được dùng cho các lần ẩn hoặc gỡ ẩn tiếp theo."
+        }
+        confirmLabel={conversation.hidden ? "Gỡ ẩn" : "Ẩn"}
+        loading={hidePinLoading}
+        onClose={() => {
+          if (hidePinLoading) return;
+          setHidePinOpen(false);
+        }}
+        onSubmit={submitHideConversationPin}
+      />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="max-w-[520px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận</AlertDialogTitle>
+            <AlertDialogDescription className="text-[16px] leading-7 text-[#374151]">
+              Toàn bộ nội dung trò chuyện sẽ bị xóa vĩnh viễn. Bạn có chắc chắn muốn xóa?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Không</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                try {
+                  await deleteConversation(user?.userId, conversation.conversationId);
+                  dispatch(removeConversation(conversation.conversationId));
+                } catch (error) {
+                  console.error("Delete failed:", error);
+                }
+              }}
+            >
+              Xóa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div
       onClick={handleConversationClick}
       className={cn(
         "group mx-2 mt-2 flex cursor-pointer items-center gap-3 rounded-lg px-4 py-3 transition-colors",
         isActive ? "bg-[#e5efff]" : "hover:bg-[#f3f5f6]",
       )}
-    >
+      >
       <AppAvatar
         src={conversation.avatar}
         name={conversation.name}
@@ -808,7 +890,8 @@ const ConversationListItem = ({
           </span>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

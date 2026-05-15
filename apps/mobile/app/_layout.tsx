@@ -8,7 +8,6 @@ import { store, useAppDispatch, useAppSelector } from "@/store/store";
 import { useEffect } from "react";
 import { restoreSession } from "@/store/auth/authThunk";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
-import { SocketProvider } from "@/contexts/SocketContext";
 import Toast from "react-native-toast-message";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -21,11 +20,9 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <GestureHandlerRootView>
             <BottomSheetModalProvider>
-              <SocketProvider>
-                <StatusBar style="dark" />
-                <AppNavigation />
-                <Toast />
-              </SocketProvider>
+              <StatusBar style="dark" />
+              <AppNavigation />
+              <Toast />
             </BottomSheetModalProvider>
           </GestureHandlerRootView>
         </SafeAreaProvider>

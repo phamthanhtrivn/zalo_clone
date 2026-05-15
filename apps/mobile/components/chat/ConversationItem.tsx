@@ -8,6 +8,7 @@ import {
   Animated,
   PanResponder,
   Dimensions,
+  Alert,
 } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
@@ -32,6 +33,7 @@ import {
 } from "@/store/slices/conversationSlice";
 import GroupAvatar from "../ui/GroupAvatar";
 import { useSocket } from "@/contexts/SocketContext";
+import ConversationPinModal from "./ConversationPinModal";
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
 interface Props {
@@ -55,6 +57,9 @@ const ConversationItem: React.FC<Props> = React.memo(({
   const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
   const [subMenu, setSubMenu] = useState<SubMenu>(null);
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [pinAction, setPinAction] = useState<"hide" | "unhide" | null>(null);
+  const [pinLoading, setPinLoading] = useState(false);
   const user = useAppSelector((state) => state.auth.user);
   const authUserId = user?.userId || (user as any)?._id || "";
   const dispatch = useAppDispatch();
@@ -339,8 +344,14 @@ const ConversationItem: React.FC<Props> = React.memo(({
   };
 
   const handleHide = () => {
-    const newHidden = !conversation.hidden;
+    setPinAction(conversation.hidden ? "unhide" : "hide");
+    setPinModalVisible(true);
+    closeSheet();
+  };
 
+  const handleHideWithPin = async (pin: string) => {
+    const newHidden = !conversation.hidden;
+    setPinLoading(true);
 
     dispatch(
       updateConversationSetting({
@@ -349,32 +360,46 @@ const ConversationItem: React.FC<Props> = React.memo(({
       }),
     );
 
-    closeSheet(async () => {
-      try {
-        newHidden
-          ? await hideConversation(authUserId, conversation.conversationId)
-          : await unhideConversation(authUserId, conversation.conversationId);
-      } catch (err) {
-
-        dispatch(
-          updateConversationSetting({
-            conversationId: conversation.conversationId,
-            hidden: !newHidden,
-          }),
-        );
-        console.error(err);
-      }
-    });
+    try {
+      newHidden
+        ? await hideConversation(authUserId, conversation.conversationId, pin)
+        : await unhideConversation(authUserId, conversation.conversationId, pin);
+      setPinModalVisible(false);
+      setPinAction(null);
+    } catch (err: any) {
+      dispatch(
+        updateConversationSetting({
+          conversationId: conversation.conversationId,
+          hidden: !newHidden,
+        }),
+      );
+      Alert.alert("Lỗi", err?.response?.data?.message || "Không thể cập nhật ẩn cuộc trò chuyện");
+    } finally {
+      setPinLoading(false);
+    }
   };
 
   const handleDelete = () => {
-    closeSheet(async () => {
-      try {
-        await deleteConversation(authUserId, conversation.conversationId);
-        dispatch(removeConversation(conversation.conversationId));
-      } catch (err) {
-        console.error(err);
-      }
+    closeSheet(() => {
+      Alert.alert(
+        "Xác nhận",
+        "Toàn bộ nội dung trò chuyện sẽ bị xóa vĩnh viễn. Bạn có chắc chắn muốn xóa?",
+        [
+          { text: "Không", style: "cancel" },
+          {
+            text: "Xóa",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                await deleteConversation(authUserId, conversation.conversationId);
+                dispatch(removeConversation(conversation.conversationId));
+              } catch (err) {
+                console.error(err);
+              }
+            },
+          },
+        ],
+      );
     });
   };
 
@@ -416,6 +441,27 @@ const ConversationItem: React.FC<Props> = React.memo(({
   };
   return (
     <>
+      <ConversationPinModal
+        visible={pinModalVisible}
+        title={
+          pinAction === "unhide"
+            ? "Nhập mã PIN để gỡ ẩn trò chuyện"
+            : "Nhập mã PIN để ẩn trò chuyện"
+        }
+        description={
+          pinAction === "hide"
+            ? "Nếu đây là lần đầu, mã PIN 4 số này sẽ được dùng cho các lần ẩn hoặc gỡ ẩn tiếp theo."
+            : "Nhập đúng mã PIN 4 số để xác nhận gỡ ẩn cuộc trò chuyện."
+        }
+        confirmLabel={pinAction === "unhide" ? "Gỡ ẩn" : "Ẩn"}
+        loading={pinLoading}
+        onClose={() => {
+          if (pinLoading) return;
+          setPinModalVisible(false);
+          setPinAction(null);
+        }}
+        onSubmit={handleHideWithPin}
+      />
       <TouchableOpacity
         onPress={() => {
           if (isSelectMode) {

@@ -27,11 +27,12 @@ export const unpinConversation = async (userId: string, conversationId: string) 
     }
 };
 // Ẩn cuộc hội thoại
-export const hideConversation = async (userId: string, conversationId: string) => {
+export const hideConversation = async (userId: string, conversationId: string, pin?: string) => {
     try {
         const response = await api.patch('/conversation-settings/hide', {
             userId,
             conversationId,
+            pin,
         });
         return response.data;
     } catch (error) {
@@ -40,11 +41,12 @@ export const hideConversation = async (userId: string, conversationId: string) =
     }
 };
 // Bỏ ẩn cuộc hội thoại
-export const unhideConversation = async (userId: string, conversationId: string) => {
+export const unhideConversation = async (userId: string, conversationId: string, pin?: string) => {
     try {
         const response = await api.patch('/conversation-settings/unhide', {
             userId,
             conversationId,
+            pin,
         });
         return response.data;
     } catch (error) {
@@ -114,6 +116,19 @@ export const deleteConversation = async (userId: string, conversationId: string)
         throw error;
     }
 
+};
+
+export const clearConversation = async (userId: string, conversationId: string) => {
+    try {
+        const response = await api.patch('/conversation-settings/clear', {
+            userId,
+            conversationId,
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error clearing conversation:', error);
+        throw error;
+    }
 };
 // tin nhắn tự xóa
 

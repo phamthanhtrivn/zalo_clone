@@ -34,6 +34,22 @@ export class Content {
 
   @Prop({ type: Number, default: null })
   voiceDuration?: number | null;
+
+  @Prop({
+    type: {
+      storyId: { type: String },
+      authorId: { type: String },
+      previewText: { type: String },
+      previewImage: { type: String },
+    },
+    default: null,
+  })
+  storyLink?: {
+    storyId?: string;
+    authorId?: string;
+    previewText?: string;
+    previewImage?: string;
+  } | null;
 }
 
 @Schema({ _id: false })

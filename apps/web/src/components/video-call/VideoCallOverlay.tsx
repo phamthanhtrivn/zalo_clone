@@ -29,7 +29,34 @@ function CallTimer({ isOpen }: { isOpen: boolean }) {
 const VideoRenderer = ({ stream, isLocal }: { stream: MediaStream | undefined, isLocal?: boolean }) => {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
-    if (ref.current && stream) ref.current.srcObject = stream;
+    const video = ref.current;
+    if (!video) return;
+
+    if (!stream) {
+      video.srcObject = null;
+      return;
+    }
+
+    video.srcObject = stream;
+    const ensurePlayback = async () => {
+      try {
+        await video.play();
+      } catch (error) {
+        console.warn("[VideoRenderer] Unable to autoplay stream:", error);
+      }
+    };
+
+    if (video.readyState >= 1) {
+      void ensurePlayback();
+    } else {
+      video.onloadedmetadata = () => {
+        void ensurePlayback();
+      };
+    }
+
+    return () => {
+      video.onloadedmetadata = null;
+    };
   }, [stream]);
   if (!stream) return <div className="bg-slate-800 w-full h-full flex items-center justify-center"><VideoOff size={48} className="text-white/20" /></div>;
   return <video ref={ref} autoPlay playsInline muted={isLocal} className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''}`} />;
@@ -132,8 +159,14 @@ export default function VideoCallOverlay() {
   };
 
   const getName = (id: string) => {
-    const member = members.find((m: any) => m.userId === id);
-    return member?.name || `User_${id.substring(id.length - 4)}`;
+    if (!id) return "Người dùng";
+    const mid = String(id);
+    const member = members.find((m: any) => 
+      String(m.userId) === mid || 
+      String(m._id) === mid || 
+      String(m.user?._id) === mid
+    );
+    return member?.profile?.name || member?.name || member?.user?.profile?.name || `User_${mid.substring(mid.length - 4)}`;
   };
 
   if (!isOpen || callMode === 'NONE') return null;

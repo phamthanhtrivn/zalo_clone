@@ -28,6 +28,8 @@ interface Props {
     fontColor?: string;
     selectedMusic?: Music | null;
     onRemoveMusic?: () => void;
+    minHeight?: number;
+    textMode?: boolean;
 }
 
 export default function PostBody({
@@ -42,25 +44,27 @@ export default function PostBody({
     fontColor,
     selectedMusic,
     onRemoveMusic,
+    minHeight = 320,
+    textMode = false,
 }: Props) {
     return (
         <>
-            {/* Text input với font style và màu chữ */}
             <TextInput
                 value={text}
                 onChangeText={onChangeText}
-                placeholder="Bạn đang nghĩ gì?"
-                placeholderTextColor="#bbb"
+                placeholder="Bạn dang nghĩ gì?"
+                placeholderTextColor={fontColor ? `${fontColor}99` : "#9ca3af"}
                 multiline
                 style={{
-                    fontSize: 17,
-                    color: fontColor || "#111", // ✅ Áp dụng màu chữ
-                    fontWeight: fontStyle?.fontWeight || "normal", // ✅ Áp dụng kiểu chữ
-                    fontStyle: fontStyle?.fontStyle || "normal", // ✅ Áp dụng in nghiêng
+                    fontSize: textMode ? 22 : 18,
+                    lineHeight: textMode ? 30 : 26,
+                    color: fontColor || "#111",
+                    fontWeight: fontStyle?.fontWeight || "normal",
+                    fontStyle: fontStyle?.fontStyle || "normal",
                     paddingHorizontal: 16,
-                    paddingTop: 14,
+                    paddingTop: 18,
                     paddingBottom: 10,
-                    minHeight: 120,
+                    minHeight,
                     textAlignVertical: "top",
                 }}
             />
@@ -126,13 +130,13 @@ export default function PostBody({
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 12, gap: 8 }}
+                    contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 14, gap: 8 }}
                 >
                     {selectedImages.map((uri, i) => (
                         <View key={i} style={{ position: "relative" }}>
                             <Image
                                 source={{ uri }}
-                                style={{ width: 100, height: 100, borderRadius: 8 }}
+                                style={{ width: 132, height: 132, borderRadius: 14 }}
                             />
                             <Pressable
                                 onPress={() => onRemoveImage(i)}
@@ -156,7 +160,7 @@ export default function PostBody({
                     flexDirection: "row",
                     alignItems: "center",
                     marginHorizontal: 16,
-                    marginBottom: 8,
+                    marginBottom: 10,
                     gap: 8,
                 }}>
                     {fontStyle && (

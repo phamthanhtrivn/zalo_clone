@@ -11,12 +11,19 @@ export interface MessagesType {
     };
   };
   conversationId: string;
-  type: "USER_MESSAGE" | "SYSTEM" | "POLL";
+  type: "USER_MESSAGE" | "SYSTEM" | "POLL" | "GROUP_CALL" | "AI_SUMMARY";
+  callSessionId?: string | null;
   content: {
     text: string | null;
     icon: string | null;
     files: File[];
     voiceDuration?: number | null;
+    storyLink?: {
+      storyId?: string;
+      authorId?: string;
+      previewText?: string;
+      previewImage?: string;
+    } | null;
   };
   pollId?: string;
   poll?: any;

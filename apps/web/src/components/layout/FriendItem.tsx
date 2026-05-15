@@ -1,5 +1,4 @@
 import { MoreHorizontal } from "lucide-react";
-import CategoryFilterButton from "./CategoryFilterButton";
 import AppAvatar from "../common/AppAvatar";
 import { useState } from "react";
 import { userService } from "@/services/user.service";

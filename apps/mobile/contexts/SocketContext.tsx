@@ -10,6 +10,7 @@ import { Alert, ToastAndroid } from "react-native";
 import { io, Socket } from "socket.io-client";
 import * as SecureStore from "expo-secure-store";
 import { useRouter } from "expo-router";
+import Toast from "react-native-toast-message";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { config } from "@/constants/config";
 import {
@@ -367,6 +368,21 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         setFriendRefreshKey((value) => value + 1);
       };
 
+      const handleSocialNotification = (data: {
+        title?: string;
+        body?: string;
+        actorName?: string;
+      }) => {
+        Toast.show({
+          type: "info",
+          text1: data.title || "Thong bao moi",
+          text2:
+            data.body ||
+            (data.actorName ? `${data.actorName} vua tuong tac voi ban` : ""),
+          visibilityTime: 2800,
+        });
+      };
+
       const handleFriendAccepted = (data: {
         friendId: string;
         name: string;
@@ -430,6 +446,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.on("friend_accepted", handleFriendAccepted);
       socketInstance.on("cancel_friend_request", handleCancelFriendRequest);
       socketInstance.on("update_profile", handleUpdateProfile);
+      socketInstance.on("social:notification", handleSocialNotification);
 
       const handleUpdatePoll = (data: any) => {
         if (data.conversationId) {
@@ -471,6 +488,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         socketInstance.off("friend_accepted", handleFriendAccepted);
         socketInstance.off("cancel_friend_request", handleCancelFriendRequest);
         socketInstance.off("update_profile", handleUpdateProfile);
+        socketInstance.off("social:notification", handleSocialNotification);
         socketInstance.off("update_poll", handleUpdatePoll);
 
         socketInstance.off("member_removed", handleMemberRemoved);
