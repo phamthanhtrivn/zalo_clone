@@ -5,8 +5,7 @@ on:
     branches: [ "main" ]
     paths:
       - 'apps/backend/**'
-      - 'apps/web/**'
-      - 'docker/**'
+      - 'apps/web/**' 
 
 jobs:
   build-and-push:
@@ -21,7 +20,13 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # Build & Push Web Frontend
+      # 1. Build & Push Backend
+      - name: Build and Push Backend Image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/zola-backend:latest ./apps/backend
+          docker push ${{ secrets.DOCKER_USERNAME }}/zola-backend:latest
+
+      # 2. Build & Push Web
       - name: Build and Push Web Image
         run: |
           docker build \
@@ -29,26 +34,10 @@ jobs:
             -t ${{ secrets.DOCKER_USERNAME }}/zola-web:latest ./apps/web
           docker push ${{ secrets.DOCKER_USERNAME }}/zola-web:latest
 
-      # Build & Push Backend
-      - name: Build and Push Backend Image
-        run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/zola-backend:latest ./apps/backend
-          docker push ${{ secrets.DOCKER_USERNAME }}/zola-backend:latest
-
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Copy docker-compose file to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker/docker-compose.yml"
-          target: "/home/ubuntu/zola-backend/"
-          strip_components: 1
-
       - name: SSH to EC2 and Deploy
         uses: appleboy/ssh-action@master
         with:
@@ -59,4 +48,4 @@ jobs:
             cd ~/zola-backend
             sudo docker-compose pull
             sudo docker-compose up -d
-            sudo docker image prune -f # Dọn dẹp các ảnh cũ để tránh đầy ổ cứng EC2
+            sudo docker image prune -f
