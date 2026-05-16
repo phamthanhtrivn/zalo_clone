@@ -12,37 +12,34 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 import cookieParser from 'cookie-parser';
 
 import * as dns from 'node:dns';
-dns.setServers(['1.1.1.1']);
+
+if (process.env.NODE_ENV !== 'production') {
+  dns.setServers(['1.1.1.1']);
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-
-  app.enableCors({
-    origin: 'http://localhost:5173',
-    credentials: true,
-  });
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port');
   const clientUrl = configService.get<string>('client_url');
 
   app.use(cookieParser());
+
   app.enableCors({
-    origin: clientUrl,
-
+    origin: [
+      clientUrl!,
+      'http://localhost:5173',
+      'http://localhost:3000',
+    ].filter(Boolean),
     credentials: true,
-
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-
-    allowedHeaders: 'Content-Type,Accept,Authorization',
+    allowedHeaders: 'Content-Type,Accept,Authorization,x-device-id',
   });
 
   app.setGlobalPrefix('/api');
   app.enableVersioning({
     type: VersioningType.URI,
-  });
-  app.enableCors({
-    origin: true,
   });
 
   app.useGlobalPipes(

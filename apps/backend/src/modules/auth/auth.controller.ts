@@ -147,11 +147,13 @@ export class AuthController {
   ) {
     const result = await this.authService.signIn(req.user, client);
 
+    const isProduction = process.env.NODE_ENV === 'production';
+
     // Set Cookie cho Web (Mobile sẽ lờ đi cái này)
     res.cookie('refreshToken', result.refreshToken, {
       httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
+      secure: isProduction, // Chỉ bật secure trên production (HTTPS)
+      sameSite: isProduction ? 'none' : 'lax', // 'none' cho cross-site production, 'lax' cho local
       path: '/',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
@@ -167,15 +169,16 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     try {
-      console.log(req.user, req.cookies?.refreshToken);
       const token = (req.cookies?.refreshToken as string) || bodyToken;
 
       const result = await this.authService.signOut(req.user.userId, token);
 
+      const isProduction = process.env.NODE_ENV === 'production';
+
       res.clearCookie('refreshToken', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
         path: '/',
       });
 
@@ -286,14 +289,14 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     try {
-      console.log('do');
-      console.log(body.ticket);
       const rs = await this.authService.exchangeTicket(body.ticket);
+
+      const isProduction = process.env.NODE_ENV === 'production';
 
       res.cookie('refreshToken', rs.refreshToken, {
         httpOnly: true,
-        secure: false,
-        sameSite: 'strict',
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
         path: '/',
         maxAge: 30 * 24 * 60 * 60 * 1000,
       });
