@@ -14,7 +14,6 @@ const ContactPage = () => {
   const queryClient = useQueryClient();
   const [sortOrder, setSortOrder] = useState<string>("a-z");
 
-  // Debounce keyword
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedKeyword(keyword);
@@ -22,15 +21,14 @@ const ContactPage = () => {
     return () => clearTimeout(timer);
   }, [keyword]);
 
-  // Fetch friends with React Query
-  const { data: friendsData, isLoading } = useQuery({
+  const { data: friendsData } = useQuery({
     queryKey: ["friends", debouncedKeyword, userId],
     queryFn: async () => {
       const res = await userService.searchFriend(debouncedKeyword, userId);
       return res?.data?.users || [];
     },
     enabled: !!userId,
-    staleTime: 1000 * 60 * 5, // Cache trong 5 phút
+    staleTime: 1000 * 60 * 5,
   });
 
   const setFriends = (updater: any) => {
@@ -85,10 +83,10 @@ const ContactPage = () => {
           friends: group.friends.map((friend: any) =>
             friend.friendId === data.userId
               ? {
-                ...friend,
-                name: data.name ?? friend.name,
-                avatarUrl: data.avatarUrl ?? friend.avatarUrl,
-              }
+                  ...friend,
+                  name: data.name ?? friend.name,
+                  avatarUrl: data.avatarUrl ?? friend.avatarUrl,
+                }
               : friend,
           ),
         }));
@@ -118,43 +116,39 @@ const ContactPage = () => {
   }, [socket, queryClient, debouncedKeyword, userId]);
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="h-[64px] border-b border-[#e5e7eb] flex items-center px-4 shrink-0">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <header className="flex h-[64px] shrink-0 items-center border-b border-[#e5e7eb] px-4">
         <div className="flex items-center gap-3">
-          <Users className="w-5 h-5 text-gray-600" />
+          <Users className="h-5 w-5 text-gray-600" />
           <h1 className="text-[16px] font-semibold text-gray-800">
             Danh sách bạn bè
           </h1>
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col bg-gray-200 px-5 pt-5">
+      <div className="flex min-h-0 flex-1 flex-col bg-gray-200 px-5 pt-5">
         <div className="mb-4">
           <span className="text-[16px] font-semibold text-gray-800">
             Bạn bè ({countFriends() || 0})
           </span>
         </div>
 
-        <div className="flex-1 bg-white rounded-md p-4 flex flex-col h-[600px]">
-          {/* 1. Phần Search & Sort: Giữ nguyên nhưng bọc trong một div để cố định phía trên */}
-          <div className="flex gap-4 mb-6">
-            {/* SEARCH */}
-            <div className="flex flex-1 items-center bg-white px-3 py-2 rounded-lg border">
+        <div className="flex min-h-0 flex-1 flex-col rounded-md bg-white p-4">
+          <div className="mb-6 flex gap-4">
+            <div className="flex flex-1 items-center rounded-lg border bg-white px-3 py-2">
               <Search size={18} className="text-gray-400" />
               <input
                 onChange={(e) => handelSearch(e.target.value)}
-                className="ml-2 outline-none w-full"
+                className="ml-2 w-full outline-none"
                 placeholder="Tìm bạn"
               />
             </div>
 
-            {/* SORT */}
-            <div className="w-[30%] flex items-center gap-2 bg-white px-4 py-2 border rounded-lg cursor-pointer">
+            <div className="flex w-[30%] items-center gap-2 rounded-lg border bg-white px-4 py-2">
               <ArrowUpDown size={18} />
               <select
                 onChange={(e) => handelSort(e.target.value)}
-                className="flex-1 outline-none border-none focus:ring-0 cursor-pointer"
+                className="flex-1 cursor-pointer border-none outline-none focus:ring-0"
               >
                 <option value="a-z">A-Z</option>
                 <option value="z-a">Z-A</option>
@@ -162,12 +156,11 @@ const ContactPage = () => {
             </div>
           </div>
 
-          {/* 2. Phần Danh sách: Thêm overflow-y-auto và flex-1 để nó chiếm hết phần còn lại */}
-          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pr-2">
             {friends?.length === 0 && friends ? (
-              <div className="h-full flex flex-col items-center justify-center text-center">
-                <Users className="w-20 h-20 mx-auto opacity-20" />
-                <p className="text-2xl text-gray-400 mt-4">
+              <div className="flex h-full flex-col items-center justify-center text-center">
+                <Users className="mx-auto h-20 w-20 opacity-20" />
+                <p className="mt-4 text-2xl text-gray-400">
                   Hiện tại bạn chưa có bạn bè
                 </p>
               </div>

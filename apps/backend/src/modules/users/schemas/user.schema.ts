@@ -71,6 +71,9 @@ export class User {
   @Prop({ type: [Types.ObjectId], ref: 'User', default: [] })
   blockedDiaryViewerIds?: Types.ObjectId[];
 
+  @Prop({ type: [Types.ObjectId], ref: 'User', default: [] })
+  followingVideoCreatorIds?: Types.ObjectId[];
+
   @Prop()
   conversationPinHash?: string;
 }

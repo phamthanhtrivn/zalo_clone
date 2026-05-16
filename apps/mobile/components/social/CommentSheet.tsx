@@ -29,6 +29,8 @@ interface Props {
     visible: boolean;
     onClose: () => void;
     currentUserId: string;
+    onCommentAdded?: () => void;
+    onCommentDeleted?: () => void;
 }
 
 // Thời gian tương đối
@@ -42,7 +44,14 @@ function timeAgo(dateStr: string) {
     return `${Math.floor(hrs / 24)} ngày`;
 }
 
-export default function CommentSheet({ postId, visible, onClose, currentUserId }: Props) {
+export default function CommentSheet({
+    postId,
+    visible,
+    onClose,
+    currentUserId,
+    onCommentAdded,
+    onCommentDeleted,
+}: Props) {
     const dispatch = useAppDispatch();
     const comments: CommentItem[] = useAppSelector(
         (s: any) => s.diary?.commentsByPost?.[postId] ?? EMPTY_COMMENTS
@@ -89,6 +98,7 @@ export default function CommentSheet({ postId, visible, onClose, currentUserId }
                 parentId: replyTo?.id,
             })
         );
+        onCommentAdded?.();
         setSending(false);
         setText("");
         setReplyTo(null);
@@ -102,7 +112,10 @@ export default function CommentSheet({ postId, visible, onClose, currentUserId }
                 {
                     text: "Xoá",
                     style: "destructive",
-                    onPress: () => dispatch(deleteCommentThunk({ postId, commentId })),
+                    onPress: () => {
+                        dispatch(deleteCommentThunk({ postId, commentId }));
+                        onCommentDeleted?.();
+                    },
                 },
             ]);
         },

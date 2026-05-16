@@ -61,6 +61,10 @@ export class Post extends Document {
 
     @Prop({ default: 0 })
     commentCount: number;
+
+    @Prop({ default: 0 })
+    shareCount?: number;
+
     @Prop({ type: Object })
     location?: any;
 
@@ -87,14 +91,14 @@ export class Post extends Document {
 
     @Prop({
         type: {
-            mode: { type: String, enum: ['friends', 'include', 'exclude'], default: 'friends' },
+            mode: { type: String, enum: ['friends', 'include', 'exclude', 'private'], default: 'friends' },
             includeUserIds: [{ type: Types.ObjectId, ref: 'User' }],
             excludeUserIds: [{ type: Types.ObjectId, ref: 'User' }],
         },
         default: null,
     })
     storyPrivacy?: {
-        mode: 'friends' | 'include' | 'exclude';
+        mode: 'friends' | 'include' | 'exclude' | 'private';
         includeUserIds?: Types.ObjectId[];
         excludeUserIds?: Types.ObjectId[];
     } | null;

@@ -24,7 +24,7 @@ export default function PostViewerScreen() {
 
     const loadPost = async () => {
       if (!postId) {
-        Alert.alert("Loi", "Khong tim thay bai dang.");
+        Alert.alert("Lỗi", "Không tìm thấy bài đăng.");
         router.back();
         return;
       }
@@ -37,8 +37,8 @@ export default function PostViewerScreen() {
         }
       } catch (error: any) {
         Alert.alert(
-          "Thong bao",
-          error?.response?.data?.message || "Khong mo duoc bai dang nay.",
+          "Thông báo",
+          error?.response?.data?.message || "Không mở được bài đăng này.",
           [{ text: "OK", onPress: () => router.back() }],
         );
       } finally {
@@ -59,7 +59,7 @@ export default function PostViewerScreen() {
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </Pressable>
         <Text className="text-[18px] font-semibold text-[#111827]">
-          Bai dang
+          Bài đăng
         </Text>
       </View>
 
@@ -76,7 +76,7 @@ export default function PostViewerScreen() {
       ) : (
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-[#6b7280] text-center">
-            Khong tim thay bai dang.
+            Không tìm thấy bài đăng.
           </Text>
         </View>
       )}

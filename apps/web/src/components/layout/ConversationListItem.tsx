@@ -108,6 +108,30 @@ const CATEGORY_VALUES: Exclude<ConversationCategory, null>[] = [
   "colleague",
 ];
 
+const CATEGORY_LABEL_DISPLAY: Record<
+  Exclude<ConversationCategory, null>,
+  string
+> = {
+  customer: "Khách hàng",
+  family: "Gia đình",
+  work: "Công việc",
+  friends: "Bạn bè",
+  later: "Trả lời sau",
+  colleague: "Đồng nghiệp",
+};
+
+const CATEGORY_SHORT_DISPLAY: Record<
+  Exclude<ConversationCategory, null>,
+  string
+> = {
+  customer: "KH",
+  family: "GĐ",
+  work: "CV",
+  friends: "BB",
+  later: "Sau",
+  colleague: "ĐN",
+};
+
 const getIsExpired = (expired?: boolean, expiredAt?: string | null) => {
   if (expired) return true;
   if (!expiredAt) return false;
@@ -259,6 +283,151 @@ const ConversationListItem = ({
 
     return () => window.clearTimeout(timeoutId);
   }, [conversation.lastMessage]);
+
+  const previewDisplay = useMemo(() => {
+    const lastMsg = conversation.lastMessage;
+    const content = lastMsg?.content;
+
+    if (!lastMsg?._id) {
+      return {
+        showSender: false,
+        content: "Chưa có tin nhắn",
+      };
+    }
+
+    if (lastMsg.recalled) {
+      return {
+        showSender: true,
+        content: "Tin nhắn đã được thu hồi",
+      };
+    }
+
+    if (isLastMessageExpired) {
+      return {
+        showSender: true,
+        content: "Tin nhắn đã hết hạn",
+      };
+    }
+
+    if (lastMsg.call?.type) {
+      const isVideo = lastMsg.call.type === "VIDEO";
+      const isMe = lastMsg.senderName === "Bạn";
+      let text = isMe
+        ? `Cuộc gọi ${isVideo ? "video" : "thoại"} đi`
+        : `Cuộc gọi ${isVideo ? "video" : "thoại"} đến`;
+
+      switch (lastMsg.call.status) {
+        case "MISSED":
+          text = "Cuộc gọi nhỡ";
+          break;
+        case "REJECTED":
+          text = isMe ? "Cuộc gọi bị từ chối" : "Cuộc gọi nhỡ";
+          break;
+        case "BUSY":
+          text = "Máy bận";
+          break;
+        case "ENDED":
+        case "ACCEPTED":
+          text = `Cuộc gọi ${isVideo ? "video" : "thoại"}`;
+          break;
+        default:
+          break;
+      }
+
+      return {
+        showSender: false,
+        content: text,
+      };
+    }
+
+    if (!content) {
+      return {
+        showSender: false,
+        content: "Tin nhắn mới",
+      };
+    }
+
+    let icon: React.ReactNode = null;
+    let text = "";
+
+    if ((content as any).storyLink?.storyId) {
+      return {
+        showSender: true,
+        content: (
+          <span className="flex items-center gap-1 truncate">
+            <span className="rounded-full bg-sky-100 px-1.5 py-[1px] text-[10px] font-semibold text-sky-700">
+              Story
+            </span>
+            <span className="truncate">
+              {content.text
+                ? `Trả lời story: ${content.text}`
+                : `Trả lời story: ${(content as any).storyLink.previewText || "Xem lại story"}`}
+            </span>
+          </span>
+        ),
+      };
+    }
+
+    if (content.text && /https?:\/\//.test(content.text)) {
+      icon = <HiMiniLink />;
+      text = content.text;
+    } else if ((content as any).icon) {
+      icon = <LuSticker />;
+      text = "Sticker";
+    } else if (Array.isArray((content as any).files) && (content as any).files.length > 0) {
+      switch ((content as any).files[(content as any).files.length - 1].type) {
+        case "IMAGE":
+          icon = <CiImageOn />;
+          text = "Hình ảnh";
+          break;
+        case "VIDEO":
+          icon = <RiVideoLine />;
+          text = "Video";
+          break;
+        case "FILE":
+          icon = <GoFileSymlinkFile />;
+          text = (content as any).files[0].fileName;
+          break;
+        case "VOICE":
+          icon = <IoMicOutline />;
+          text = "Tin nhắn thoại";
+          break;
+        default:
+          text = "";
+      }
+    } else if (content.text) {
+      text = content.text;
+    }
+
+    if (!text) {
+      text = "Tin nhắn mới";
+    }
+
+    return {
+      showSender: true,
+      content: (
+        <span className="flex items-center gap-1 truncate">
+          {icon}
+          <span className="truncate">{text}</span>
+        </span>
+      ),
+    };
+  }, [conversation.lastMessage, isLastMessageExpired]);
+
+  const previewSenderPrefix = useMemo(() => {
+    if (!previewDisplay.showSender) return "";
+    if (
+      conversation.type === "DIRECT" &&
+      conversation.lastMessage?.senderName !== "Bạn"
+    ) {
+      return "";
+    }
+    return `${conversation.lastMessage?.senderName ?? ""}: `;
+  }, [
+    conversation.lastMessage?.senderName,
+    conversation.type,
+    previewDisplay.showSender,
+  ]);
 
   const previewData = useMemo(() => {
     const lastMsg = conversation.lastMessage;
@@ -721,7 +890,7 @@ const ConversationListItem = ({
                                     CATEGORY_DOT[cat],
                                   )}
                                 />
-                                {CATEGORY_LABEL[cat]}
+                                {CATEGORY_LABEL_DISPLAY[cat]}
                               </div>
                               {conversation.category === cat && (
                                 <IoCheckmark className="h-4 w-4 text-blue-500" />
@@ -864,14 +1033,15 @@ const ConversationListItem = ({
                 CATEGORY_STYLE[conversation.category],
               )}
             >
-              {CATEGORY_SHORT[conversation.category]}
+              {CATEGORY_SHORT_DISPLAY[conversation.category]}
             </span>
           )}
           <span className="flex min-w-0 items-center gap-1 text-[13px] text-gray-500">
-            <span className="shrink-0">
+            <span className="shrink-0">{previewSenderPrefix}</span>
+            <span className="hidden">
               {!previewData.showSender
                 ? ""
-                : conversation.type === "PRIVATE" &&
+                : conversation.type === "DIRECT" &&
                   conversation.lastMessage?.senderName !== "Bạn"
                   ? ""
                   : `${conversation.lastMessage?.senderName ?? ""}: `}
@@ -885,7 +1055,7 @@ const ConversationListItem = ({
                   : "text-gray-500",
               )}
             >
-              {previewData.content}
+              {previewDisplay.content}
             </span>
           </span>
         </div>

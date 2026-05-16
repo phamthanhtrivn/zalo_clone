@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, Pressable, Alert, ScrollView, Modal, TextInput } from "react-native";
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
@@ -11,7 +19,7 @@ import { userService } from "@/services/user.service";
 import { createStory, musicService } from "@/services/social.service";
 
 type StoryMode = "text" | "image" | "video" | "loop";
-type PrivacyMode = "friends" | "include" | "exclude";
+type PrivacyMode = "friends" | "include" | "exclude" | "private";
 type Friend = { id: string; name: string; avatar?: string };
 
 const SAMPLE_THUMBS = [
@@ -100,24 +108,6 @@ export default function CreateStoryScreen() {
     };
   }, [musicKeyword, showMusicSheet]);
 
-  const toggleFriend = (id: string) => {
-    if (friendPickerMode === "include") {
-      setIncludedFriendIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-      });
-      return;
-    }
-    setExcludedFriendIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
   const pickMedia = async (pickMode: "image" | "video") => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -157,7 +147,7 @@ export default function CreateStoryScreen() {
     }
     const perm = await MediaLibrary.requestPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Thiếu quyền", "Vui lòng cấp quyền lưu ảnh vào thư viện.");
+      Alert.alert("Thiếu quyền", "Vui lòng cấp quyền lưu vào thư viện.");
       return;
     }
     try {
@@ -168,17 +158,37 @@ export default function CreateStoryScreen() {
     }
   };
 
+  const toggleFriend = (id: string) => {
+    if (friendPickerMode === "include") {
+      setIncludedFriendIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      return;
+    }
+    setExcludedFriendIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const handlePost = async () => {
     if (!assetUri && activeMode !== "text") {
       Alert.alert("Thiếu nội dung", "Vui lòng chụp/chọn ảnh hoặc video trước khi đăng.");
       return;
     }
+
     try {
       setPosting(true);
       const formData = new FormData();
       formData.append("privacyMode", privacyMode);
       formData.append("includeUserIds", JSON.stringify(Array.from(includedFriendIds)));
       formData.append("excludeUserIds", JSON.stringify(Array.from(excludedFriendIds)));
+
       if (selectedMusic) {
         formData.append(
           "music",
@@ -190,9 +200,11 @@ export default function CreateStoryScreen() {
           }),
         );
       }
+
       if (activeMode === "text") {
         formData.append("text", textStory || "Khoảnh khắc mới");
       }
+
       if (assetUri) {
         const name = assetUri.split("/").pop() || `story-${Date.now()}.jpg`;
         const lower = name.toLowerCase();
@@ -201,12 +213,14 @@ export default function CreateStoryScreen() {
           lower.endsWith(".mp4") ||
           lower.endsWith(".mov") ||
           lower.endsWith(".mkv");
+
         formData.append("files", {
           uri: assetUri,
           name,
           type: isVideo ? "video/mp4" : "image/jpeg",
         } as any);
       }
+
       await createStory(formData);
       Alert.alert("Thành công", "Đăng story thành công.");
       router.back();
@@ -222,9 +236,9 @@ export default function CreateStoryScreen() {
     return (
       <Container className="bg-black">
         <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-white text-center text-[16px] mb-4">Cần quyền camera để tạo story</Text>
-          <Pressable onPress={requestPermission} className="bg-[#0ea5e9] px-5 py-3 rounded-full">
-            <Text className="text-white font-semibold">Cấp quyền Camera</Text>
+          <Text className="mb-4 text-center text-[16px] text-white">Cần quyền camera để tạo story</Text>
+          <Pressable onPress={requestPermission} className="rounded-full bg-[#0ea5e9] px-5 py-3">
+            <Text className="font-semibold text-white">Cấp quyền camera</Text>
           </Pressable>
         </View>
       </Container>
@@ -235,7 +249,11 @@ export default function CreateStoryScreen() {
     <Container className="bg-black">
       <View className="flex-1 bg-black">
         {activeMode === "text" ? (
-          <Image source={{ uri: "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8" }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+          <Image
+            source={{ uri: "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8" }}
+            style={{ width: "100%", height: "100%" }}
+            contentFit="cover"
+          />
         ) : assetUri ? (
           <Image source={{ uri: assetUri }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
         ) : (
@@ -244,59 +262,82 @@ export default function CreateStoryScreen() {
 
         <View className="absolute inset-0 bg-black/10" />
 
-        <View className="absolute top-14 left-5 right-5 flex-row justify-between items-center">
+        <View className="absolute left-5 right-5 top-14 flex-row items-center justify-between">
           <Pressable onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={36} color="white" />
           </Pressable>
-          <View className="w-3 h-3 rounded-full bg-[#22c55e]" />
+          <View className="h-3 w-3 rounded-full bg-[#22c55e]" />
         </View>
 
         <Pressable
           onPress={() => setShowMusicSheet(true)}
-          className="absolute top-24 self-center bg-black/60 rounded-full px-5 py-2.5 flex-row items-center"
+          className="absolute top-24 self-center rounded-full bg-black/60 px-5 py-2.5"
         >
-          <Ionicons name="musical-notes-outline" size={18} color="white" />
-          <Text className="text-white text-[16px] ml-2">
-            {selectedMusic?.title ? selectedMusic.title : "Thêm nhạc"}
-          </Text>
+          <View className="flex-row items-center">
+            <Ionicons name="musical-notes-outline" size={18} color="white" />
+            <Text className="ml-2 text-[16px] text-white">
+              {selectedMusic?.title ? selectedMusic.title : "Thêm nhạc"}
+            </Text>
+          </View>
         </Pressable>
 
-        <View className="absolute top-24 right-4">
-          <Pressable className="w-14 h-14 rounded-full bg-black/45 items-center justify-center mb-3" onPress={() => setShowTools((v) => !v)}>
-            <Text className="text-white text-[28px] font-bold">Aa</Text>
+        <View className="absolute right-4 top-24">
+          <Pressable
+            className="mb-3 h-14 w-14 items-center justify-center rounded-full bg-black/45"
+            onPress={() => setShowTools((v) => !v)}
+          >
+            <Text className="text-[28px] font-bold text-white">Aa</Text>
           </Pressable>
-          {showTools && (
+          {showTools ? (
             <>
               {["Sticker", "Cắt ảnh", "Hiệu ứng", "Hình vẽ", "Vị trí"].map((label) => (
-                <View key={label} className="flex-row items-center justify-end mb-2">
-                  <Text className="text-white text-[20px] mr-3">{label}</Text>
-                  <View className="w-14 h-14 rounded-full bg-black/45 items-center justify-center">
+                <View key={label} className="mb-2 flex-row items-center justify-end">
+                  <Text className="mr-3 text-[20px] text-white">{label}</Text>
+                  <View className="h-14 w-14 items-center justify-center rounded-full bg-black/45">
                     <Ionicons name="ellipse-outline" size={20} color="white" />
                   </View>
                 </View>
               ))}
-              <Pressable className="w-14 h-14 rounded-full bg-black/45 items-center justify-center self-end" onPress={() => setShowTools(false)}>
+              <Pressable
+                className="self-end h-14 w-14 items-center justify-center rounded-full bg-black/45"
+                onPress={() => setShowTools(false)}
+              >
                 <Ionicons name="chevron-up" size={28} color="white" />
               </Pressable>
             </>
-          )}
+          ) : null}
         </View>
 
         {activeMode === "text" ? (
-          <View className="absolute inset-x-0 top-[300px] px-10 items-center">
-            <TextInput placeholder="Bạn đang nghĩ gì?" placeholderTextColor="#d4d4d4" value={textStory} onChangeText={setTextStory} className="text-[32px] text-white text-center w-full" />
+          <View className="absolute inset-x-0 top-[300px] items-center px-10">
+            <TextInput
+              placeholder="Bạn đang nghĩ gì?"
+              placeholderTextColor="#d4d4d4"
+              value={textStory}
+              onChangeText={setTextStory}
+              className="w-full text-center text-[32px] text-white"
+            />
           </View>
         ) : (
           <View className="absolute bottom-44 left-0 right-0">
-            <View className="items-center mb-3">
-              <View className="w-14 h-14 rounded-full bg-black/55 items-center justify-center">
+            <View className="mb-3 items-center">
+              <View className="h-14 w-14 items-center justify-center rounded-full bg-black/55">
                 <Ionicons name="chevron-down" size={28} color="white" />
               </View>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14 }}>
               {SAMPLE_THUMBS.map((uri, idx) => (
                 <Pressable key={`${uri}-${idx}`} onPress={() => setAssetUri(uri)} className="mr-2">
-                  <Image source={{ uri }} style={{ width: 90, height: 90, borderRadius: 10, borderWidth: assetUri === uri ? 2 : 0, borderColor: "#fff" }} />
+                  <Image
+                    source={{ uri }}
+                    style={{
+                      width: 90,
+                      height: 90,
+                      borderRadius: 10,
+                      borderWidth: assetUri === uri ? 2 : 0,
+                      borderColor: "#fff",
+                    }}
+                  />
                 </Pressable>
               ))}
             </ScrollView>
@@ -306,36 +347,39 @@ export default function CreateStoryScreen() {
         <View className="absolute bottom-20 left-0 right-0 px-8">
           <View className="flex-row items-center justify-between">
             <View className="items-center">
-              <Pressable onPress={() => setShowPrivacySheet(true)} className="w-14 h-14 rounded-xl bg-white/75 items-center justify-center">
+              <Pressable onPress={() => setShowPrivacySheet(true)} className="h-14 w-14 items-center justify-center rounded-xl bg-white/75">
                 <Ionicons name="people-outline" size={24} color="#1f2937" />
               </Pressable>
-              <Text className="text-white text-[13px] mt-1">Quyền xem</Text>
+              <Text className="mt-1 text-[13px] text-white">Quyền xem</Text>
             </View>
 
-            <Pressable onPress={activeMode === "text" ? handlePost : capturePhoto} className={`w-28 h-28 rounded-full border-[6px] border-white/90 items-center justify-center ${activeMode === "loop" ? "bg-pink-500/80" : ""}`}>
-              <View className={`w-[84px] h-[84px] rounded-full items-center justify-center ${activeMode === "loop" ? "bg-pink-500" : "bg-white/95"}`}>
+            <Pressable
+              onPress={activeMode === "text" ? handlePost : capturePhoto}
+              className={`h-28 w-28 items-center justify-center rounded-full border-[6px] border-white/90 ${activeMode === "loop" ? "bg-pink-500/80" : ""}`}
+            >
+              <View className={`h-[84px] w-[84px] items-center justify-center rounded-full ${activeMode === "loop" ? "bg-pink-500" : "bg-white/95"}`}>
                 {activeMode === "loop" ? <Ionicons name="infinite" size={42} color="white" /> : null}
               </View>
             </Pressable>
 
             <View className="items-center">
-              <Pressable onPress={() => setFacing((prev) => (prev === "back" ? "front" : "back"))} className="w-14 h-14 rounded-2xl bg-white/80 items-center justify-center">
+              <Pressable onPress={() => setFacing((prev) => (prev === "back" ? "front" : "back"))} className="h-14 w-14 items-center justify-center rounded-2xl bg-white/80">
                 <Ionicons name="camera-reverse-outline" size={28} color="#334155" />
               </Pressable>
-              <Pressable disabled={posting} onPress={handlePost} className="mt-2 bg-[#0f82ff] px-5 py-2 rounded-full">
-                <Text className="text-white font-semibold text-[18px]">{posting ? "Đang đăng..." : "Đăng"}</Text>
+              <Pressable disabled={posting} onPress={handlePost} className="mt-2 rounded-full bg-[#0f82ff] px-5 py-2">
+                <Text className="text-[18px] font-semibold text-white">{posting ? "Đang đăng..." : "Đăng"}</Text>
               </Pressable>
             </View>
           </View>
 
-          <View className="flex-row mt-3 items-center">
+          <View className="mt-3 flex-row items-center">
             <Pressable onPress={saveToDevice} className="mr-5 flex-row items-center">
               <MaterialIcons name="download" size={20} color="white" />
-              <Text className="text-white ml-1">Tải về</Text>
+              <Text className="ml-1 text-white">Tải về</Text>
             </Pressable>
             <Pressable onPress={() => pickMedia("image")} className="flex-row items-center">
               <Ionicons name="images-outline" size={20} color="white" />
-              <Text className="text-white ml-1">Thư viện</Text>
+              <Text className="ml-1 text-white">Thư viện</Text>
             </Pressable>
           </View>
         </View>
@@ -360,123 +404,133 @@ export default function CreateStoryScreen() {
                 }}
                 className="mx-5"
               >
-                <Text className={`text-[16px] ${activeMode === m.key ? "text-white font-semibold" : "text-white/50"}`}>{m.label}</Text>
+                <Text className={`text-[16px] ${activeMode === m.key ? "font-semibold text-white" : "text-white/50"}`}>
+                  {m.label}
+                </Text>
               </Pressable>
             ))}
           </View>
         </View>
 
         <Modal visible={showPrivacySheet} transparent animationType="slide">
-          <View className="flex-1 bg-black/40 justify-end">
-            <View className="bg-white rounded-t-3xl p-5">
-              <View className="w-14 h-1.5 bg-[#d1d5db] rounded-full self-center mb-4" />
-              <Text className="text-[24px] font-semibold mb-4">Ai được xem khoảnh khắc này?</Text>
-              <Pressable onPress={() => setPrivacyMode("friends")} className="py-4 border-b border-[#f3f4f6]">
-                <Text className="text-[20px]">Bạn bè Zalo</Text>
-                <Text className="text-[#6b7280] text-[16px]">Trừ bạn bè đã bị chặn xem</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setPrivacyMode("include");
-                  setFriendPickerMode("include");
-                  setShowFriendPicker(true);
-                }}
-                className="py-4 border-b border-[#f3f4f6] flex-row justify-between items-center"
-              >
-                <View>
-                  <Text className="text-[20px]">Một số bạn bè</Text>
-                  <Text className="text-[#6b7280] text-[16px]">{includedFriendIds.size > 0 ? `Đã chọn ${includedFriendIds.size} bạn` : "Chọn bạn bè được xem"}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="#64748b" />
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setPrivacyMode("exclude");
-                  setFriendPickerMode("exclude");
-                  setShowFriendPicker(true);
-                }}
-                className="py-4 border-b border-[#f3f4f6] flex-row justify-between items-center"
-              >
-                <View>
-                  <Text className="text-[20px]">Bạn bè ngoại trừ...</Text>
-                  <Text className="text-[#6b7280] text-[16px]">{excludedFriendIds.size > 0 ? `Đã loại trừ ${excludedFriendIds.size} bạn` : "Chọn bạn bè không được xem"}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="#64748b" />
-              </Pressable>
-              <Pressable onPress={() => setShowPrivacySheet(false)} className="mt-4 bg-[#0f82ff] py-3 rounded-full items-center">
-                <Text className="text-white text-[18px] font-semibold">Xong</Text>
+          <View className="flex-1 justify-end bg-black/40">
+            <View className="max-h-[82%] rounded-t-3xl bg-white p-5 pb-8">
+              <View className="mb-4 h-1.5 w-14 self-center rounded-full bg-[#d1d5db]" />
+              <Text className="mb-4 text-[24px] font-semibold">Ai được xem khoảnh khắc này?</Text>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Pressable onPress={() => setPrivacyMode("friends")} className="border-b border-[#f3f4f6] py-4">
+                  <Text className="text-[20px]">Bạn bè Zalo</Text>
+                  <Text className="text-[16px] text-[#6b7280]">Trừ bạn bè đã bị chặn xem</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setPrivacyMode("include");
+                    setFriendPickerMode("include");
+                    setShowFriendPicker(true);
+                  }}
+                  className="flex-row items-center justify-between border-b border-[#f3f4f6] py-4"
+                >
+                  <View>
+                    <Text className="text-[20px]">Một số bạn bè</Text>
+                    <Text className="text-[16px] text-[#6b7280]">
+                      {includedFriendIds.size > 0 ? `Đã chọn ${includedFriendIds.size} bạn` : "Chọn bạn bè được xem"}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#64748b" />
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setPrivacyMode("exclude");
+                    setFriendPickerMode("exclude");
+                    setShowFriendPicker(true);
+                  }}
+                  className="flex-row items-center justify-between border-b border-[#f3f4f6] py-4"
+                >
+                  <View>
+                    <Text className="text-[20px]">Bạn bè ngoại trừ...</Text>
+                    <Text className="text-[16px] text-[#6b7280]">
+                      {excludedFriendIds.size > 0 ? `Đã loại trừ ${excludedFriendIds.size} bạn` : "Chọn bạn bè không được xem"}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#64748b" />
+                </Pressable>
+                <Pressable onPress={() => setPrivacyMode("private")} className="border-b border-[#f3f4f6] py-4">
+                  <Text className="text-[20px]">Chỉ mình tôi</Text>
+                  <Text className="text-[16px] text-[#6b7280]">Chỉ bạn mới xem được tin này</Text>
+                </Pressable>
+              </ScrollView>
+              <Pressable onPress={() => setShowPrivacySheet(false)} className="mt-4 items-center rounded-full bg-[#0f82ff] py-3">
+                <Text className="text-[18px] font-semibold text-white">Xong</Text>
               </Pressable>
             </View>
           </View>
         </Modal>
 
         <Modal visible={showFriendPicker} transparent animationType="slide">
-          <View className="flex-1 bg-black/40 justify-end">
-            <View className="bg-white rounded-t-3xl p-4 h-[75%]">
-              <View className="flex-row justify-between items-center mb-3">
-                <Text className="text-[20px] font-semibold">{friendPickerMode === "include" ? "Chọn bạn bè được xem" : "Chọn bạn bè không được xem"}</Text>
+          <View className="flex-1 justify-end bg-black/40">
+            <View className="h-[75%] rounded-t-3xl bg-white p-4">
+              <View className="mb-3 flex-row items-center justify-between">
+                <Text className="text-[20px] font-semibold">
+                  {friendPickerMode === "include" ? "Chọn bạn bè được xem" : "Chọn bạn bè không được xem"}
+                </Text>
                 <Pressable onPress={() => setShowFriendPicker(false)}>
                   <Ionicons name="close" size={26} color="#111827" />
                 </Pressable>
               </View>
-              <View className="bg-[#f3f4f6] rounded-full px-4 py-2 mb-3">
+              <View className="mb-3 rounded-full bg-[#f3f4f6] px-4 py-2">
                 <TextInput placeholder="Tìm bạn bè..." value={friendQuery} onChangeText={setFriendQuery} />
               </View>
               <ScrollView>
                 {filteredFriends.map((f) => {
                   const checked = friendPickerMode === "include" ? includedFriendIds.has(f.id) : excludedFriendIds.has(f.id);
                   return (
-                    <Pressable key={f.id} onPress={() => toggleFriend(f.id)} className="flex-row items-center py-3 border-b border-[#f3f4f6]">
-                      <Image source={{ uri: f.avatar || "https://images.unsplash.com/photo-1544005313-94ddf0286df2" }} style={{ width: 38, height: 38, borderRadius: 19 }} />
-                      <Text className="ml-3 text-[17px] flex-1">{f.name}</Text>
-                      <View className={`w-6 h-6 rounded-full border ${checked ? "bg-[#0f82ff] border-[#0f82ff]" : "border-[#cbd5e1]"}`} />
+                    <Pressable key={f.id} onPress={() => toggleFriend(f.id)} className="flex-row items-center border-b border-[#f3f4f6] py-3">
+                      <Image
+                        source={{ uri: f.avatar || "https://images.unsplash.com/photo-1544005313-94ddf0286df2" }}
+                        style={{ width: 38, height: 38, borderRadius: 19 }}
+                      />
+                      <Text className="ml-3 flex-1 text-[17px]">{f.name}</Text>
+                      <View className={`h-6 w-6 rounded-full border ${checked ? "border-[#0f82ff] bg-[#0f82ff]" : "border-[#cbd5e1]"}`} />
                     </Pressable>
                   );
                 })}
               </ScrollView>
-              <Pressable onPress={() => setShowFriendPicker(false)} className="mt-3 bg-[#0f82ff] py-3 rounded-full items-center">
-                <Text className="text-white text-[18px] font-semibold">Lưu lựa chọn</Text>
+              <Pressable onPress={() => setShowFriendPicker(false)} className="mt-3 items-center rounded-full bg-[#0f82ff] py-3">
+                <Text className="text-[18px] font-semibold text-white">Lưu lựa chọn</Text>
               </Pressable>
             </View>
           </View>
         </Modal>
 
         <Modal visible={showMusicSheet} transparent animationType="slide">
-          <View className="flex-1 bg-black/40 justify-end">
-            <View className="bg-white rounded-t-3xl p-4 h-[75%]">
-              <View className="w-14 h-1.5 bg-[#d1d5db] rounded-full self-center mb-3" />
-              <View className="bg-[#f3f4f6] rounded-full px-4 py-2 mb-3">
-                <TextInput
-                  placeholder="Tìm bài hát hoặc nghệ sĩ"
-                  value={musicKeyword}
-                  onChangeText={setMusicKeyword}
-                />
+          <View className="flex-1 justify-end bg-black/40">
+            <View className="h-[75%] rounded-t-3xl bg-white p-4">
+              <View className="mb-3 h-1.5 w-14 self-center rounded-full bg-[#d1d5db]" />
+              <View className="mb-3 rounded-full bg-[#f3f4f6] px-4 py-2">
+                <TextInput placeholder="Tìm bài hát hoặc nghệ sĩ" value={musicKeyword} onChangeText={setMusicKeyword} />
               </View>
               <ScrollView>
                 {musicList.map((m) => (
-                  <View key={m.id} className="flex-row items-center py-3 border-b border-[#f3f4f6]">
-                    <Image
-                      source={{ uri: m.thumbnail }}
-                      style={{ width: 48, height: 48, borderRadius: 10 }}
-                    />
+                  <View key={m.id} className="flex-row items-center border-b border-[#f3f4f6] py-3">
+                    <Image source={{ uri: m.thumbnail }} style={{ width: 48, height: 48, borderRadius: 10 }} />
                     <View className="ml-3 flex-1">
                       <Text className="text-[18px]" numberOfLines={1}>{m.title}</Text>
-                      <Text className="text-[#6b7280] text-[14px]" numberOfLines={1}>{m.artist}</Text>
+                      <Text className="text-[14px] text-[#6b7280]" numberOfLines={1}>{m.artist}</Text>
                     </View>
                     <Pressable
                       onPress={() => {
                         setSelectedMusic(m);
                         setShowMusicSheet(false);
                       }}
-                      className="bg-[#e0f2fe] px-4 py-2 rounded-full"
+                      className="rounded-full bg-[#e0f2fe] px-4 py-2"
                     >
-                      <Text className="text-[#0ea5e9] font-semibold">CHỌN</Text>
+                      <Text className="font-semibold text-[#0ea5e9]">CHỌN</Text>
                     </Pressable>
                   </View>
                 ))}
               </ScrollView>
-              <Pressable onPress={() => setShowMusicSheet(false)} className="mt-3 bg-[#0f82ff] py-3 rounded-full items-center">
-                <Text className="text-white text-[18px] font-semibold">Đóng</Text>
+              <Pressable onPress={() => setShowMusicSheet(false)} className="mt-3 items-center rounded-full bg-[#0f82ff] py-3">
+                <Text className="text-[18px] font-semibold text-white">Đóng</Text>
               </Pressable>
             </View>
           </View>

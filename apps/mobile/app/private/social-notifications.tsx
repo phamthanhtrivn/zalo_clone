@@ -35,11 +35,11 @@ type SocialNotificationItem = {
 const timeAgo = (dateStr: string) => {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Vua xong";
-  if (mins < 60) return `${mins} phut`;
+  if (mins < 1) return "Vừa xong";
+  if (mins < 60) return `${mins} phút`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} gio`;
-  return `${Math.floor(hours / 24)} ngay`;
+  if (hours < 24) return `${hours} giờ`;
+  return `${Math.floor(hours / 24)} ngày`;
 };
 
 export default function SocialNotificationsScreen() {
@@ -127,9 +127,9 @@ export default function SocialNotificationsScreen() {
           }
         }
 
-        Alert.alert("Thong bao", "Story nay da het han hoac khong con ton tai.");
+        Alert.alert("Thông báo", "Story này đã hết hạn hoac không còn tồn tại.");
       } catch {
-        Alert.alert("Loi", "Khong mo duoc story luc nay.");
+        Alert.alert("Loi", "Không mở được story lúc này.");
       }
     },
     [router],
@@ -212,21 +212,20 @@ export default function SocialNotificationsScreen() {
             <View className="flex-1 items-center justify-center px-6">
               <Ionicons name="notifications-off-outline" size={40} color="#94a3b8" />
               <Text className="text-[#475569] text-[16px] font-semibold mt-3">
-                Chua co thong bao
+                Chưa co thông báo
               </Text>
               <Text className="text-[#94a3b8] text-center mt-1">
-                Khi ai do binh luan hoac tha cam xuc, thong bao se hien o day.
+                Khi ai dó bình luận hoặc thả cảm xúc, thông báo sẽ hiện ở đây.
               </Text>
             </View>
           }
           renderItem={({ item }) => (
             <Pressable
               onPress={() => handleOpen(item)}
-              className={`mb-3 rounded-[22px] px-4 py-4 border ${
-                item.readAt
-                  ? "bg-white border-[#e5e7eb]"
-                  : "bg-[#eff6ff] border-[#bfdbfe]"
-              }`}
+              className={`mb-3 rounded-[22px] px-4 py-4 border ${item.readAt
+                ? "bg-white border-[#e5e7eb]"
+                : "bg-[#eff6ff] border-[#bfdbfe]"
+                }`}
             >
               <View className="flex-row items-start">
                 <Image

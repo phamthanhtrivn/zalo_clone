@@ -23,7 +23,6 @@ interface Props {
     selectedFriends: Friend[];
     selectedLocation: Location | null;
     onRemoveLocation: () => void;
-    // ✅ Thêm props mới
     fontStyle?: FontStyle | null;
     fontColor?: string;
     selectedMusic?: Music | null;
@@ -52,7 +51,7 @@ export default function PostBody({
             <TextInput
                 value={text}
                 onChangeText={onChangeText}
-                placeholder="Bạn dang nghĩ gì?"
+                placeholder="Bạn đang nghĩ gì?"
                 placeholderTextColor={fontColor ? `${fontColor}99` : "#9ca3af"}
                 multiline
                 style={{
@@ -69,7 +68,6 @@ export default function PostBody({
                 }}
             />
 
-            {/* ✅ Hiển thị music đã chọn */}
             {selectedMusic && (
                 <View style={{
                     flexDirection: "row",
@@ -82,7 +80,6 @@ export default function PostBody({
                     borderWidth: 1,
                     borderColor: "#d0e3ff",
                 }}>
-                    {/* Music icon */}
                     <View style={{
                         width: 40,
                         height: 40,
@@ -95,7 +92,6 @@ export default function PostBody({
                         <Ionicons name="musical-note" size={20} color="#0068FF" />
                     </View>
 
-                    {/* Music info */}
                     <View style={{ flex: 1 }}>
                         <Text style={{
                             fontSize: 14,
@@ -113,7 +109,6 @@ export default function PostBody({
                         </Text>
                     </View>
 
-                    {/* Remove button */}
                     {onRemoveMusic && (
                         <Pressable
                             onPress={onRemoveMusic}
@@ -125,7 +120,6 @@ export default function PostBody({
                 </View>
             )}
 
-            {/* Selected images preview row */}
             {selectedImages.length > 0 && (
                 <ScrollView
                     horizontal
@@ -154,7 +148,6 @@ export default function PostBody({
                 </ScrollView>
             )}
 
-            {/* ✅ Hiển thị font style indicator nếu có */}
             {(fontStyle || fontColor) && (
                 <View style={{
                     flexDirection: "row",
@@ -209,7 +202,6 @@ export default function PostBody({
                 </View>
             )}
 
-            {/* Location badge */}
             {selectedLocation && (
                 <View style={{
                     flexDirection: "row", alignItems: "center",
@@ -228,7 +220,6 @@ export default function PostBody({
                 </View>
             )}
 
-            {/* Tagged friends */}
             {selectedFriends.length > 0 && (
                 <View style={{
                     flexDirection: "row", flexWrap: "wrap",

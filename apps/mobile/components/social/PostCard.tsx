@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { Video, ResizeMode } from "expo-av";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { reactPostThunk } from "@/store/slices/diaryThunk";
@@ -123,7 +124,9 @@ export default function PostCard({
 }) {
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector((s: any) => s.auth.user);
-  const currentUserId = normalizeId(currentUser?._id || currentUser?.id || currentUser);
+  const currentUserId = normalizeId(
+    currentUser?._id || currentUser?.id || currentUser,
+  );
   const postId: string = item?.id || item?._id || "";
   const authorId = normalizeId(
     item?.authorId ||
@@ -133,7 +136,9 @@ export default function PostCard({
       item?.user?._id ||
       item?.user?.id,
   );
-  const isOwnPost = Boolean(currentUserId && authorId && authorId === currentUserId);
+  const isOwnPost = Boolean(
+    currentUserId && authorId && authorId === currentUserId,
+  );
 
   const [showReactions, setShowReactions] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -159,6 +164,10 @@ export default function PostCard({
         "https://ui-avatars.com/api/?name=U";
 
   const contentText = item.content || item.text || "";
+  const videoUrl =
+    item.videoUrl ||
+    item.media?.find?.((media: any) => media?.type === "VIDEO")?.url ||
+    "";
   const music = item.music || null;
   const musicTitle = music?.title || "";
   const musicArtist = music?.artist || "";
@@ -216,19 +225,23 @@ export default function PostCard({
 
   const confirmDeletePost = () => {
     setShowOptions(false);
-    Alert.alert("Xóa bài đăng", "Bài đăng này sẽ bị xóa khỏi nhật ký của bạn.", [
-      { text: "Hủy", style: "cancel" },
-      {
-        text: "Xóa",
-        style: "destructive",
-        onPress: () =>
-          runAction("delete", async () => {
-            await deletePost(postId);
-            dispatch(removePostFromFeed(postId));
-            Alert.alert("Thành công", "Đã xóa bài đăng.");
-          }),
-      },
-    ]);
+    Alert.alert(
+      "Xóa bài đăng",
+      "Bài đăng này sẽ bị xóa khỏi nhật ký của bạn.",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: () =>
+            runAction("delete", async () => {
+              await deletePost(postId);
+              dispatch(removePostFromFeed(postId));
+              Alert.alert("Thành công", "Đã xóa bài đăng.");
+            }),
+        },
+      ],
+    );
   };
 
   const confirmChangeVisibility = () => {
@@ -236,7 +249,9 @@ export default function PostCard({
     setShowVisibilitySheet(true);
   };
 
-  const handleSelectVisibility = (nextVisibility: "PUBLIC" | "FRIENDS" | "PRIVATE") => {
+  const handleSelectVisibility = (
+    nextVisibility: "PUBLIC" | "FRIENDS" | "PRIVATE",
+  ) => {
     setShowVisibilitySheet(false);
     runAction(`visibility-${nextVisibility.toLowerCase()}`, async () => {
       await updatePostVisibility(postId, nextVisibility);
@@ -265,10 +280,7 @@ export default function PostCard({
               const res: any = await hideAuthorPosts(postId);
               const hiddenAuthorId = res?.data?.hiddenAuthorId || authorId;
               dispatch(removeAuthorPostsFromFeed(hiddenAuthorId));
-              Alert.alert(
-                "Thành công",
-                `Đã ẩn hoạt động của ${displayName}.`,
-              );
+              Alert.alert("Thành công", `Đã ẩn hoạt động của ${displayName}.`);
             }),
         },
       ],
@@ -369,7 +381,8 @@ export default function PostCard({
           key: "block-viewer",
           icon: "ban-outline",
           title: `Chặn ${displayName} xem nhật ký của tôi`,
-          subtitle: "Người này sẽ không xem được bài đăng và khoảnh khắc của bạn.",
+          subtitle:
+            "Người này sẽ không xem được bài đăng và khoảnh khắc của bạn.",
           onPress: confirmBlockViewer,
         },
         {
@@ -391,8 +404,8 @@ export default function PostCard({
       ];
 
   const likeLabel = myReaction
-    ? REACTIONS.find((reaction) => reaction.type === myReaction)?.label ??
-      "Thích"
+    ? (REACTIONS.find((reaction) => reaction.type === myReaction)?.label ??
+      "Thích")
     : "Thích";
   const likeColor = myReaction ? "#e11d48" : "#4b5563";
 
@@ -430,25 +443,34 @@ export default function PostCard({
         </View>
       </View>
 
-      {item.images?.length > 0 ? (
+      {videoUrl ? (
         <View style={styles.mediaWrap}>
-          <Image
-            source={{ uri: item.images[0] }}
+          <Video
+            source={{ uri: videoUrl }}
             style={styles.postImage}
-            contentFit="cover"
+            resizeMode={ResizeMode.COVER}
+            shouldPlay
+            isLooping
+            isMuted
+            useNativeControls
           />
 
           {musicTitle ? (
             <View style={styles.musicOverlay}>
               <View style={styles.musicPill}>
-                <Image source={{ uri: musicThumbnail }} style={styles.musicThumb} />
+                <Image
+                  source={{ uri: musicThumbnail }}
+                  style={styles.musicThumb}
+                />
                 <View style={styles.musicMeta}>
                   <Text numberOfLines={1} style={styles.musicText}>
                     {musicTitle}
                     {musicArtist ? ` - ${musicArtist}` : ""}
                   </Text>
                   <Text style={styles.musicState}>
-                    {isMusicActive && !isMusicMuted ? "Đang phát" : "Nhấn để nghe"}
+                    {isMusicActive && !isMusicMuted
+                      ? "Đang phát"
+                      : "Nhấn để nghe"}
                   </Text>
                 </View>
               </View>
@@ -460,7 +482,55 @@ export default function PostCard({
               >
                 <Ionicons
                   name={
-                    isMusicActive && !isMusicMuted ? "volume-high" : "volume-mute"
+                    isMusicActive && !isMusicMuted
+                      ? "volume-high"
+                      : "volume-mute"
+                  }
+                  size={22}
+                  color="#fff"
+                />
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      ) : item.images?.length > 0 ? (
+        <View style={styles.mediaWrap}>
+          <Image
+            source={{ uri: item.images[0] }}
+            style={styles.postImage}
+            contentFit="cover"
+          />
+
+          {musicTitle ? (
+            <View style={styles.musicOverlay}>
+              <View style={styles.musicPill}>
+                <Image
+                  source={{ uri: musicThumbnail }}
+                  style={styles.musicThumb}
+                />
+                <View style={styles.musicMeta}>
+                  <Text numberOfLines={1} style={styles.musicText}>
+                    {musicTitle}
+                    {musicArtist ? ` - ${musicArtist}` : ""}
+                  </Text>
+                  <Text style={styles.musicState}>
+                    {isMusicActive && !isMusicMuted
+                      ? "Đang phát"
+                      : "Nhấn để nghe"}
+                  </Text>
+                </View>
+              </View>
+
+              <Pressable
+                onPress={onToggleMusicMute}
+                style={styles.musicButton}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={
+                    isMusicActive && !isMusicMuted
+                      ? "volume-high"
+                      : "volume-mute"
                   }
                   size={22}
                   color="#fff"
@@ -508,7 +578,11 @@ export default function PostCard({
           style={styles.actionBtn}
           onPress={() => setShowComments(true)}
         >
-          <Ionicons name="chatbubble-ellipses-outline" size={24} color="#4b5563" />
+          <Ionicons
+            name="chatbubble-ellipses-outline"
+            size={24}
+            color="#4b5563"
+          />
           <Text style={styles.actionLabel}>
             {item.comments > 0 ? item.comments : "Bình luận"}
           </Text>
@@ -552,7 +626,9 @@ export default function PostCard({
                       {busy ? "Đang xử lý..." : option.title}
                     </Text>
                     {option.subtitle ? (
-                      <Text style={styles.sheetSubtitle}>{option.subtitle}</Text>
+                      <Text style={styles.sheetSubtitle}>
+                        {option.subtitle}
+                      </Text>
                     ) : null}
                   </View>
                 </TouchableOpacity>
@@ -601,7 +677,11 @@ export default function PostCard({
                     <Text style={styles.sheetSubtitle}>{meta.subtitle}</Text>
                   </View>
                   {active ? (
-                    <Ionicons name="checkmark-circle" size={22} color="#2563eb" />
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={22}
+                      color="#2563eb"
+                    />
                   ) : null}
                 </TouchableOpacity>
               );
