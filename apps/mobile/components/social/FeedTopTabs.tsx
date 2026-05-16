@@ -1,19 +1,23 @@
-import { View, Text, Pressable } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 export default function FeedTopTabs({ activeTab, onChange }: any) {
   return (
-    <View className="flex-row bg-white">
-      {["diary", "video"].map((tab) => {
-        const active = activeTab === tab;
+    <View className="flex-row bg-white px-4">
+      {[
+        { key: "diary", label: "Nhật ký" },
+        { key: "video", label: "Zalo Video" },
+      ].map((tab) => {
+        const active = activeTab === tab.key;
         return (
           <Pressable
-            key={tab}
-            onPress={() => onChange(tab)}
+            key={tab.key}
+            onPress={() => onChange(tab.key)}
             className="flex-1 items-center py-4"
           >
-            <Text className={active ? "font-bold" : "text-gray-400"}>
-              {tab === "diary" ? "Nhật ký" : "Video"}
+            <Text className={`text-[17px] ${active ? "font-semibold text-[#111827]" : "text-[#9ca3af]"}`}>
+              {tab.label}
             </Text>
+            <View className={`mt-3 h-[2.5px] w-[62%] rounded-full ${active ? "bg-[#111827]" : "bg-transparent"}`} />
           </Pressable>
         );
       })}

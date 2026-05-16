@@ -1,14 +1,14 @@
 export const AVATAR_COLORS = [
-  "#FF5722", // Deep Orange
-  "#FF9800", // Orange
-  "#FFC107", // Amber
-  "#4CAF50", // Green
-  "#009688", // Teal
-  "#2196F3", // Blue
-  "#3F51B5", // Indigo
-  "#673AB7", // Deep Purple
-  "#9C27B0", // Purple
-  "#E91E63", // Pink
+  "#FF5722",
+  "#FF9800",
+  "#FFC107",
+  "#4CAF50",
+  "#009688",
+  "#2196F3",
+  "#3F51B5",
+  "#673AB7",
+  "#9C27B0",
+  "#E91E63",
 ];
 
 export const getColorByName = (name: string) => {
@@ -23,9 +23,15 @@ export const getColorByName = (name: string) => {
 export const getAvatarData = (name: string) => {
   if (!name) return { initials: "?", isGroupIcon: false };
 
-  // Logic: Nếu tên chứa dấu phẩy hoặc có chữ "người khác" -> Hiện Icon Nhóm
-  const isDefaultGroup = name.includes(",") || name.includes("người khác");
-  
+  const normalizedName = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const isDefaultGroup =
+    name.includes(",") ||
+    normalizedName.includes("nguoi khac") ||
+    normalizedName.includes("nhom");
+
   if (isDefaultGroup) {
     return { initials: null, isGroupIcon: true };
   }
@@ -34,11 +40,10 @@ export const getAvatarData = (name: string) => {
   if (parts.length === 1) {
     return { initials: parts[0].charAt(0).toUpperCase(), isGroupIcon: false };
   }
-  
+
   const first = parts[0].charAt(0).toUpperCase();
   const last = parts[parts.length - 1].charAt(0).toUpperCase();
   return { initials: first + last, isGroupIcon: false };
 };
 
-// Legacy support
 export const getInitials = (name: string) => getAvatarData(name).initials;

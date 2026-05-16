@@ -67,7 +67,7 @@ export default function ViewStoryScreen() {
   const reactionSeedRef = useRef(1);
   const {
     authorId = "",
-    userName = "Nguoi dung",
+    userName = "Người dùng",
     userAvatar = "",
     hoursAgo = "",
     storiesJson = "[]",
@@ -282,10 +282,10 @@ export default function ViewStoryScreen() {
 
   const handleDelete = () => {
     if (!storyId || deleting) return;
-    Alert.alert("Xoa story", "Ban co chac chan muon xoa story nay?", [
-      { text: "Huy", style: "cancel" },
+    Alert.alert("Xóa story", "Bạn có chắc chắn muốn xóa story này?", [
+      { text: "Hủy", style: "cancel" },
       {
-        text: "Xoa",
+        text: "Xóa",
         style: "destructive",
         onPress: async () => {
           try {
@@ -293,7 +293,7 @@ export default function ViewStoryScreen() {
             await deleteStory(storyId);
             goNext();
           } catch (error: any) {
-            Alert.alert("Loi", error?.response?.data?.message || "Khong the xoa story.");
+            Alert.alert("Lỗi", error?.response?.data?.message || "Không thể xóa story.");
           } finally {
             setDeleting(false);
           }
@@ -309,7 +309,7 @@ export default function ViewStoryScreen() {
       setViewers(res?.data || []);
       setViewerOpen(true);
     } catch {
-      Alert.alert("Loi", "Khong tai duoc danh sach nguoi da xem.");
+      Alert.alert("Lỗi", "Không tải được danh sách người đã xem.");
     }
   };
 
@@ -323,9 +323,9 @@ export default function ViewStoryScreen() {
       if (conversationId) {
         await conversationService.getMyConversations().catch(() => undefined);
       }
-      Alert.alert("Thanh cong", "Tin nhan da duoc gui vao chat.");
+      Alert.alert("Thành công", "Tin nhắn đã được gửi vào chat.");
     } catch (error: any) {
-      Alert.alert("Loi", error?.response?.data?.message || "Khong the gui tin nhan.");
+      Alert.alert("Lỗi", error?.response?.data?.message || "Không thể gửi tin nhắn.");
     } finally {
       setSending(false);
     }
@@ -401,7 +401,7 @@ export default function ViewStoryScreen() {
         setFloatingReactions((prev) => prev.filter((item) => item.id !== id));
       });
     } catch {
-      Alert.alert("Loi", "Khong the tha cam xuc.");
+      Alert.alert("Lỗi", "Không thể thả cảm xúc.");
     }
   };
 
@@ -492,7 +492,7 @@ export default function ViewStoryScreen() {
           <Image source={{ uri: mediaUri }} style={{ width: "100%", height: "100%" }} contentFit="contain" />
         ) : (
           <View className="flex-1 items-center justify-center px-8 bg-[#1f2937]">
-            <Text className="text-white text-[28px] text-center">{text || "Story chu"}</Text>
+            <Text className="text-white text-[28px] text-center">{text || "Story chữ"}</Text>
           </View>
         )}
 
@@ -527,7 +527,7 @@ export default function ViewStoryScreen() {
               <View className="flex-row items-center">
                 <Ionicons name="eye-outline" size={20} color="white" />
                 <Text className="text-white text-[18px] font-semibold ml-2">
-                  {viewerCount} nguoi xem
+                  {viewerCount} người xem
                 </Text>
               </View>
               <Ionicons name="chevron-up" size={18} color="white" />
@@ -580,7 +580,7 @@ export default function ViewStoryScreen() {
             <View className="flex-row items-center">
               <View className="flex-1 mr-3 rounded-full bg-white/25 px-4 py-2 flex-row items-center">
                 <TextInput
-                  placeholder="Gui tin nhan..."
+                  placeholder="Gửi tin nhắn..."
                   placeholderTextColor="#e5e7eb"
                   style={{ color: "white", fontSize: 18, flex: 1 }}
                   value={message}
@@ -615,9 +615,9 @@ export default function ViewStoryScreen() {
             <View className="bg-white rounded-t-3xl p-4 max-h-[70%]">
               <View className="flex-row items-center justify-between mb-3">
                 <View>
-                  <Text className="text-[20px] font-semibold">Nguoi da xem</Text>
+                  <Text className="text-[20px] font-semibold">Người đã xem</Text>
                   <Text className="text-[13px] text-[#6b7280] mt-1">
-                    Danh sach nguoi xem va cam xuc cua ho
+                    Danh sách người xem và cảm xúc của họ
                   </Text>
                   {compactReactionSummary.length > 0 ? (
                     <View className="flex-row items-center flex-wrap mt-3">
@@ -647,7 +647,7 @@ export default function ViewStoryScreen() {
               </View>
               <ScrollView>
                 {viewers.length === 0 ? (
-                  <Text className="text-[#6b7280] py-4">Chua co ai xem.</Text>
+                  <Text className="text-[#6b7280] py-4">Chưa có ai xem.</Text>
                 ) : (
                   viewers.map((viewer: any) => (
                     <View key={viewer.userId} className="flex-row items-center justify-between py-3">
@@ -691,7 +691,7 @@ export default function ViewStoryScreen() {
                           </Text>
                         </View>
                       ) : (
-                        <Text className="text-[13px] text-[#9ca3af]">Da xem</Text>
+                        <Text className="text-[13px] text-[#9ca3af]">Đã xem</Text>
                       )}
                     </View>
                   ))

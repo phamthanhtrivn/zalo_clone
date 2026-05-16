@@ -195,16 +195,171 @@ const ConversationItem: React.FC<Props> = React.memo(({
     return { icon: null, text: "Tin nhắn" };
   }, [lastMessage]);
 
+  const previewDisplay = useMemo(() => {
+    const lastMsg = conversation.lastMessage;
+    const content = lastMsg?.content;
+    const call = (lastMsg as any)?.call;
+
+    if (!lastMsg?._id) {
+      return { icon: null, text: "Chưa có tin nhắn" };
+    }
+
+    if (lastMsg.recalled) {
+      return {
+        icon: null,
+        text: "Tin nhắn đã được thu hồi",
+      };
+    }
+
+    if (lastMsg.expired) {
+      return {
+        icon: null,
+        text: "Tin nhắn đã hết hạn",
+      };
+    }
+
+    if (call) {
+      const isVideo = call.type === "VIDEO";
+      const isMe = lastMsg.senderName === "Bạn";
+
+      if (call.status === "MISSED") {
+        return {
+          icon: (
+            <Ionicons
+              name={isVideo ? "videocam-outline" : "call-outline"}
+              size={14}
+              color="#ef4444"
+            />
+          ),
+          text: "Cuộc gọi nhỡ",
+        };
+      }
+
+      if (call.status === "REJECTED") {
+        return {
+          icon: (
+            <Ionicons
+              name={isVideo ? "videocam-outline" : "call-outline"}
+              size={14}
+              color="#ef4444"
+            />
+          ),
+          text: isMe ? "Cuộc gọi bị từ chối" : "Cuộc gọi nhỡ",
+        };
+      }
+
+      if (call.status === "BUSY") {
+        return {
+          icon: (
+            <Ionicons
+              name={isVideo ? "videocam-outline" : "call-outline"}
+              size={14}
+              color="#f59e0b"
+            />
+          ),
+          text: "Máy bận",
+        };
+      }
+
+      return {
+        icon: (
+          <Ionicons
+            name={isVideo ? "videocam-outline" : "call-outline"}
+            size={14}
+            color="#6b7280"
+          />
+        ),
+        text: `Cuộc gọi ${isVideo ? "video" : "thoại"}`,
+      };
+    }
+
+    if ((lastMsg as any)?.type === "SYSTEM") {
+      return {
+        icon: (
+          <Ionicons
+            name="information-circle-outline"
+            size={14}
+            color="#6b7280"
+          />
+        ),
+        text: content?.text || "Tin nhắn hệ thống",
+      };
+    }
+
+    if (!content) return { icon: null, text: "Tin nhắn mới" };
+
+    if ((content as any).storyLink?.storyId) {
+      return {
+        icon: null,
+        text: content.text
+          ? `Trả lời story: ${content.text}`
+          : `Trả lời story: ${(content as any).storyLink.previewText || "Xem lại story"}`,
+      };
+    }
+
+    if (content.text && /https?:\/\//.test(content.text)) {
+      return {
+        icon: <Feather name="link" size={14} color="#6b7280" />,
+        text: content.text,
+      };
+    }
+
+    if ((content as any).icon) {
+      return {
+        icon: <MaterialIcons name="emoji-emotions" size={14} color="#6b7280" />,
+        text: "Sticker",
+      };
+    }
+
+    if (Array.isArray((content as any).files) && (content as any).files.length > 0) {
+      switch ((content as any).files[(content as any).files.length - 1].type) {
+        case "IMAGE":
+          return {
+            icon: <MaterialIcons name="image" size={14} color="#6b7280" />,
+            text: "Hình ảnh",
+          };
+        case "VIDEO":
+          return {
+            icon: <MaterialIcons name="videocam" size={14} color="#6b7280" />,
+            text: "Video",
+          };
+        case "FILE":
+          return {
+            icon: (
+              <MaterialIcons name="attach-file" size={14} color="#6b7280" />
+            ),
+            text: (content as any).files[0].fileName,
+          };
+        case "VOICE":
+          return {
+            icon: <Ionicons name="mic" size={14} color="#6b7280" />,
+            text: "Tin nhắn thoại",
+          };
+        default:
+          return { icon: null, text: "Tin nhắn mới" };
+      }
+    }
+
+    if (content.text) {
+      return {
+        icon: null,
+        text: content.text,
+      };
+    }
+
+    return { icon: null, text: "Tin nhắn mới" };
+  }, [conversation.lastMessage]);
+
   const isOwn =
     lastMessage?.senderId === currentUserId ||
     lastMessage?.senderName === "Bạn";
-  const isSystemMessage = (lastMessage as any)?.type === "SYSTEM";
-  const senderPrefix =
-    isSystemMessage || !lastMessage?.senderName
+  const senderPrefixDisplay =
+    !conversation.lastMessage?.senderName ||
+    (conversation.lastMessage as any)?.type === "SYSTEM"
       ? ""
-      : conversation.type === "PRIVATE" && !isOwn
+      : conversation.type === "DIRECT" && !isOwn
         ? ""
-        : `${isOwn ? "Bạn" : lastMessage?.senderName}: `;
+        : `${isOwn ? "Bạn" : conversation.lastMessage?.senderName}: `;
 
   // ── Animation ──
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -638,13 +793,13 @@ const ConversationItem: React.FC<Props> = React.memo(({
                 fontWeight: isUnread ? "600" : "400",
               }}
             >
-              {senderPrefix}
+              {senderPrefixDisplay}
             </Text>
 
             {/* preview */}
             <View className="flex-row items-center flex-1">
-              {preview.icon && (
-                <View className="mr-1 justify-center">{preview.icon}</View>
+              {previewDisplay.icon && (
+                <View className="mr-1 justify-center">{previewDisplay.icon}</View>
               )}
 
               <Text
@@ -656,7 +811,7 @@ const ConversationItem: React.FC<Props> = React.memo(({
                   fontWeight: isUnread ? "600" : "400",
                 }}
               >
-                {preview.text}
+                {previewDisplay.text}
               </Text>
             </View>
           </View>
@@ -756,7 +911,7 @@ const ConversationItem: React.FC<Props> = React.memo(({
                   numberOfLines={1}
                   style={{ fontSize: 12, color: "#9ca3af", marginTop: 1 }}
                 >
-                  {preview.text}
+                  {previewDisplay.text}
                 </Text>
               ) : null}
             </View>

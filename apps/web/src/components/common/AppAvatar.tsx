@@ -8,7 +8,7 @@ import { getAvatarData, getColorByName } from "@/utils/avatar-utils";
 interface AppAvatarProps {
   src?: string;
   name: string;
-  className?: string; // Để tùy chỉnh kích thước h-x w-x
+  className?: string;
   isAI?: boolean;
   onClick?: () => void;
 }
@@ -18,17 +18,20 @@ const AppAvatar: React.FC<AppAvatarProps> = ({
   name,
   className,
   isAI = false,
-  onClick
+  onClick,
 }) => {
   const [stableSrc, setStableSrc] = useState<string>("");
+  const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
+    setImageFailed(false);
     if (src && src.trim().length > 0) {
       setStableSrc(src);
     }
   }, [src]);
 
-  const displaySrc = src && src.trim().length > 0 ? src : stableSrc;
+  const displaySrc =
+    imageFailed ? "" : src && src.trim().length > 0 ? src : stableSrc;
   const { initials, isGroupIcon } = getAvatarData(name);
   const backgroundColor = getColorByName(name);
 
@@ -38,7 +41,12 @@ const AppAvatar: React.FC<AppAvatarProps> = ({
         className={cn("h-12 w-12 cursor-pointer", className)}
         onClick={onClick}
       >
-        <AvatarImage src={displaySrc} alt={name} className="object-cover" />
+        <AvatarImage
+          src={displaySrc}
+          alt={name}
+          className="object-cover"
+          onError={() => setImageFailed(true)}
+        />
         <AvatarFallback
           className="font-bold text-white"
           style={{ backgroundColor }}

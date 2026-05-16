@@ -70,16 +70,21 @@ export default function StoriesStrip({
     >
       <Pressable
         onPress={onCreateStory}
-        className="w-[120px] h-[160px] rounded-2xl overflow-hidden mr-3 bg-black"
+        className="mr-3 h-[160px] w-[120px] overflow-hidden rounded-2xl bg-black"
       >
-        <Image
-          source={{
-            uri:
-              currentUserAvatar ||
-              "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9",
-          }}
-          style={{ width: "100%", height: "100%" }}
-        />
+        {currentUserAvatar ? (
+          <Image
+            source={{ uri: currentUserAvatar }}
+            style={{ width: "100%", height: "100%" }}
+          />
+        ) : (
+          <LinearGradient
+            colors={["#1d4ed8", "#0f172a"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ width: "100%", height: "100%" }}
+          />
+        )}
         <View className="absolute inset-0 bg-black/35" />
         <View className="absolute left-0 right-0 top-[48px] items-center">
           <View
@@ -111,7 +116,7 @@ export default function StoriesStrip({
           </View>
         </View>
         <View className="absolute bottom-2 left-0 right-0 items-center">
-          <Text className="text-white font-semibold text-[18px]">Tạo mới</Text>
+          <Text className="text-[18px] font-semibold text-white">Tạo mới</Text>
         </View>
       </Pressable>
 
@@ -119,7 +124,7 @@ export default function StoriesStrip({
         <Pressable
           key={story.id}
           onPress={() => onOpenStory?.(story)}
-          className="w-[120px] h-[160px] rounded-2xl overflow-hidden bg-black mr-3"
+          className="mr-3 h-[160px] w-[120px] overflow-hidden rounded-2xl bg-black"
         >
           {story.mediaUri ? (
             <Image
@@ -127,21 +132,21 @@ export default function StoriesStrip({
               style={{ width: "100%", height: "100%" }}
             />
           ) : (
-            <View className="w-full h-full bg-[#1f2937] items-center justify-center px-2">
-              <Text numberOfLines={5} className="text-white text-[13px] text-center">
+            <View className="h-full w-full items-center justify-center bg-[#1f2937] px-2">
+              <Text numberOfLines={5} className="text-center text-[13px] text-white">
                 {story.text || "Story chữ"}
               </Text>
             </View>
           )}
           <View className="absolute inset-0 bg-black/35" />
-          <View className="absolute top-3 left-3 w-9 h-9 rounded-full border-2 border-white overflow-hidden">
+          <View className="absolute left-3 top-3 h-9 w-9 overflow-hidden rounded-full border-2 border-white">
             <Image
               source={{ uri: story.userAvatar }}
               style={{ width: "100%", height: "100%" }}
             />
           </View>
           <View className="absolute bottom-2 left-2 right-2">
-            <Text numberOfLines={1} className="text-white font-semibold text-[16px]">
+            <Text numberOfLines={1} className="text-[16px] font-semibold text-white">
               {story.userName}
             </Text>
           </View>

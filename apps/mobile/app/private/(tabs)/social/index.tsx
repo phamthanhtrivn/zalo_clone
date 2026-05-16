@@ -39,10 +39,16 @@ export default function SocialScreen() {
 
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
+  const userInfo = useAppSelector((state: any) => state.userInfo?.userInfo);
   const posts = useAppSelector((state: any) => state.diary?.posts ?? []);
   const loading = useAppSelector((state: any) => state.diary?.loading ?? false);
 
-  const avatar = user?.avatarUrl || user?.profile?.avatarUrl || null;
+  const avatar =
+    userInfo?.profile?.avatarUrl ||
+    userInfo?.avatarUrl ||
+    user?.profile?.avatarUrl ||
+    user?.avatarUrl ||
+    null;
 
   const loadContent = useCallback(async () => {
     if (activeTab === "diary") {
