@@ -1,0 +1,51 @@
+name: Deploy Zola System
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'apps/backend/**'
+      - 'apps/web/**' 
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 1. Build & Push Backend
+      - name: Build and Push Backend Image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/zola-backend:latest ./apps/backend
+          docker push ${{ secrets.DOCKER_USERNAME }}/zola-backend:latest
+
+      # 2. Build & Push Web
+      - name: Build and Push Web Image
+        run: |
+          docker build \
+            --build-arg VITE_API_URL="http://${{ secrets.EC2_HOST }}:3000" \
+            -t ${{ secrets.DOCKER_USERNAME }}/zola-web:latest ./apps/web
+          docker push ${{ secrets.DOCKER_USERNAME }}/zola-web:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH to EC2 and Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/zola-backend
+            sudo docker-compose pull
+            sudo docker-compose up -d
+            sudo docker image prune -f

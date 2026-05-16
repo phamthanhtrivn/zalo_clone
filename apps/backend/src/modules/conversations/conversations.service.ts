@@ -2263,4 +2263,51 @@ export class ConversationsService {
       session.endSession();
     }
   }
+
+  /**
+   * Đếm số nhóm chung giữa 2 user
+   */
+  async getCommonGroupsCount(
+    currentUserId: string,
+    targetUserId: string,
+  ): Promise<{ count: number }> {
+    const currentUserObjId = new Types.ObjectId(currentUserId.trim());
+    const targetUserObjId = new Types.ObjectId(targetUserId.trim());
+
+    // 1. Lấy tất cả conversationId mà currentUser đang tham gia (chưa rời)
+    const currentUserConvIds = await this.memberModel
+      .find({ userId: currentUserObjId, leftAt: null })
+      .select('conversationId')
+      .lean();
+
+    const convIds = currentUserConvIds.map((m) => m.conversationId);
+
+    if (convIds.length === 0) {
+      return { count: 0 };
+    }
+
+    // 2. Trong số đó, tìm những conversation mà targetUser cũng đang tham gia
+    const commonConvIds = await this.memberModel
+      .find({
+        userId: targetUserObjId,
+        conversationId: { $in: convIds },
+        leftAt: null,
+      })
+      .select('conversationId')
+      .lean();
+
+    const commonConvObjectIds = commonConvIds.map((m) => m.conversationId);
+
+    if (commonConvObjectIds.length === 0) {
+      return { count: 0 };
+    }
+
+    // 3. Chỉ đếm những conversation có type = GROUP
+    const count = await this.conversationModel.countDocuments({
+      _id: { $in: commonConvObjectIds },
+      type: ConversationType.GROUP,
+    });
+
+    return { count };
+  }
 }

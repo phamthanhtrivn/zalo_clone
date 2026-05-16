@@ -5,10 +5,20 @@ import { useEffect, useState } from "react";
 import { userService } from "@/services/user.service";
 import { router } from "expo-router";
 import { useSocket } from "@/contexts/SocketContext";
+import { conversationService } from "@/services/conversation.service";
+import { useVideoCall } from "@/contexts/VideoCallContext";
 
 export default function FriendsTab() {
   const [friends, setFriends] = useState([]);
   const { friendRefreshKey } = useSocket();
+  const { startDirectCall } = useVideoCall();
+
+  const getDirectConversationId = async (targetUserId: string) => {
+    const response = await conversationService.getOrCreateDirect(targetUserId);
+    return (
+      response?.data?._id || response?.data?.conversationId
+    );
+  };
 
   useEffect(() => {
     const fetchFriends = async () => {
@@ -22,6 +32,39 @@ export default function FriendsTab() {
 
     fetchFriends();
   }, [friendRefreshKey]);
+
+  
+  const handleStartConversation = async (targetUserId: string) => {
+    try {
+      const conversationId = await getDirectConversationId(targetUserId);
+
+      if (!conversationId) return;
+      // Điều hướng tới màn chat của conversation vừa lấy/khởi tạo
+      router.push(`/private/chat/${conversationId}`);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const handleStartVideoCall = async (friend: any) => {
+    try {
+      const conversationId = await getDirectConversationId(friend?.friendId);
+
+      if (!conversationId || !friend?.friendId) return;
+
+      await startDirectCall(
+        friend.friendId,
+        conversationId,
+        "VIDEO",
+        friend?.name,
+        friend?.avatarUrl,
+      );
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+
 
   return (
     <ScrollView className="flex-1 bg-white">
@@ -66,7 +109,13 @@ export default function FriendsTab() {
           </View>
           <View>
             {group.friends.map((friend: any) => (
-              <FriendItem key={friend.friendId} item={friend} isOnline={true} />
+              <FriendItem
+                key={friend.friendId}
+                item={friend}
+                isOnline={true}
+                onStartConversation={handleStartConversation}
+                onStartVideoCall={handleStartVideoCall}
+              />
             ))}
           </View>
         </View>

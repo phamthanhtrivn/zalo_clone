@@ -206,6 +206,15 @@ export class ConversationsController {
       file,
     );
   }
+  @Get('common-groups/:targetUserId')
+  async getCommonGroupsCount(
+    @Req() req,
+    @Param('targetUserId') targetUserId: string,
+  ) {
+    const userId = req.user.userId;
+    return this.conversationsService.getCommonGroupsCount(userId, targetUserId);
+  }
+
   @Get('search')
   async search(@Req() req, @Query() query: SearchConversationsDto) {
     query.userId = req.user.userId;

@@ -184,7 +184,7 @@ const ConversationList = () => {
               </Button>
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent
+            <DropdownMenuContent  
               align="end"
               className="w-[292px] rounded-2xl border border-gray-200 bg-white p-2 shadow-xl"
             >
