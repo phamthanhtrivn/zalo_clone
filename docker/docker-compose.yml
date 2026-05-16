@@ -12,18 +12,33 @@ services:
   web:
     container_name: zola-web
     image: htuan04/zola-web:latest
-    ports:
-      - "80:80"
+    # Port 80 không expose ra ngoài nữa, Nginx sẽ proxy vào
+    expose:
+      - "80"
     restart: always
 
   backend:
     image: ${DOCKER_USERNAME}/zola-backend:latest
     container_name: zalo-backend
-      - "3000:3000"
+    ports:
+      - "3000:3000"   # Giữ lại để debug; bỏ khi lên production thật
     env_file:
       - .env
     depends_on:
       - redis
+    restart: always
+
+  nginx:
+    image: nginx:alpine
+    container_name: zola-nginx
+    ports:
+      - "80:80"
+      - "443:443"     # Dùng khi có SSL (Let's Encrypt)
+    volumes:
+      - ../nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - web
     restart: always
 
 volumes:
