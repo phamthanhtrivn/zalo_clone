@@ -2,11 +2,11 @@ name: Deploy Zola System
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "deploy-test" ]
     paths:
       - 'apps/backend/**'
       - 'apps/web/**' 
-
+      - '.github/workflows/deploy.yml'
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
