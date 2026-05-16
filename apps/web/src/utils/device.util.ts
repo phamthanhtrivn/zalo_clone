@@ -17,6 +17,5 @@ export const getDeviceId = () => {
     }
     localStorage.setItem("device_id", deviceId);
   }
-
   return deviceId;
 };
