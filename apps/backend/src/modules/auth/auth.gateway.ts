@@ -12,7 +12,7 @@ import { AuthUser } from './types/auth.type';
 import { parseClientInfo } from './util/client-info.util';
 import { IClientInfo } from './decorator/client-info.decorator';
 
-@WebSocketGateway({ cors: { origin: true, credentials: true }, namespace: '/auth' })
+@WebSocketGateway({ cors: { origin: (origin, callback) => callback(null, true), credentials: true }, namespace: '/auth' })
 export class AuthGateway {
   @WebSocketServer()
   server!: Server;

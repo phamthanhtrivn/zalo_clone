@@ -23,7 +23,7 @@ import { MessagesCallService } from '../messages/services/call.service';
 import { CallStatus } from 'src/common/types/enums/call-status';
 @WebSocketGateway({
   cors: {
-    origin: true,
+    origin: (origin, callback) => callback(null, true),
     credentials: true,
   },
 })
