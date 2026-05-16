@@ -9,6 +9,13 @@ services:
     command: redis-server --appendonly yes
     restart: unless-stopped
 
+  web: 
+    zola-web:
+    image: htuan04/zola-web:latest
+    ports:
+      - "80:80"
+    restart: always
+
   backend:
     image: ${DOCKER_USERNAME}/zola-backend:latest
     container_name: zalo-backend

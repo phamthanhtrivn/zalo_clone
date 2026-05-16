@@ -1,10 +1,12 @@
-name: Deploy Zola Backend
+name: Deploy Zola System
 
 on:
   push:
-    branches: [ "main" ] # Tự động chạy khi push code vào nhánh main
+    branches: [ "main" ]
     paths:
-      - 'apps/backend/**' # Chỉ chạy khi sửa code ở folder backend
+      - 'apps/backend/**'
+      - 'apps/web/**'
+      - 'docker/**'
 
 jobs:
   build-and-push:
@@ -19,16 +21,34 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and Push Docker Image
+      # Build & Push Web Frontend
+      - name: Build and Push Web Image
         run: |
-          # Build image từ folder backend và đẩy lên Docker Hub
+          docker build \
+            --build-arg VITE_API_URL="http://${{ secrets.EC2_HOST }}:3000" \
+            -t ${{ secrets.DOCKER_USERNAME }}/zola-web:latest ./apps/web
+          docker push ${{ secrets.DOCKER_USERNAME }}/zola-web:latest
+
+      # Build & Push Backend
+      - name: Build and Push Backend Image
+        run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/zola-backend:latest ./apps/backend
           docker push ${{ secrets.DOCKER_USERNAME }}/zola-backend:latest
 
   deploy:
-    needs: build-and-push # Đợi build xong mới deploy
+    needs: build-and-push
     runs-on: ubuntu-latest
     steps:
+      - name: Copy docker-compose file to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker/docker-compose.yml"
+          target: "/home/ubuntu/zola-backend/"
+          strip_components: 1
+
       - name: SSH to EC2 and Deploy
         uses: appleboy/ssh-action@master
         with:
@@ -37,8 +57,6 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd ~/zola-backend
-            # Tạo file docker-compose.yml nếu chưa có (lần đầu chạy)
-            # Kéo bản image mới nhất từ Docker Hub về
             sudo docker-compose pull
-            # Khởi động lại container với bản mới
             sudo docker-compose up -d
+            sudo docker image prune -f # Dọn dẹp các ảnh cũ để tránh đầy ổ cứng EC2
