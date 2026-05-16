@@ -23,7 +23,8 @@ import { MessagesCallService } from '../messages/services/call.service';
 import { CallStatus } from 'src/common/types/enums/call-status';
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: true,
+    credentials: true,
   },
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -426,7 +427,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const userId = client.data.userId;
     try {
       const existingParticipants = await this.messagesCallService.joinGroupCall(userId, data.sessionId);
-      
+
       this.server.to(data.conversationId).emit('call:group:join', {
         sessionId: data.sessionId,
         conversationId: data.conversationId,
@@ -453,7 +454,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const userId = client.data.userId;
     try {
       await this.messagesCallService.leaveGroupCall(userId, data.sessionId);
-      
+
       this.server.to(data.conversationId).emit('call:group:leave', {
         sessionId: data.sessionId,
         conversationId: data.conversationId,
@@ -463,8 +464,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       console.warn('[Socket] Failed to leave group call:', err.message);
     }
 
-  //AI event
-  //Dùng để ngắt AI trả lời
+    //AI event
+    //Dùng để ngắt AI trả lời
   }
 
   @SubscribeMessage('stop_ai_generation')
