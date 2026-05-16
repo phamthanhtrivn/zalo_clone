@@ -155,7 +155,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
           peer.onicecandidate = null;
           peer.onconnectionstatechange = null;
           peer.close();
-        } catch {}
+        } catch { }
         peersRef.current.delete(userId);
       }
 
@@ -177,7 +177,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
         peer.onicecandidate = null;
         peer.onconnectionstatechange = null;
         peer.close();
-      } catch {}
+      } catch { }
       pendingGroupCandidatesRef.current.delete(userId);
     });
     peersRef.current.clear();
@@ -328,7 +328,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
         setCallMode("DIRECT");
         setVideoCallData({ ...data, isReceiving: true });
         updateCallState("RINGING");
-        ringtoneRef.current?.play().catch(() => {});
+        ringtoneRef.current?.play().catch(() => { });
 
         if (data.messageId) {
           messageService.updateCallStatus({
@@ -423,7 +423,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
           for (const candidate of pendingCandidates) {
             try {
               await peer.addIceCandidate(new RTCIceCandidate(candidate));
-            } catch {}
+            } catch { }
           }
           pendingGroupCandidatesRef.current.delete(data.fromUserId);
 
@@ -454,7 +454,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
           for (const candidate of pendingCandidates) {
             try {
               await peer.addIceCandidate(new RTCIceCandidate(candidate));
-            } catch {}
+            } catch { }
           }
           pendingGroupCandidatesRef.current.delete(data.fromUserId);
         } catch (e) {
@@ -491,7 +491,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     setCallMode("DIRECT");
     updateCallState("CALLING");
-    dialingRef.current?.play().catch(() => {});
+    dialingRef.current?.play().catch(() => { });
 
     try {
       const res = await messageService.createCallMessage({
@@ -558,7 +558,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({
           conversationId: videoCallData.conversationId!,
           status: CallStatus.ACCEPTED,
         })
-        .catch(() => {});
+        .catch(() => { });
     }
 
     try {

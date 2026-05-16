@@ -316,6 +316,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!socketRef.current) {
       socketRef.current = io(apiUrl, {
         auth: { token: accessToken, deviceId: getDeviceId() },
+        withCredentials: true,
         transports: ['websocket'],
         reconnection: true,
         reconnectionAttempts: 5,

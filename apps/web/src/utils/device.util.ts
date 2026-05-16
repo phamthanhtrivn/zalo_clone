@@ -2,8 +2,12 @@ export const getDeviceId = () => {
   let deviceId = localStorage.getItem("device_id");
 
   if (!deviceId) {
-    if (typeof crypto !== "undefined" && crypto.randomUUID) {
-      deviceId = crypto.randomUUID();
+    if (
+      typeof window !== "undefined" &&
+      window.crypto &&
+      "randomUUID" in window.crypto
+    ) {
+      deviceId = (window.crypto as any).randomUUID();
     } else {
       // Fallback cho môi trường HTTP (không phải Secure Context)
       deviceId = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
@@ -15,7 +19,7 @@ export const getDeviceId = () => {
         }
       );
     }
-    localStorage.setItem("device_id", deviceId);
+    localStorage.setItem("device_id", deviceId as string);
   }
   return deviceId;
 };
