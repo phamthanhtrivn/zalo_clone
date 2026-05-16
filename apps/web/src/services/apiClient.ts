@@ -51,11 +51,12 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // những api không cần check
+    // những api không cần check refresh
     if (
       originalRequest?.url?.includes("/api/auth/sign-in") ||
       originalRequest?.url?.includes("/api/auth/sign-up") ||
-      originalRequest?.url?.includes("/api/api/auth/qr-login/exchange")
+      originalRequest?.url?.includes("/api/auth/qr-login/exchange") ||
+      originalRequest?.url?.includes("/api/auth/token/refresh")
     ) {
       return Promise.reject(error);
     }
