@@ -13,6 +13,7 @@ RUN npm run build
 # Stage 2: Serve với Nginx siêu nhẹ
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
-# Copy file cấu hình custom của Nginx
+# Copy file cấu hình Nginx với SPA fallback
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
