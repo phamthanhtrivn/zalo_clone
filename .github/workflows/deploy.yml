@@ -5,7 +5,9 @@ on:
     branches: [ "main" ]
     paths:
       - 'apps/backend/**'
-      - 'apps/web/**' 
+      - 'apps/web/**'
+      - 'docker/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   build-and-push:
@@ -26,11 +28,11 @@ jobs:
           docker build -t ${{ secrets.DOCKER_USERNAME }}/zola-backend:latest ./apps/backend
           docker push ${{ secrets.DOCKER_USERNAME }}/zola-backend:latest
 
-      # 2. Build & Push Web
+      # 2. Build & Push Web (Đã nướng kèm file apps/web/nginx.conf bên trong)
       - name: Build and Push Web Image
         run: |
           docker build \
-            --build-arg VITE_API_URL="http://${{ secrets.EC2_HOST }}:3000" \
+            --build-arg VITE_API_URL="https://zola14.ddns.net" \
             -t ${{ secrets.DOCKER_USERNAME }}/zola-web:latest ./apps/web
           docker push ${{ secrets.DOCKER_USERNAME }}/zola-web:latest
 
@@ -38,6 +40,19 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy docker-compose.yml to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker/docker-compose.yml"
+          target: "~/zola-backend"
+          strip_components: 1
+
       - name: SSH to EC2 and Deploy
         uses: appleboy/ssh-action@master
         with:

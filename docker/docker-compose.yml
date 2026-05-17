@@ -9,20 +9,23 @@ services:
     command: redis-server --appendonly yes
     restart: unless-stopped
 
-  web: 
-    zola-web:
+  web:
     image: htuan04/zola-web:latest
+    container_name: zalo-web
     ports:
       - "80:80"
+      - "443:443"
     restart: always
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
 
   backend:
-    image: ${DOCKER_USERNAME}/zola-backend:latest
+    image: htuan04/zola-backend:latest
     container_name: zalo-backend
-    ports:
-      - "3000:3000"
     env_file:
       - .env
+    volumes:
+      - ./secrets:/app/secrets
     depends_on:
       - redis
     restart: always
