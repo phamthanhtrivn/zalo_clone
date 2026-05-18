@@ -26,6 +26,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.htuan04.mobile",
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",

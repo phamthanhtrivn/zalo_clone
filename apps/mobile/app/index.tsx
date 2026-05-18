@@ -1,7 +1,8 @@
 import Button from "@/components/common/Button";
 import Container from "@/components/common/Container";
 import { useRouter } from "expo-router";
-import { Image, Text, Touchable, TouchableOpacity, View } from "react-native";
+import { Text, View } from "react-native";
+import ZolaLogo from "@/assets/images/ZolaZola.svg";
 
 export default function Index() {
   const router = useRouter();
@@ -15,9 +16,9 @@ export default function Index() {
   };
 
   return (
-    <Container>
-      <View className="h-[15%] mx-auto justify-center ">
-        <Text className="text-5xl font-semibold text-primary">Zalo</Text>
+    <Container className="bg-blue-50">
+      <View className="h-[15%] pt-32 mx-auto justify-center">
+        <ZolaLogo width={240} height={80} />
       </View>
       <View className="h-[60%] mx-auto"></View>
       <View className="h-[25%] w-[80%] mx-auto gap-5">

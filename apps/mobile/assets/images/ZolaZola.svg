@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="130px" height="30px" viewBox="0 0 130 30">
+  <g>
+    <rect x="0" y="0" width="130" height="30" fill="none" stroke="none" />
+    
+    <text 
+      x="65" 
+      y="22" 
+      fill="#0067f7" 
+      font-family="Comic Sans MS" 
+      font-size="20px" 
+      text-anchor="middle"
+      font-weight="normal"
+    >Zola Zola</text>
+  </g>
+</svg>

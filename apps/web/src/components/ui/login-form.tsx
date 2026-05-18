@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { QrCode, Key } from "lucide-react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { useEffect, useState } from "react";
 import { exchangeToken, signIn } from "@/store/auth/authThunk";
@@ -73,7 +73,7 @@ export function LoginForm({
   };
 
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
+    <div className={cn("flex flex-col gap-6 items-center", className)} {...props}>
       {loginMethod === "PHONE" ? (
         <Card className="w-100">
           <CardHeader className="text-center">
@@ -133,9 +133,9 @@ export function LoginForm({
                 </div>
                 <div className="text-center text-sm">
                   Bạn chưa có tài khoản?{" "}
-                  <a href="#" className="underline underline-offset-4">
+                  <Link to="/register" className="underline underline-offset-4 text-blue-600 hover:text-blue-800">
                     Đăng ký
-                  </a>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -186,9 +186,9 @@ export function LoginForm({
                     </div>
                     <div className="text-center text-sm">
                       Bạn chưa có tài khoản?{" "}
-                      <a href="#" className="underline underline-offset-4">
+                      <Link to="/register" className="underline underline-offset-4 text-blue-600 hover:text-blue-800">
                         Đăng ký
-                      </a>
+                      </Link>
                     </div>
                   </div>
                 )}

@@ -134,4 +134,10 @@ export const userService = {
     const response = await api.get(`/users/friend-status/${targetUserId}`);
     return response.data;
   },
+
+  // Lấy trạng thái online/offline của nhiều user cùng lúc
+  getBulkStatus: async (userIds: string[]) => {
+    const response = await api.post("/users/status/bulk", { userIds });
+    return response.data || [];
+  },
 };

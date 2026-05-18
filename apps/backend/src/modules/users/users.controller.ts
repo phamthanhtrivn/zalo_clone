@@ -18,7 +18,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+  ) { }
 
   @Get()
   async findByPhone(phone: string) {
@@ -93,5 +95,10 @@ export class UsersController {
   @Get('friend-status/:targetUserId')
   getFriendStatus(@Request() req, @Param('targetUserId') targetUserId: string) {
     return this.usersService.getFriendStatus(req.user.userId, targetUserId);
+  }
+
+  @Post('status/bulk')
+  getBulkStatus(@Body('userIds') userIds: string[]) {
+    return this.usersService.getBulkStatus(userIds);
   }
 }

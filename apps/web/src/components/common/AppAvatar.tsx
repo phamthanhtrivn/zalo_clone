@@ -10,6 +10,7 @@ interface AppAvatarProps {
   name: string;
   className?: string;
   isAI?: boolean;
+  isOnline?: boolean;
   onClick?: () => void;
 }
 
@@ -18,6 +19,7 @@ const AppAvatar: React.FC<AppAvatarProps> = ({
   name,
   className,
   isAI = false,
+  isOnline = false,
   onClick,
 }) => {
   const [stableSrc, setStableSrc] = useState<string>("");
@@ -59,6 +61,13 @@ const AppAvatar: React.FC<AppAvatarProps> = ({
         <div className="absolute -bottom-1 -right-1 flex h-[40%] w-[40%] items-center justify-center rounded-full bg-white p-px shadow-sm">
           <RiVerifiedBadgeFill className="h-full w-full text-[#0091ff]" />
         </div>
+      )}
+
+      {!isAI && isOnline && (
+        <span
+          className="absolute bottom-0 right-0 h-[26%] w-[26%] rounded-full border-2 border-white bg-green-500 shadow-sm"
+          title="Đang hoạt động"
+        />
       )}
     </div>
   );

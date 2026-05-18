@@ -9,9 +9,10 @@ import {
   Text,
   TouchableOpacity,
   InteractionManager,
-  StyleSheet,
+  Keyboard,
 } from "react-native";
-import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useSocket } from "@/contexts/SocketContext";
 import { messageService } from "@/services/message.service";
@@ -39,6 +40,7 @@ import ChatModals from "@/components/chat/ChatModals";
 import ChatHeader from "@/components/chat/ChatHeader";
 import FriendBanner from "@/components/chat/FriendBanner";
 import { getStories } from "@/services/social.service";
+import { formatLastSeen } from "@/utils/formater";
 
 export default function ChatWindow() {
   const conversationState = useAppSelector((state) => state.conversation);
@@ -56,32 +58,26 @@ export default function ChatWindow() {
   const user = useAppSelector((state) => state.auth.user);
   const authUserId = user?.userId || (user as any)?._id || "";
   const router = useRouter();
-  const navigation = useNavigation();
   const dispatch = useAppDispatch();
-  const lastSetTitle = useRef<string | null>(null);
+  const insets = useSafeAreaInsets();
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", () => {
+      setIsKeyboardVisible(true);
+    });
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const conversation = conversations.find((c) => c.conversationId === id);
 
-  useEffect(() => {
-    const title = conversation?.name || "Chat";
-    if (title !== lastSetTitle.current) {
-      navigation.setOptions({
-        headerTitle: () => (
-          <View style={styles.headerContainer}>
-            <GroupAvatar
-              uri={conversation?.avatar}
-              name={conversation?.name || "Chat"}
-              size={36}
-            />
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {title}
-            </Text>
-          </View>
-        ),
-      });
-      lastSetTitle.current = title;
-    }
-  }, [conversation?.name, conversation?.avatar, navigation]);
   // ✅ Use conversation.group as source of truth — conversation.type can be contaminated
   // by the last message type (e.g. "GROUP_CALL") and cause false negatives
   const isGroup = conversation?.type === "GROUP" || !!conversation?.group;
@@ -912,28 +908,28 @@ export default function ChatWindow() {
                 typeof rawUser === "string"
                   ? prevUser
                     ? {
-                        ...prevUser,
-                        _id: uid || prevUser?._id,
-                      }
+                      ...prevUser,
+                      _id: uid || prevUser?._id,
+                    }
                     : {
-                        _id: uid,
-                        profile: { name: "", avatarUrl: "" },
-                      }
+                      _id: uid,
+                      profile: { name: "", avatarUrl: "" },
+                    }
                   : {
-                      ...rawUser,
-                      profile: {
-                        name:
-                          rawUser?.profile?.name ||
-                          prevUser?.profile?.name ||
-                          "",
-                        avatarUrl:
-                          rawUser?.profile?.avatarUrl ||
-                          prevUser?.profile?.avatarUrl ||
-                          (rawUser as any)?.avatarUrl ||
-                          (prevUser as any)?.avatarUrl ||
-                          "",
-                      },
-                    };
+                    ...rawUser,
+                    profile: {
+                      name:
+                        rawUser?.profile?.name ||
+                        prevUser?.profile?.name ||
+                        "",
+                      avatarUrl:
+                        rawUser?.profile?.avatarUrl ||
+                        prevUser?.profile?.avatarUrl ||
+                        (rawUser as any)?.avatarUrl ||
+                        (prevUser as any)?.avatarUrl ||
+                        "",
+                    },
+                  };
 
               return {
                 ...prevReceipt,
@@ -965,14 +961,14 @@ export default function ChatWindow() {
       setMessages((prev) =>
         prev.map((m) =>
           m._id === data.messageId
-            ? { 
-                ...m, 
-                call: { 
-                  type: m.call?.type ?? "VIDEO", 
-                  status: data.status, 
-                  duration: data.duration ?? m.call?.duration ?? null 
-                } 
+            ? {
+              ...m,
+              call: {
+                type: m.call?.type ?? "VIDEO",
+                status: data.status,
+                duration: data.duration ?? m.call?.duration ?? null
               }
+            }
             : m,
         ),
       );
@@ -984,14 +980,14 @@ export default function ChatWindow() {
         setMessages((prev) =>
           prev.map((m) =>
             m._id === data.messageId
-              ? { 
-                  ...m, 
-                  call: { 
-                    type: m.call?.type ?? "VIDEO", 
-                    status: data.status, 
-                    duration: data.duration ?? m.call?.duration ?? 0 
-                  } 
+              ? {
+                ...m,
+                call: {
+                  type: m.call?.type ?? "VIDEO",
+                  status: data.status,
+                  duration: data.duration ?? m.call?.duration ?? 0
                 }
+              }
               : m,
           ),
         );
@@ -1140,7 +1136,9 @@ export default function ChatWindow() {
   }, [messages, authUserId, selectedMessages, isSelectMode, highlightedMessageId, isGroup, latestSentMessageId, handleJumpToMessage, handleOpenStoryLink, joinGroupCall, user?.userId]);
 
   return (
-    <Container edges={["top", "left", "right", "bottom"]}>
+    <Container
+      edges={["top", "left", "right", "bottom"]}
+    >
       <ChatHeader
         conversation={conversation}
         isFriend={isFriend}
@@ -1151,9 +1149,9 @@ export default function ChatWindow() {
       />
 
       <KeyboardAvoidingView
-        className="flex-1"
+        style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={50}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         <PinnedMessagesBar
           pinnedMessages={pinnedMessages}
@@ -1278,70 +1276,70 @@ export default function ChatWindow() {
               )}
             />
           )}
+        </View>
 
-          {/* Reply Bar */}
-          {replyingMessage && (
-            <View className="bg-white p-2.5 border-t border-[#e5e7eb] flex-row items-center gap-2.5">
-              <View className="w-1 h-[30px] bg-[#0068ff] rounded" />
-              <View className="flex-1">
-                <Text className="text-[12px] font-bold text-[#0068ff]">
-                  Đang trả lời{" "}
-                  {replyingMessage.senderId?._id === user?.userId
-                    ? "chính mình"
-                    : replyingMessage.senderId?.profile?.name || "Bạn"}
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  className="text-[12px] text-[#6b7280]"
-                >
-                  {replyingMessage.content?.text ||
-                    (replyingMessage.content?.files
-                      ? replyingMessage.content.files[0].fileName
-                      : "[Tệp đính kèm]")}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => dispatch(clearReplyingMessage())}
+        {/* Reply Bar */}
+        {replyingMessage && (
+          <View className="bg-white p-2.5 border-t border-[#e5e7eb] flex-row items-center gap-2.5">
+            <View className="w-1 h-[30px] bg-[#0068ff] rounded" />
+            <View className="flex-1">
+              <Text className="text-[12px] font-bold text-[#0068ff]">
+                Đang trả lời{" "}
+                {replyingMessage.senderId?._id === user?.userId
+                  ? "chính mình"
+                  : replyingMessage.senderId?.profile?.name || "Bạn"}
+              </Text>
+              <Text
+                numberOfLines={1}
+                className="text-[12px] text-[#6b7280]"
               >
-                <Ionicons name="close-circle" size={20} color="#9ca3af" />
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {!canChat && !isSelectMode ? (
-            <View className="p-4 bg-[#f9fafb] border-t border-[#e5e7eb] items-center">
-              <Text className="text-[#6b7280] text-[13px] italic">
-                Chỉ Trưởng/Phó nhóm mới được gửi tin nhắn
+                {replyingMessage.content?.text ||
+                  (replyingMessage.content?.files
+                    ? replyingMessage.content.files[0].fileName
+                    : "[Tệp đính kèm]")}
               </Text>
             </View>
-          ) : (
-            <ChatInput
-              chatName={conversation?.name}
-              onSendMessage={handleSendMessage}
-              onSendFiles={handleSendFile}
-              onSendVoiceAudio={handleSendVoiceAudio}
-              isSelectMode={isSelectMode}
-              selectedMessages={selectedMessages}
-              onOpenForwardModal={() => setShowForwardModal(true)}
-              onCancelSelect={() => {
-                setIsSelectMode(false);
-                setSelectedMessages([]);
-              }}
-              isGroup={isGroup}
-              conversationId={id}
-            />
-          )}
-
-          {/* Floating Jump to Newest Button */}
-          {showScrollToBottom && (
             <TouchableOpacity
-              onPress={handleGoToNewest}
-              className="absolute bottom-24 right-4 w-9 h-9 rounded-full bg-white items-center justify-center z-10 shadow-sm"
+              onPress={() => dispatch(clearReplyingMessage())}
             >
-              <Ionicons name="chevron-down" size={24} color="#0068ff" />
+              <Ionicons name="close-circle" size={20} color="#9ca3af" />
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        )}
+
+        {!canChat && !isSelectMode ? (
+          <View className="p-4 bg-[#f9fafb] border-t border-[#e5e7eb] items-center">
+            <Text className="text-[#6b7280] text-[13px] italic">
+              Chỉ Trưởng/Phó nhóm mới được gửi tin nhắn
+            </Text>
+          </View>
+        ) : (
+          <ChatInput
+            chatName={conversation?.name}
+            onSendMessage={handleSendMessage}
+            onSendFiles={handleSendFile}
+            onSendVoiceAudio={handleSendVoiceAudio}
+            isSelectMode={isSelectMode}
+            selectedMessages={selectedMessages}
+            onOpenForwardModal={() => setShowForwardModal(true)}
+            onCancelSelect={() => {
+              setIsSelectMode(false);
+              setSelectedMessages([]);
+            }}
+            isGroup={isGroup}
+            conversationId={id}
+          />
+        )}
+
+        {/* Floating Jump to Newest Button */}
+        {showScrollToBottom && (
+          <TouchableOpacity
+            onPress={handleGoToNewest}
+            className="absolute bottom-24 right-4 w-9 h-9 rounded-full bg-white items-center justify-center z-10 shadow-sm"
+          >
+            <Ionicons name="chevron-down" size={24} color="#0068ff" />
+          </TouchableOpacity>
+        )}
       </KeyboardAvoidingView>
 
       <ChatModals
@@ -1380,17 +1378,3 @@ export default function ChatWindow() {
   );
 }
 
-const styles = StyleSheet.create({
-  headerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    maxWidth: 220,
-  },
-  headerTitle: {
-    marginLeft: 8,
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-    flexShrink: 1,
-  },
-});

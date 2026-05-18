@@ -777,289 +777,290 @@ const ConversationListItem = ({
       </AlertDialog>
 
       <div
-      onClick={handleConversationClick}
-      className={cn(
-        "group mx-2 mt-2 flex cursor-pointer items-center gap-3 rounded-lg px-4 py-3 transition-colors",
-        isActive ? "bg-[#e5efff]" : "hover:bg-[#f3f5f6]",
-      )}
+        onClick={handleConversationClick}
+        className={cn(
+          "group mx-2 mt-2 flex cursor-pointer items-center gap-3 rounded-lg px-4 py-3 transition-colors",
+          isActive ? "bg-[#e5efff]" : "hover:bg-[#f3f5f6]",
+        )}
       >
-      <AppAvatar
-        src={conversation.avatar}
-        name={conversation.name}
-        isAI={conversation.type === "AI"}
-        className="h-12 w-12"
-      />
+        <AppAvatar
+          src={conversation.avatar}
+          name={conversation.name}
+          isAI={conversation.type === "AI"}
+          isOnline={conversation.type === "DIRECT" && conversation.isOnline}
+          className="h-12 w-12"
+        />
 
-      <div className="min-w-0 flex-1">
-        <div className="mb-0.5 flex items-start justify-between gap-2">
-          <h4
-            className={cn(
-              "flex min-w-0 flex-1 items-center gap-2 text-sm",
-              conversation.unreadCount > 0
-                ? "font-semibold text-black"
-                : "font-normal text-gray-900",
-              isActive ? "text-black" : "",
-            )}
-          >
-            {conversation.type === "GROUP" && (
-              <MdGroups size={18} color="gray" className="shrink-0" />
-            )}
-            <span className="min-w-0 truncate">{conversation.name}</span>
-            {conversation.pinned && (
-              <PiPushPinFill className="ml-1 h-3 w-3 shrink-0 text-blue-500" />
-            )}
-          </h4>
-
-          <div className="relative flex w-[54px] shrink-0 items-start justify-end">
-            {conversation.muted && (
-              <MdNotificationsOff className="mr-1 h-5 w-5 shrink-0 text-gray-400" />
-            )}
-
-            <div className="flex min-w-0 flex-col items-end">
-              <span className="max-w-full break-words text-right text-[11px] leading-3 text-gray-400 transition-opacity group-hover:opacity-0">
-                {formatMessageTime(conversation.lastMessageAt)}
-              </span>
-
-              {conversation.unreadCount > 0 && (
-                <span className="mt-1 rounded-full bg-red-500 px-2 py-[1px] text-[10px] text-white">
-                  {conversation.unreadCount > 99
-                    ? "99+"
-                    : conversation.unreadCount}
-                </span>
+        <div className="min-w-0 flex-1">
+          <div className="mb-0.5 flex items-start justify-between gap-2">
+            <h4
+              className={cn(
+                "flex min-w-0 flex-1 items-center gap-2 text-sm",
+                conversation.unreadCount > 0
+                  ? "font-semibold text-black"
+                  : "font-normal text-gray-900",
+                isActive ? "text-black" : "",
               )}
-            </div>
+            >
+              {conversation.type === "GROUP" && (
+                <MdGroups size={18} color="gray" className="shrink-0" />
+              )}
+              <span className="min-w-0 truncate">{conversation.name}</span>
+              {conversation.pinned && (
+                <PiPushPinFill className="ml-1 h-3 w-3 shrink-0 text-blue-500" />
+              )}
+            </h4>
 
-            <div ref={refs.setReference}>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setOpenMenu(
-                    openMenu === conversation.conversationId
-                      ? null
-                      : conversation.conversationId,
-                  );
-                }}
-                className="absolute right-0 top-1/2 -translate-y-1/2 rounded-full bg-transparent p-1 opacity-0 transition-opacity hover:bg-gray-200 group-hover:opacity-100"
-              >
-                <MoreHorizontal size={16} className="text-gray-500" />
-              </button>
+            <div className="relative flex w-[54px] shrink-0 items-start justify-end">
+              {conversation.muted && (
+                <MdNotificationsOff className="mr-1 h-5 w-5 shrink-0 text-gray-400" />
+              )}
 
-              {openMenu === conversation.conversationId && (
-                <FloatingPortal>
-                  <div
-                    ref={refs.setFloating}
-                    style={floatingStyles}
-                    className="z-50 w-56 rounded-xl border bg-white text-sm shadow-lg"
-                    onClick={(e) => e.stopPropagation()}
-                  >
+              <div className="flex min-w-0 flex-col items-end">
+                <span className="max-w-full break-words text-right text-[11px] leading-3 text-gray-400 transition-opacity group-hover:opacity-0">
+                  {formatMessageTime(conversation.lastMessageAt)}
+                </span>
+
+                {conversation.unreadCount > 0 && (
+                  <span className="mt-1 rounded-full bg-red-500 px-2 py-[1px] text-[10px] text-white">
+                    {conversation.unreadCount > 99
+                      ? "99+"
+                      : conversation.unreadCount}
+                  </span>
+                )}
+              </div>
+
+              <div ref={refs.setReference}>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setOpenMenu(
+                      openMenu === conversation.conversationId
+                        ? null
+                        : conversation.conversationId,
+                    );
+                  }}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 rounded-full bg-transparent p-1 opacity-0 transition-opacity hover:bg-gray-200 group-hover:opacity-100"
+                >
+                  <MoreHorizontal size={16} className="text-gray-500" />
+                </button>
+
+                {openMenu === conversation.conversationId && (
+                  <FloatingPortal>
                     <div
-                      onMouseEnter={closeSubMenu}
-                      className="cursor-pointer p-3 hover:bg-gray-100"
-                      onClick={handlePinConversation}
+                      ref={refs.setFloating}
+                      style={floatingStyles}
+                      className="z-50 w-56 rounded-xl border bg-white text-sm shadow-lg"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      {conversation.pinned
-                        ? "Bỏ ghim hội thoại"
-                        : "Ghim hội thoại"}
-                    </div>
-
-                    <div
-                      ref={subRefs.setReference}
-                      onMouseEnter={() => setHoverMenu("category")}
-                      className="relative flex cursor-pointer justify-between p-3 hover:bg-gray-100"
-                    >
-                      Phân loại <span>›</span>
-                      {hoverMenu === "category" && (
-                        <div
-                          ref={subRefs.setFloating}
-                          style={subFloatingStyles}
-                          onMouseEnter={() => setHoverMenu("category")}
-                          onMouseLeave={closeSubMenu}
-                          className="w-56 rounded-xl border bg-white text-sm shadow-lg"
-                        >
-                          {CATEGORY_VALUES.map((cat) => (
-                            <div
-                              key={cat}
-                              onClick={(e) => handleCategory(cat, e)}
-                              className="flex cursor-pointer items-center justify-between p-3 hover:bg-gray-100"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={cn(
-                                    "h-3 w-3 rounded-sm",
-                                    CATEGORY_DOT[cat],
-                                  )}
-                                />
-                                {CATEGORY_LABEL_DISPLAY[cat]}
-                              </div>
-                              {conversation.category === cat && (
-                                <IoCheckmark className="h-4 w-4 text-blue-500" />
-                              )}
-                            </div>
-                          ))}
-
-                          <div className="border-t" />
-                          <div className="cursor-pointer p-3 hover:bg-gray-100">
-                            Quản lý thẻ phân loại
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div
-                      onMouseEnter={closeSubMenu}
-                      className="cursor-pointer p-3 hover:bg-gray-100"
-                      onClick={handleMarkUnread}
-                    >
-                      {conversation.unreadCount > 0
-                        ? "Đánh dấu đã đọc"
-                        : "Đánh dấu chưa đọc"}
-                    </div>
-
-                    <div className="my-1 border-t" />
-
-                    {isDirect && (
                       <div
                         onMouseEnter={closeSubMenu}
                         className="cursor-pointer p-3 hover:bg-gray-100"
+                        onClick={handlePinConversation}
                       >
-                        Thêm vào nhóm
+                        {conversation.pinned
+                          ? "Bỏ ghim hội thoại"
+                          : "Ghim hội thoại"}
                       </div>
-                    )}
 
-                    {!conversation.muted ? (
                       <div
-                        onMouseEnter={() => setHoverMenu("mute")}
+                        ref={subRefs.setReference}
+                        onMouseEnter={() => setHoverMenu("category")}
                         className="relative flex cursor-pointer justify-between p-3 hover:bg-gray-100"
                       >
-                        Tắt thông báo <span>›</span>
-                        {hoverMenu === "mute" && (
+                        Phân loại <span>›</span>
+                        {hoverMenu === "category" && (
                           <div
-                            onMouseEnter={() => setHoverMenu("mute")}
+                            ref={subRefs.setFloating}
+                            style={subFloatingStyles}
+                            onMouseEnter={() => setHoverMenu("category")}
                             onMouseLeave={closeSubMenu}
-                            className="absolute left-full top-0 ml-1 w-48 rounded-xl border bg-white shadow-lg"
+                            className="w-56 rounded-xl border bg-white text-sm shadow-lg"
                           >
+                            {CATEGORY_VALUES.map((cat) => (
+                              <div
+                                key={cat}
+                                onClick={(e) => handleCategory(cat, e)}
+                                className="flex cursor-pointer items-center justify-between p-3 hover:bg-gray-100"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={cn(
+                                      "h-3 w-3 rounded-sm",
+                                      CATEGORY_DOT[cat],
+                                    )}
+                                  />
+                                  {CATEGORY_LABEL_DISPLAY[cat]}
+                                </div>
+                                {conversation.category === cat && (
+                                  <IoCheckmark className="h-4 w-4 text-blue-500" />
+                                )}
+                              </div>
+                            ))}
+
+                            <div className="border-t" />
+                            <div className="cursor-pointer p-3 hover:bg-gray-100">
+                              Quản lý thẻ phân loại
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div
+                        onMouseEnter={closeSubMenu}
+                        className="cursor-pointer p-3 hover:bg-gray-100"
+                        onClick={handleMarkUnread}
+                      >
+                        {conversation.unreadCount > 0
+                          ? "Đánh dấu đã đọc"
+                          : "Đánh dấu chưa đọc"}
+                      </div>
+
+                      <div className="my-1 border-t" />
+
+                      {isDirect && (
+                        <div
+                          onMouseEnter={closeSubMenu}
+                          className="cursor-pointer p-3 hover:bg-gray-100"
+                        >
+                          Thêm vào nhóm
+                        </div>
+                      )}
+
+                      {!conversation.muted ? (
+                        <div
+                          onMouseEnter={() => setHoverMenu("mute")}
+                          className="relative flex cursor-pointer justify-between p-3 hover:bg-gray-100"
+                        >
+                          Tắt thông báo <span>›</span>
+                          {hoverMenu === "mute" && (
+                            <div
+                              onMouseEnter={() => setHoverMenu("mute")}
+                              onMouseLeave={closeSubMenu}
+                              className="absolute left-full top-0 ml-1 w-48 rounded-xl border bg-white shadow-lg"
+                            >
+                              {[
+                                { label: "Trong 1 giờ", duration: 60 },
+                                { label: "Trong 4 giờ", duration: 240 },
+                                { label: "Cho đến 8:00 AM", duration: -2 },
+                                { label: "Cho đến khi mở lại", duration: -1 },
+                              ].map((opt) => (
+                                <div
+                                  key={opt.label}
+                                  className="cursor-pointer p-3 hover:bg-gray-100"
+                                  onClick={(e) => handleMute(opt.duration, e)}
+                                >
+                                  {opt.label}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div
+                          onMouseEnter={closeSubMenu}
+                          className="cursor-pointer p-3 hover:bg-gray-100"
+                          onClick={(e) => handleMute(0, e)}
+                        >
+                          Bật lại thông báo
+                        </div>
+                      )}
+
+                      <div
+                        onMouseEnter={closeSubMenu}
+                        className="cursor-pointer p-3 hover:bg-gray-100"
+                        onClick={handleHideConversation}
+                      >
+                        {conversation.hidden ? "Bỏ ẩn trò chuyện" : "Ẩn trò chuyện"}
+                      </div>
+
+                      <div
+                        onMouseEnter={() => setHoverMenu("delete")}
+                        className="relative flex cursor-pointer justify-between p-3 hover:bg-gray-100"
+                      >
+                        Tin nhắn tự xóa <span>›</span>
+                        {hoverMenu === "delete" && (
+                          <div className="absolute left-full top-0 ml-1 w-44 rounded-xl border bg-white shadow-lg">
                             {[
-                              { label: "Trong 1 giờ", duration: 60 },
-                              { label: "Trong 4 giờ", duration: 240 },
-                              { label: "Cho đến 8:00 AM", duration: -2 },
-                              { label: "Cho đến khi mở lại", duration: -1 },
+                              { label: "1 ngày", days: 1 },
+                              { label: "7 ngày", days: 7 },
+                              { label: "Không bao giờ", days: 0 },
                             ].map((opt) => (
                               <div
                                 key={opt.label}
-                                className="cursor-pointer p-3 hover:bg-gray-100"
-                                onClick={(e) => handleMute(opt.duration, e)}
+                                className="flex cursor-pointer justify-between p-3 hover:bg-gray-100"
+                                onClick={(e) => handleExpire(opt.days, e)}
                               >
                                 {opt.label}
+                                {expireDays === opt.days && (
+                                  <IoCheckmark className="h-4 w-4 text-blue-500" />
+                                )}
                               </div>
                             ))}
                           </div>
                         )}
                       </div>
-                    ) : (
+
+                      <div className="my-1 border-t" />
+
+                      <div
+                        onMouseEnter={closeSubMenu}
+                        className="cursor-pointer p-3 text-red-500 hover:bg-gray-100"
+                        onClick={handleDeleteConversation}
+                      >
+                        Xóa hội thoại
+                      </div>
+
                       <div
                         onMouseEnter={closeSubMenu}
                         className="cursor-pointer p-3 hover:bg-gray-100"
-                        onClick={(e) => handleMute(0, e)}
                       >
-                        Bật lại thông báo
+                        Báo xấu
                       </div>
-                    )}
-
-                    <div
-                      onMouseEnter={closeSubMenu}
-                      className="cursor-pointer p-3 hover:bg-gray-100"
-                      onClick={handleHideConversation}
-                    >
-                      {conversation.hidden ? "Bỏ ẩn trò chuyện" : "Ẩn trò chuyện"}
                     </div>
-
-                    <div
-                      onMouseEnter={() => setHoverMenu("delete")}
-                      className="relative flex cursor-pointer justify-between p-3 hover:bg-gray-100"
-                    >
-                      Tin nhắn tự xóa <span>›</span>
-                      {hoverMenu === "delete" && (
-                        <div className="absolute left-full top-0 ml-1 w-44 rounded-xl border bg-white shadow-lg">
-                          {[
-                            { label: "1 ngày", days: 1 },
-                            { label: "7 ngày", days: 7 },
-                            { label: "Không bao giờ", days: 0 },
-                          ].map((opt) => (
-                            <div
-                              key={opt.label}
-                              className="flex cursor-pointer justify-between p-3 hover:bg-gray-100"
-                              onClick={(e) => handleExpire(opt.days, e)}
-                            >
-                              {opt.label}
-                              {expireDays === opt.days && (
-                                <IoCheckmark className="h-4 w-4 text-blue-500" />
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="my-1 border-t" />
-
-                    <div
-                      onMouseEnter={closeSubMenu}
-                      className="cursor-pointer p-3 text-red-500 hover:bg-gray-100"
-                      onClick={handleDeleteConversation}
-                    >
-                      Xóa hội thoại
-                    </div>
-
-                    <div
-                      onMouseEnter={closeSubMenu}
-                      className="cursor-pointer p-3 hover:bg-gray-100"
-                    >
-                      Báo xấu
-                    </div>
-                  </div>
-                </FloatingPortal>
-              )}
+                  </FloatingPortal>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[13px] text-gray-500">
-          {conversation.category && (
-            <span
-              className={cn(
-                "relative inline-flex shrink-0 items-center rounded-l-md px-2 py-[2px] text-[10px] font-medium text-white",
-                "before:absolute before:right-[-6px] before:top-0 before:h-full before:w-3 before:skew-x-[-30deg]",
-                CATEGORY_STYLE[conversation.category],
-              )}
-            >
-              {CATEGORY_SHORT_DISPLAY[conversation.category]}
-            </span>
-          )}
-          <span className="flex min-w-0 items-center gap-1 text-[13px] text-gray-500">
-            <span className="shrink-0">{previewSenderPrefix}</span>
-            <span className="hidden">
-              {!previewData.showSender
-                ? ""
-                : conversation.type === "DIRECT" &&
-                  conversation.lastMessage?.senderName !== "Bạn"
+          <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[13px] text-gray-500">
+            {conversation.category && (
+              <span
+                className={cn(
+                  "relative inline-flex shrink-0 items-center rounded-l-md px-2 py-[2px] text-[10px] font-medium text-white",
+                  "before:absolute before:right-[-6px] before:top-0 before:h-full before:w-3 before:skew-x-[-30deg]",
+                  CATEGORY_STYLE[conversation.category],
+                )}
+              >
+                {CATEGORY_SHORT_DISPLAY[conversation.category]}
+              </span>
+            )}
+            <span className="flex min-w-0 items-center gap-1 text-[13px] text-gray-500">
+              <span className="shrink-0">{previewSenderPrefix}</span>
+              <span className="hidden">
+                {!previewData.showSender
                   ? ""
-                  : `${conversation.lastMessage?.senderName ?? ""}: `}
-            </span>
+                  : conversation.type === "DIRECT" &&
+                    conversation.lastMessage?.senderName !== "Bạn"
+                    ? ""
+                    : `${conversation.lastMessage?.senderName ?? ""}: `}
+              </span>
 
-            <span
-              className={cn(
-                "flex min-w-0 items-center gap-1 truncate",
-                conversation.unreadCount > 0
-                  ? "font-semibold text-gray-900"
-                  : "text-gray-500",
-              )}
-            >
-              {previewDisplay.content}
+              <span
+                className={cn(
+                  "flex min-w-0 items-center gap-1 truncate",
+                  conversation.unreadCount > 0
+                    ? "font-semibold text-gray-900"
+                    : "text-gray-500",
+                )}
+              >
+                {previewDisplay.content}
+              </span>
             </span>
-          </span>
+          </div>
         </div>
-      </div>
       </div>
     </>
   );
