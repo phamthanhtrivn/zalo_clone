@@ -22,7 +22,9 @@ import {
   setUnreadCount,
   addConversationToTop,
   fetchConversations,
+  updateUserStatus,
 } from "@/store/slices/conversationSlice";
+import { userService } from "@/services/user.service";
 import { logout2 } from "@/store/auth/authThunk";
 import { getDeviceId } from "@/utils/device.util";
 
@@ -64,6 +66,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const router = useRouter();
   const user = useAppSelector((state) => state.auth.user);
   const socketRef = useRef<Socket | null>(null);
+  const conversations = useAppSelector((state) => state.conversation.conversations);
 
   // Track current route để biết có đang ở màn hình bị kick không
   const currentConversationIdRef = useRef<string | null>(null);
@@ -103,6 +106,31 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     },
     [],
   );
+
+  // Tự động fetch trạng thái online ban đầu của tất cả bạn chat (giống Web)
+  useEffect(() => {
+    if (!user?.userId || conversations.length === 0) return;
+
+    const idsToFetch = conversations
+      .filter((c) => c.type === "DIRECT" && c.otherMemberId && c.isOnline === undefined)
+      .map((c) => c.otherMemberId) as string[];
+
+    if (idsToFetch.length === 0) return;
+
+    userService.getBulkStatus(idsToFetch)
+      .then((statuses: any[]) => {
+        if (Array.isArray(statuses)) {
+          statuses.forEach((status) => {
+            dispatch(updateUserStatus({
+              userId: status.userId,
+              isOnline: status.isOnline,
+              lastSeenAt: status.lastSeenAt,
+            }));
+          });
+        }
+      })
+      .catch((err: any) => console.error("[Mobile] Error fetching bulk statuses:", err));
+  }, [user?.userId, conversations.length]);
 
   // Tự động đăng xuất khi bị cưỡng ép
   const handleForceLogout = (data: { message: string }) => {
@@ -420,6 +448,15 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         setFriendRefreshKey((value) => value + 1);
       };
 
+      // Handler trạng thái online/offline real-time (giống Web)
+      const handleUserStatusChange = (data: {
+        userId: string;
+        isOnline: boolean;
+        lastSeenAt: string | null;
+      }) => {
+        dispatch(updateUserStatus(data));
+      };
+
       // --- ĐĂNG KÝ LISTENERS (mỗi event 1 lần, truyền đầy đủ callback ref) ---
       socketInstance.on("connect", onConnect);
       socketInstance.on("disconnect", onDisconnect);
@@ -447,6 +484,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.on("cancel_friend_request", handleCancelFriendRequest);
       socketInstance.on("update_profile", handleUpdateProfile);
       socketInstance.on("social:notification", handleSocialNotification);
+      socketInstance.on("user_status_change", handleUserStatusChange);
 
       const handleUpdatePoll = (data: any) => {
         if (data.conversationId) {
@@ -495,6 +533,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
         socketInstance.off("member_updated", handleMemberUpdated);
         socketInstance.off("role_updated", handleRoleUpdated);
         socketInstance.off("new_approval_request", handleNewApprovalRequest);
+        socketInstance.off("user_status_change", handleUserStatusChange);
       };
     };
 

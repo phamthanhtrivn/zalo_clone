@@ -25,7 +25,7 @@ const Container = ({
 
   return (
     <View
-      className={`flex-1 ${className}`}
+      className={`flex-1 bg-white ${className}`}
       style={[paddingStyle, style]}
       {...props}
     >

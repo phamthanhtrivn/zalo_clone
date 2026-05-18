@@ -355,7 +355,7 @@ const ConversationItem: React.FC<Props> = React.memo(({
     lastMessage?.senderName === "Bạn";
   const senderPrefixDisplay =
     !conversation.lastMessage?.senderName ||
-    (conversation.lastMessage as any)?.type === "SYSTEM"
+      (conversation.lastMessage as any)?.type === "SYSTEM"
       ? ""
       : conversation.type === "DIRECT" && !isOwn
         ? ""
@@ -670,6 +670,22 @@ const ConversationItem: React.FC<Props> = React.memo(({
             name={conversation.name}
             size={48}
           />
+          {/* Chấm xanh online - chỉ cho DIRECT, không phải AI */}
+          {conversation.type === "DIRECT" && conversation.isOnline && (
+            <View
+              style={{
+                position: "absolute",
+                bottom: 0,
+                right: 0,
+                width: 13,
+                height: 13,
+                borderRadius: 7,
+                backgroundColor: "#22c55e",
+                borderWidth: 2,
+                borderColor: "#fff",
+              }}
+            />
+          )}
           {conversation.type === "AI" && (
             <View
               style={{

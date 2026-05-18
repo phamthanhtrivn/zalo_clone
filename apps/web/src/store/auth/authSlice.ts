@@ -86,7 +86,8 @@ const authSlice = createSlice({
       })
       .addCase(completeSignUp.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload;
+        state.user = action.payload.user;
+        state.accessToken = action.payload.accessToken;
       })
       .addCase(completeSignUp.rejected, (state) => {
         state.loading = false;

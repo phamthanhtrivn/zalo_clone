@@ -44,6 +44,8 @@ export interface ConversationItemType {
     ownerId: string;
     joinToken: string | null;
   };
+  isOnline?: boolean;
+  lastSeenAt?: string | null;
 }
 
 export interface File {

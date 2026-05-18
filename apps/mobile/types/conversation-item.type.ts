@@ -3,8 +3,11 @@ export interface ConversationItemType {
   type: string;
   name: string;
   avatar: string;
+  otherMemberId?: string | null;
+  isOnline?: boolean;
+  lastSeenAt?: string | null;
   muted: boolean;
-  mutedUntil: Date | null;
+  mutedUntil: string | Date | null;
   pinned: boolean;
   hidden: boolean;
   category?: ConversationCategory;

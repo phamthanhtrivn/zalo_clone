@@ -204,6 +204,24 @@ const conversationSlice = createSlice({
     setCachedMessages(state, action: PayloadAction<{ conversationId: string; messages: any[] }>) {
       state.cachedMessages[action.payload.conversationId] = action.payload.messages;
     },
+
+    // 11. Cập nhật trạng thái online/offline của người dùng (real-time)
+    updateUserStatus(
+      state,
+      action: PayloadAction<{
+        userId: string;
+        isOnline: boolean;
+        lastSeenAt: string | null;
+      }>,
+    ) {
+      const { userId, isOnline, lastSeenAt } = action.payload;
+      state.conversations = state.conversations.map((c) => {
+        if (c.type === "DIRECT" && c.otherMemberId === userId) {
+          return { ...c, isOnline, lastSeenAt };
+        }
+        return c;
+      });
+    },
   },
 
   // 10. Extra Reducers cho AsyncThunk
@@ -236,6 +254,7 @@ export const {
   clearReplyingMessage,
   addConversationToTop,
   setCachedMessages,
+  updateUserStatus,
 } = conversationSlice.actions;
 
 export default conversationSlice.reducer;

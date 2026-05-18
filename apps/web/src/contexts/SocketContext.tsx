@@ -20,6 +20,7 @@ import {
   updateConversationSetting,
   updateRecallMessageInConversation,
   updateUnreadStateInMessages,
+  updateUserStatus,
 } from "@/store/slices/conversationSlice";
 import {
   updateReadReceipt,
@@ -45,6 +46,7 @@ import {
 import { toast } from "react-toastify";
 import { clearAuth } from "@/store/auth/authSlice";
 import { getDeviceId } from "@/utils/device.util";
+import { userService } from "@/services/user.service";
 
 interface SocketContextType {
   socket: Socket | null;
@@ -101,6 +103,35 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
+
+  // Tự động truy vấn trạng thái hoạt động ban đầu của các bạn chat
+  useEffect(() => {
+    if (!user?.userId || conversations.length === 0) return;
+
+    // Lọc các otherMemberId từ direct conversation mà chưa có thông tin isOnline
+    const idsToFetch = conversations
+      .filter((c) => c.type === "DIRECT" && c.otherMemberId && c.isOnline === undefined)
+      .map((c) => c.otherMemberId) as string[];
+
+    if (idsToFetch.length === 0) return;
+
+    userService.getBulkStatus(idsToFetch)
+      .then((res) => {
+        // Hỗ trợ cả trường hợp mảng thô hoặc đối tượng được bọc bởi Interceptor { success: true, data: [...] }
+        const statuses = Array.isArray(res) ? res : (res as any)?.data;
+        if (Array.isArray(statuses)) {
+          statuses.forEach((status) => {
+            dispatch(updateUserStatus({
+              userId: status.userId,
+              isOnline: status.isOnline,
+              lastSeenAt: status.lastSeenAt,
+            }));
+          });
+        }
+      })
+      .catch((err) => console.error("Error fetching bulk statuses:", err));
+  }, [conversations, user?.userId, dispatch]);
+
   const handleNewMessageSidebar = (data: any) => {
     dispatch(updateConversation(data));
   };
@@ -558,6 +589,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       }));
     };
 
+    const handleUserStatusChange = (data: {
+      userId: string;
+      isOnline: boolean;
+      lastSeenAt: string | null;
+    }) => {
+      dispatch(updateUserStatus(data));
+    };
+
     socketInstance.on("connect", onConnect);
     socketInstance.on("disconnect", onDisconnect);
     socketInstance.on("mark_as_read:success", handleMarkAsReadSuccess);
@@ -594,6 +633,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     socketInstance.on("force_logout", handleForceLogout);
     socketInstance.on("ai_status", handleAiStatus);
     socketInstance.on("ai_typing_chunk", handleAiTypingChunk);
+    socketInstance.on("user_status_change", handleUserStatusChange);
 
     return () => {
       socketInstance.off("connect", onConnect);
@@ -632,6 +672,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       socketInstance.off("force_logout", handleForceLogout);
       socketInstance.off("ai_status", handleAiStatus);
       socketInstance.off("ai_typing_chunk", handleAiTypingChunk);
+      socketInstance.off("user_status_change", handleUserStatusChange);
+
+      socketInstance.disconnect();
+      socketRef.current = null;
     };
   }, [apiUrl, user?.userId, accessToken, handleNewMessage, handleMessageReacted, handleMessageRecalled, handleMessagePinned, handleReadReceipt, handleMessagesExpired, handleUpdatePoll, handlePollOptionAdded, handleGroupDisbanded, handleForceLogout, handleAiStatus, handleAiTypingChunk]);
 

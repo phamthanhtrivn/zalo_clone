@@ -21,6 +21,7 @@ import { Types } from 'mongoose';
 import { TokenService } from 'src/common/jwt-token/jwt.service';
 import { MessagesCallService } from '../messages/services/call.service';
 import { CallStatus } from 'src/common/types/enums/call-status';
+import { UsersService } from '../users/users.service';
 @WebSocketGateway({
   cors: {
     origin: '*',
@@ -37,9 +38,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly redisService: RedisService,
     private readonly eventEmitter: EventEmitter2,
     private readonly tokenService: TokenService,
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService,
   ) { }
 
-  handleConnection(socket: Socket) {
+  async handleConnection(socket: Socket) {
     const token = socket.handshake.auth?.token as string;
     const deviceId = socket.handshake.auth?.deviceId as string;
 
@@ -59,11 +62,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       socket.join(userId); // Join a room of userId update online event for sidebar
       socket.join(deviceId); // Phòng dùng cho AuthService
 
-      console.log(`\nUser ${userId} connected with socket ${socket.id}`);
-      console.log(`User ${userId} join room: ${userId}`);
+      console.log(`Socket connected:`, {
+        userId,
+      });
+
+      // Track online status in Redis
+      const redis = this.redisService.getClient();
+      const redisKey = `online:${userId}`;
+      await redis.sadd(redisKey, socket.id);
+      await redis.expire(redisKey, 86400); // 24 hour expiry fallback
+
+      const activeConnections = await redis.scard(redisKey);
+      if (activeConnections === 1) {
+        // Emit user_status_change globally
+        this.server.emit('user_status_change', {
+          userId,
+          isOnline: true,
+          lastSeenAt: null,
+        });
+      }
     } catch (err: any) {
       console.log(`Lỗi xác thực Socket (${socket.id}):`, err.message);
-
       socket.disconnect();
     }
   }
@@ -83,6 +102,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       } catch (err) {
         console.error('Error handling ghost participant disconnect:', err);
       }
+
+      try {
+        const redis = this.redisService.getClient();
+        const redisKey = `online:${userId}`;
+        await redis.srem(redisKey, socket.id);
+
+        const activeConnections = await redis.scard(redisKey);
+
+        if (activeConnections === 0) {
+          await redis.del(redisKey);
+          const now = new Date();
+          await this.usersService.updateLastSeen(userId);
+
+          this.server.emit('user_status_change', {
+            userId,
+            isOnline: false,
+            lastSeenAt: now.toISOString(),
+          });
+        }
+      } catch (err) {
+        console.error('Error tracking offline status in Redis:', err);
+      }
     }
     console.log(`User ${socket.data?.userId} disconnected (${socket.id})`);
   }
@@ -92,6 +133,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const subClient = this.redisService.createDuplicateClient();
 
     this.server.adapter(createAdapter(pubClient, subClient));
+
+    // Tự động dọn dẹp các khóa online:* còn sót lại trong Redis khi khởi động server
+    try {
+      const keys = await pubClient.keys('online:*');
+      if (keys.length > 0) {
+        await pubClient.del(keys);
+      }
+    } catch (err) {
+      console.error('Lỗi khi dọn dẹp các khóa online cũ khi khởi động:', err);
+    }
 
     // Subscribe to custom redis events for multi-instance support
     this.redisService.subscribe(REDIS_CHANNEL_SOCKET_EVENTS, (payload: any) => {
@@ -123,9 +174,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.server.to(room).emit(event, data);
       }
     });
-
-    console.log('Redis adapter and custom pub/sub listener connected'); // for chat gateway to serve multiple instances (server when deploy)
   }
+
   // Conversation room
   @SubscribeMessage('join_room')
   handleJoinRoom(
@@ -426,7 +476,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const userId = client.data.userId;
     try {
       const existingParticipants = await this.messagesCallService.joinGroupCall(userId, data.sessionId);
-      
+
       this.server.to(data.conversationId).emit('call:group:join', {
         sessionId: data.sessionId,
         conversationId: data.conversationId,
@@ -453,7 +503,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const userId = client.data.userId;
     try {
       await this.messagesCallService.leaveGroupCall(userId, data.sessionId);
-      
+
       this.server.to(data.conversationId).emit('call:group:leave', {
         sessionId: data.sessionId,
         conversationId: data.conversationId,
@@ -463,8 +513,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       console.warn('[Socket] Failed to leave group call:', err.message);
     }
 
-  //AI event
-  //Dùng để ngắt AI trả lời
+    //AI event
+    //Dùng để ngắt AI trả lời
   }
 
   @SubscribeMessage('stop_ai_generation')

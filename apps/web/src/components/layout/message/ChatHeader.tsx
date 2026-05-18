@@ -1,5 +1,5 @@
 import { Video, Search, Loader2 } from "lucide-react";
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
 import { MdGroupAdd } from "react-icons/md";
 import { LuPanelRight, LuPanelRightClose } from "react-icons/lu";
 import type { ConversationItemType } from "@/types/conversation-item.type";
@@ -9,8 +9,8 @@ import type { MessagesType } from "@/types/messages.type";
 import PinnedMessagesBar from "./PinnedMessagesBar";
 import { useCall } from "@/contexts/VideoCallContext";
 import { useAppSelector } from "@/store";
-import { messageService } from "@/services/message.service";
 import { CallType } from "@/constants/types";
+import { formatLastSeen } from "@/utils/lastSeen.util";
 
 type ChatHeaderProps = {
   conversation: ConversationItemType;
@@ -36,6 +36,18 @@ const ChatHeader = ({
   const { startGroupCall, startDirectCall } = useCall();
   const currentUserId = useAppSelector((state) => state.auth.user?.userId);
   const [isInitializingCall, setIsInitializingCall] = useState(false);
+  const [, setTick] = useState(0);
+
+  // Tự động cập nhật lại thời gian "Hoạt động X phút trước" mỗi 30 giây
+  useEffect(() => {
+    if (conversation.type !== "DIRECT" || conversation.isOnline) return;
+
+    const timer = setInterval(() => {
+      setTick((t) => t + 1);
+    }, 60000);
+
+    return () => clearInterval(timer);
+  }, [conversation.isOnline, conversation.lastSeenAt, conversation.type]);
 
   const otherMemberId =
     conversation?.participants?.find((id: string) => id !== currentUserId) ||
@@ -82,6 +94,7 @@ const ChatHeader = ({
             src={conversation?.avatar}
             name={conversation?.name || ""}
             isAI={conversation?.type === "AI"}
+            isOnline={conversation?.type === "DIRECT" && conversation?.isOnline}
             className="w-10 h-10 border-0 shadow-sm"
           />
 
@@ -89,7 +102,19 @@ const ChatHeader = ({
             <h3 className="text-[16px] font-semibold text-gray-800 truncate flex items-center gap-1">
               {conversation.name}
             </h3>
-            <span className="text-[12px] text-gray-400"></span>
+            {conversation.type !== "AI" && (
+              <span className="text-[12px] text-gray-400 select-none">
+                {conversation.type === "DIRECT" ? (
+                  conversation.isOnline ? (
+                    <span className="text-[#0084ff] font-medium">Đang hoạt động</span>
+                  ) : (
+                    <span>{formatLastSeen(conversation.lastSeenAt)}</span>
+                  )
+                ) : (
+                  <span>Trò chuyện nhóm</span>
+                )}
+              </span>
+            )}
           </div>
         </div>
 

@@ -22,23 +22,42 @@ export default function OtpInput({ length = 6, onChange }: Props) {
   };
 
   const handleChange = (text: string, index: number) => {
-    if (text.length > 1) {
-      const digits = text.slice(0, length).split("");
-      const newOtp = Array(length)
-        .fill("")
-        .map((_, i) => digits[i] || "");
+    // Only allow numbers
+    const cleanText = text.replace(/[^0-9]/g, "");
+
+    if (cleanText.length > 1) {
+      // 1. Paste Action (e.g. user pastes full code)
+      if (cleanText.length >= 4) {
+        const digits = cleanText.slice(0, length).split("");
+        const newOtp = Array(length)
+          .fill("")
+          .map((_, i) => digits[i] || "");
+
+        updateOtp(newOtp);
+        inputs.current[length - 1]?.focus();
+        return;
+      }
+
+      // 2. Type-over (replace existing character with the newly typed one)
+      const char = cleanText[cleanText.length - 1] || "";
+      const newOtp = [...otp];
+      newOtp[index] = char;
 
       updateOtp(newOtp);
-      inputs.current[length - 1]?.focus();
+
+      if (index < length - 1) {
+        inputs.current[index + 1]?.focus();
+      }
       return;
     }
 
+    // 3. Normal single digit entry
     const newOtp = [...otp];
-    newOtp[index] = text;
+    newOtp[index] = cleanText;
 
     updateOtp(newOtp);
 
-    if (text && index < length - 1) {
+    if (cleanText && index < length - 1) {
       inputs.current[index + 1]?.focus();
     }
   };
@@ -68,7 +87,7 @@ export default function OtpInput({ length = 6, onChange }: Props) {
           }}
           className={`w-12 h-14 border-b text-center text-xl ${digit ? "border-graident" : "border-secondary"}`}
           keyboardType="number-pad"
-          maxLength={1}
+          maxLength={length} // Keep maxLength equal to length to enable native paste suggest options
           value={digit}
           onChangeText={(text) => handleChange(text, index)}
           onKeyPress={({ nativeEvent }) =>

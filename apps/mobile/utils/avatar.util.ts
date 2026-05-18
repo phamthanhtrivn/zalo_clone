@@ -25,7 +25,7 @@ export const getAvatarData = (name: string) => {
 
   // Logic: Nếu tên chứa dấu phẩy hoặc có chữ "người khác" -> Hiện Icon Nhóm
   const isDefaultGroup = name.includes(",") || name.includes("người khác");
-  
+
   if (isDefaultGroup) {
     return { initials: null, isGroupIcon: true };
   }
@@ -34,7 +34,7 @@ export const getAvatarData = (name: string) => {
   if (parts.length === 1) {
     return { initials: parts[0].charAt(0).toUpperCase(), isGroupIcon: false };
   }
-  
+
   const first = parts[0].charAt(0).toUpperCase();
   const last = parts[parts.length - 1].charAt(0).toUpperCase();
   return { initials: first + last, isGroupIcon: false };

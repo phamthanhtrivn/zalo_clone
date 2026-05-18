@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schemas/user.schema';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { RequestFriendDto } from './dto/request-friend.dto';
 import { updateFriendStatus } from './helper/updateFriendStatus.helper';
 import { checkFriendStatus } from './helper/checkFriendStaus.helper';
@@ -21,6 +21,7 @@ import * as bcrypt from 'bcrypt';
 import { Gender } from 'src/common/types/enums/gender';
 import { FriendStatus } from 'src/common/types/enums/friend-status';
 import { ChatGateway } from '../chat/chat.gateway';
+import { RedisService } from 'src/common/redis/redis.service';
 
 @Injectable()
 export class UsersService {
@@ -28,7 +29,8 @@ export class UsersService {
     @InjectModel(User.name) private userModel: Model<User>,
     private readonly storageService: StorageService,
     private readonly chatGateway: ChatGateway,
-  ) {}
+    private readonly redisService: RedisService,
+  ) { }
 
   async findByPhone(phone: string) {
     return this.userModel.findOne({ phone: phone }).exec();
@@ -521,5 +523,56 @@ export class UsersService {
         status: friendship?.status || null, // PENDING, REQUESTED, etc.
       },
     };
+  }
+
+  async updateLastSeen(userId: string): Promise<void> {
+    await this.userModel.updateOne(
+      { _id: new Types.ObjectId(userId) },
+      { $set: { lastSeenAt: new Date() } },
+    ).exec();
+    console.log("Cập nhật ngày cập nhật cuôi của user: ", userId)
+  }
+
+  async getBulkStatus(userIds: string[]) {
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return [];
+    }
+    const redis = this.redisService.getClient();
+    const pipeline = redis.pipeline();
+    userIds.forEach((id) => {
+      pipeline.exists(`online:${id}`);
+    });
+
+    const [results, users] = await Promise.all([
+      pipeline.exec(),
+      this.userModel.find({
+        _id: { $in: userIds.map(id => new Types.ObjectId(id)) }
+      }).select('lastSeenAt').lean()
+    ]);
+
+    const userMap = new Map(users.map(u => [u._id.toString(), u]));
+
+    if (!results) {
+      return userIds.map((id) => {
+        const u = userMap.get(id);
+        return {
+          userId: id,
+          isOnline: false,
+          lastSeenAt: u?.lastSeenAt || null,
+        };
+      });
+    }
+
+    return userIds.map((id, index) => {
+      const [err, existsCount] = results[index];
+      const isOnline = !err && existsCount === 1;
+      const u = userMap.get(id);
+
+      return {
+        userId: id,
+        isOnline,
+        lastSeenAt: isOnline ? null : (u?.lastSeenAt || null),
+      };
+    });
   }
 }
