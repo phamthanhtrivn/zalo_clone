@@ -1,4 +1,4 @@
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ChatHeader from "@/components/layout/message/ChatHeader";
 import MessageList from "@/components/layout/message/MessageList";
@@ -30,6 +30,8 @@ import {
 import { addMessage } from "@/store/slices/messageSlice"; // Added import for addMessage
 import ForwardModal from "@/components/layout/message/ForwardModal";
 import { conversationService } from "@/services/conversation.service";
+import { FriendRequestBar } from "@/components/layout/message/FriendRequestBar";
+import { ConversationProfileModal } from "@/components/layout/message/ConversationProfileModal";
 
 const EMPTY_MESSAGES: MessagesType[] = [];
 
@@ -40,6 +42,7 @@ const ConversationPage = () => {
     location.state || {};
   const openedFromSearch = Boolean(location.state?.fromSearch);
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
 
   const currentUser = useAppSelector((state) => state.auth.user);
   const currentUserId = currentUser?.userId || (currentUser as any)?._id || "";
@@ -81,6 +84,8 @@ const ConversationPage = () => {
 
   const [isFriend, setIsFriend] = useState<boolean | null>(null);
   const [friendStatus, setFriendStatus] = useState<string | null>(null);
+  const [groupMembers, setGroupMembers] = useState<any[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const lastMessageId = messages[messages.length - 1]?._id;
   const {
     setActiveConversationId,
@@ -89,7 +94,7 @@ const ConversationPage = () => {
     aiStreamingText,
     streamingTargetId,
   } = useSocket();
-  
+
   const selectedMessageId = new URLSearchParams(location.search).get(
     "messageId",
   );
@@ -103,6 +108,36 @@ const ConversationPage = () => {
       transition: Zoom,
     });
   }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    const container = containerRef.current;
+    if (container) {
+      setTimeout(() => {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior,
+        });
+      }, 50);
+    }
+  }, []);
+
+  const [showScrollToBottomBtn, setShowScrollToBottomBtn] = useState(false);
+  const [lastScrolledId, setLastScrolledId] = useState<string | null>(null);
+
+  const handleScroll = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const isScrolledUp =
+      container.scrollHeight - container.scrollTop - container.clientHeight > 300;
+    setShowScrollToBottomBtn(isScrolledUp);
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [handleScroll, messages.length]);
 
   const handleConversationCleared = useCallback(() => {
     if (!id) return;
@@ -372,6 +407,7 @@ const ConversationPage = () => {
         }
       }
       if (replyingMessage) dispatch(clearReplyingMessage());
+      scrollToBottom("smooth");
     } catch (error) {
       console.error(error);
     }
@@ -476,6 +512,7 @@ const ConversationPage = () => {
       });
 
       if (replyingMessage) dispatch(clearReplyingMessage());
+      scrollToBottom("smooth");
     } catch (error) {
       console.error(error);
     }
@@ -517,6 +554,7 @@ const ConversationPage = () => {
     }
 
     if (replyingMessage) dispatch(clearReplyingMessage());
+    scrollToBottom("smooth");
   };
 
   const handleRecalledMessage = async (messageId: string) => {
@@ -596,7 +634,9 @@ const ConversationPage = () => {
   };
 
   useEffect(() => {
-    dispatch(setMessages({ conversationId: id || "", messages: [] }));
+    if (!messages || messages.length === 0) {
+      dispatch(setMessages({ conversationId: id || "", messages: [] }));
+    }
     setPinnedMessages([]);
     setNextCursor(null);
     setPrevCursor(null);
@@ -606,7 +646,20 @@ const ConversationPage = () => {
     handleLoadPinnedMessages();
     messageService.readReceipt(currentUserId, id!);
     dispatch(clearReplyingMessage());
-  }, [id, selectedMessageId]);
+
+    if (isGroup && id) {
+      conversationService
+        .getListMembers(id)
+        .then((res: any) => {
+          if (res?.success && res.data) {
+            setGroupMembers(res.data);
+          }
+        })
+        .catch((err) => console.error("Error fetching group members:", err));
+    } else {
+      setGroupMembers([]);
+    }
+  }, [id, selectedMessageId, isGroup]);
 
   useEffect(() => {
     if (!pendingJumpMessageIdRef.current || !messages.length) return;
@@ -625,11 +678,11 @@ const ConversationPage = () => {
   }, [aiStatus, aiStreamingText, streamingTargetId, id]);
 
   useEffect(() => {
-    if (containerRef.current && isFirstLoad.current && messages.length) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
-      isFirstLoad.current = false;
+    if (id && messages.length > 0 && lastScrolledId !== id) {
+      scrollToBottom();
+      setLastScrolledId(id);
     }
-  }, [messages.length]);
+  }, [id, messages.length, lastScrolledId, scrollToBottom]);
 
   const handleMessagesExpired = useCallback(
     (data: { conversationId: string; messageIds: string[] }) => {
@@ -656,7 +709,7 @@ const ConversationPage = () => {
       if (
         container &&
         container.scrollHeight - container.scrollTop - container.clientHeight <
-          150
+        150
       ) {
         requestAnimationFrame(() => {
           container.scrollTop = container.scrollHeight;
@@ -765,7 +818,7 @@ const ConversationPage = () => {
 
   return (
     <div className="flex flex-1 h-full overflow-hidden">
-      <div className="flex-1 flex flex-col h-full bg-[#EBECF0] min-w-0">
+      <div className="flex-1 flex flex-col h-full bg-[#EBECF0] min-w-0 relative">
         <ChatHeader
           conversation={conversation}
           isInfoOpen={isInfoOpen}
@@ -783,58 +836,13 @@ const ConversationPage = () => {
           }}
         />
         {/* Thanh gửi yêu cầu kết bạn */}
-        {!isGroup && isFriend === false && (
-          <div className="px-4 py-2.5 bg-white border-b border-gray-100 flex items-center gap-3 text-sm">
-            {/* Icon */}
-            <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="w-4 h-4 text-[#0091ff]"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <line x1="19" y1="8" x2="19" y2="14" />
-                <line x1="22" y1="11" x2="16" y2="11" />
-              </svg>
-            </div>
-
-            {/* Text */}
-            <span className="flex-1 text-gray-600 text-[13px]">
-              {friendStatus === "REQUESTED"
-                ? "Người này đã gửi lời mời kết bạn cho bạn"
-                : friendStatus === "PENDING"
-                  ? "Đã gửi lời mời kết bạn"
-                  : "Gửi yêu cầu kết bạn tới người này"}
-            </span>
-
-            {/* Action button */}
-            {friendStatus === "REQUESTED" ? (
-              <button
-                onClick={handleAcceptFriendRequest}
-                className="shrink-0 px-4 py-1.5 bg-[#0091ff] text-white text-[13px] font-medium rounded-md hover:bg-[#0075dd] transition-colors"
-              >
-                Chấp nhận
-              </button>
-            ) : friendStatus === "PENDING" ? (
-              <span className="shrink-0 px-4 py-1.5 text-gray-400 text-[13px] border border-gray-200 rounded-md">
-                Đã gửi
-              </span>
-            ) : (
-              <button
-                onClick={handleSendFriendRequest}
-                className="shrink-0 px-4 py-1.5 bg-[#0091ff] text-white text-[13px] font-medium rounded-md hover:bg-[#0075dd] transition-colors"
-              >
-                Gửi kết bạn
-              </button>
-            )}
-          </div>
-        )}
+        <FriendRequestBar
+          isGroup={isGroup}
+          isFriend={isFriend}
+          friendStatus={friendStatus}
+          onAccept={handleAcceptFriendRequest}
+          onSend={handleSendFriendRequest}
+        />
         <MessageList
           messages={messages}
           currentUserId={currentUserId}
@@ -876,6 +884,8 @@ const ConversationPage = () => {
               ? conversation?.avatar
               : "https://res.cloudinary.com/dmv766v92/image/upload/v1711111111/ai_avatar_placeholder.png"
           }
+          members={isGroup ? groupMembers : []}
+          onShowProfile={(userId) => setSelectedProfileId(userId)}
         />
 
         <ChatInput
@@ -890,6 +900,27 @@ const ConversationPage = () => {
           onOpenForwardModal={() => setShowForwardModal(true)}
           conversationId={conversation.conversationId}
         />
+
+        {showScrollToBottomBtn && (
+          <button
+            onClick={() => scrollToBottom("smooth")}
+            className="absolute bottom-35 right-6 z-40 bg-white shadow-xl text-blue-500 border border-gray-100 hover:bg-gray-50 flex items-center justify-center w-10 h-10 rounded-full transition-all hover:scale-110 active:scale-95 duration-200 cursor-pointer"
+            title="Cuộn xuống tin nhắn mới nhất"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-5 h-5 text-[#0068ff]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+        )}
       </div>
 
       <ForwardModal
@@ -914,11 +945,12 @@ const ConversationPage = () => {
         conversation={conversation}
         onJumpToMessage={handleJumpToMessage}
       />
+      <ConversationProfileModal
+        selectedProfileId={selectedProfileId}
+        setSelectedProfileId={setSelectedProfileId}
+      />
     </div>
   );
 };
 
 export default ConversationPage;
-
-
-
